@@ -1,0 +1,9 @@
+{
+  "id": "markdown-table-enhancer",
+  "name": "原生表格增强",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Add color presets, column width, and row height to native Markdown tables in Obsidian.",
+  "author": "lishu",
+  "isDesktopOnly": false
+}

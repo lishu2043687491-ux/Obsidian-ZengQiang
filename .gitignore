@@ -1,0 +1,13 @@
+node_modules/
+data.json
+backups/
+_git_snapshots/
+*.bak
+*.bak-*
+debug.log
+.DS_Store
+/main.js
+/block-link-plus.bundle.js
+tests/claudian-test-bundle.cjs
+release/
+app.js

@@ -1,0 +1,26 @@
+{
+  "name": "feishu-doc-toolbar",
+  "version": "1.0.0",
+  "description": "Obsidian Enhanced Experience — unified toolbar, templates, and utilities",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lishu2043687491-ux/Obsidian-ZengQiang.git"
+  },
+  "author": "lishu",
+  "license": "MIT",
+  "scripts": {
+    "sync:block-link-plus": "cp ../block-link-plus/main.js src/modules/block-link-plus.bundle.js && cp ../block-link-plus/styles.css src/modules/block-link-plus.bundle.css && node scripts/verify-blp-bundle-patches.mjs",
+    "build": "node scripts/build.mjs",
+    "build:claudian-test": "esbuild tests/export-claudian-test.ts --bundle --platform=node --format=cjs --target=es2020 --outfile=tests/claudian-test-bundle.cjs",
+    "package:release": "npm run build && node scripts/package-release.js",
+    "test:smoke": "npm run build && npm run build:claudian-test && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-bundle-only.cjs",
+    "test:embedded-blp:real-cm": "npm run build && node ./tests/embedded-blp-real-cm.cjs",
+    "test:embedded-blp": "npm run build && node -e \"const fs=require('fs');const s=fs.readFileSync('main.js','utf8');if(!s.includes('require_block_link_plus_bundle')){process.exit(1)};if(s.includes('require(\\\"./block-link-plus.bundle.js\\\")')){process.exit(1)};console.log('embedded-blp build OK')\""
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.13"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.3"
+  }
+}
