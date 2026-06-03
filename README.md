@@ -1,11 +1,19 @@
-# Obsidian Enhanced Experience / Obsidian增强体验
+# ZengQiang Enhanced / 增强写作体验
 
-Unified Obsidian plugin for a richer writing experience: floating toolbar, template library, native table styling, and embedded utilities.
+**插件 id：** `feishu-doc-toolbar`  
+**仓库：** https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
-**Plugin id:** `feishu-doc-toolbar`  
-**Repository:** https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
+## 简介（中文）
 
-## Requirements
+浮动 **T 工具栏**、**模板库**、**原生表格配色**，以及多种内嵌实用工具（文件本地化、版本历史、宽页面、复制成图、Claudian 聊天记录存档、指向链接增强）。
+
+- 需同时安装本仓库 **`companion-plugins/markdown-table-enhancer/`** 作为表格底座。
+- **增强表格**无单独按钮；仅在「自研功能开关 → 启用测试功能 → OneNote 高保真粘贴」开启时后台可用。
+- 内置示例模板见 `examples/templates/`（含 **5why**、**六问法 pro 版**）。
+
+---
+
+## Requirements (English)
 
 Install the bundled **markdown-table-enhancer** companion first (same repo, not a separate community listing):
 
@@ -32,8 +40,9 @@ Built-in link UX: unified editor context menu, hidden `^block-id` anchors with o
 
 Off by default. Enable in **Settings → Obsidian Enhanced Experience → 自研功能开关 → 启用测试功能**:
 
-- Enhanced table mode (merge, cell images, snapshots)
-- OneNote rich paste
+- OneNote rich paste (when test features are on)
+
+**Enhanced table mode** (merge, cell images, snapshots) is **not in this release** — no settings UI; source code is kept for a future version. Only **native** table colors and sizing are available.
 
 ## Installation (manual)
 
@@ -55,9 +64,16 @@ npm run build
 npm run test:smoke
 ```
 
-## Example templates
+## Example templates (bundled)
 
-See [`examples/templates/`](examples/templates/). Copy into your vault’s `.templates/` folder or change the template directory in plugin settings.
+Default starter templates ship in [`examples/templates/`](examples/templates/):
+
+| File | Description |
+|------|-------------|
+| `5why.md` | 5 Why analysis table |
+| `六问法 pro 版.md` | Six-questions structured review |
+
+Copy into your vault’s template folder (default `.templates/`, configurable in settings). See `examples/templates/templates-index.md`.
 
 ## License
 
