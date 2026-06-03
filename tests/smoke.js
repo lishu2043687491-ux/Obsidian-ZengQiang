@@ -280,6 +280,12 @@ function createPlugin(PluginClass, options = {}) {
     plugin.dataStore = data;
   };
   plugin.updateTemplateIndexNote = async () => {};
+  for (const path of fileContents.keys()) {
+    if (path.startsWith(".模板库/")) {
+      plugin.dataStore.templateFolderPath = ".模板库";
+      break;
+    }
+  }
   return plugin;
 }
 
@@ -340,7 +346,7 @@ async function run() {
       plugin.normalizeData({}),
       {
         version: 1,
-        templateFolderPath: ".模板库",
+        templateFolderPath: ".templates",
         templateUngroupedLabel: "未分组",
         recentTemplatePaths: [],
         toolbarActionOrder: [],
@@ -353,6 +359,7 @@ async function run() {
         managedPluginStatusCheckedAt: 0,
         settingsTabOrder: ["toolbar", "nativeTable", "templateLibrary", "modules", "plugins"],
         embeddedModules: {},
+        enableBetaFeatures: false,
         showOneNoteImport: false,
         showTableEnhancerEntrances: false,
         showDraggerIntegrationStatus: true,
@@ -1338,6 +1345,7 @@ async function run() {
       [".模板库/默认排序靠前.md", ["---", "menuOrder: 2", "---", "", "默认排序靠前"].join("\n")],
     ]);
     const pluginWithTemplates = createPlugin(PluginClass, { fileContents });
+    pluginWithTemplates.dataStore.templateFolderPath = ".模板库";
     pluginWithTemplates.app.vault.getMarkdownFiles = () => [
       { path: ".模板库/默认排序靠后.md", basename: "默认排序靠后", stat: { mtime: 1 } },
       { path: ".模板库/默认排序靠前.md", basename: "默认排序靠前", stat: { mtime: 2 } },
@@ -1363,6 +1371,7 @@ async function run() {
       ],
     ]);
     const pluginWithTemplateMetadata = createPlugin(PluginClass, { fileContents });
+    pluginWithTemplateMetadata.dataStore.templateFolderPath = ".模板库";
     const descriptors = await pluginWithTemplateMetadata.getTemplateDescriptors();
     assert.equal(
       descriptors[0].excerpt,
@@ -1555,6 +1564,18 @@ async function run() {
       true,
       "renamed group should keep nested templates"
     );
+    const templateRenamed = await pluginForTemplateGroups.renameTemplateAtPath(".模板库/复盘/六问法.md", "六问法 2.0");
+    assert.equal(templateRenamed, true, "renameTemplateAtPath should rename template file in vault");
+    assert.equal(
+      await pluginForTemplateGroups.app.vault.adapter.exists(".模板库/复盘/六问法 2.0.md"),
+      true,
+      "renamed template should exist at new path"
+    );
+    assert.equal(
+      await pluginForTemplateGroups.app.vault.adapter.exists(".模板库/复盘/六问法.md"),
+      false,
+      "renamed template should remove old path"
+    );
     await pluginForTemplateGroups.setTemplateUngroupedLabel("根目录");
     assert.equal(pluginForTemplateGroups.getTemplateUngroupedLabel(), "根目录");
     const menuItems = await pluginForTemplateGroups.buildTemplateMenuItems(
@@ -1582,7 +1603,7 @@ async function run() {
         "deleted group folder should be removed"
       );
       assert.equal(
-        await pluginForTemplateGroups.app.vault.adapter.exists(".模板库/六问法.md"),
+        await pluginForTemplateGroups.app.vault.adapter.exists(".模板库/六问法 2.0.md"),
         true,
         "templates from deleted group should move to root"
       );
@@ -1597,12 +1618,36 @@ async function run() {
       );
 
       await pluginForTemplateGroups.setTemplateUngroupedLabel("默认分组");
-      const resetUngrouped = await pluginForTemplateGroups.deleteUngroupedTemplateGroup();
-      assert.equal(resetUngrouped, true, "deleteUngroupedTemplateGroup should reset custom empty label");
+      assert.equal(pluginForTemplateGroups.getTemplateUngroupedLabel(), "默认分组");
+      await pluginForTemplateGroups.setTemplateUngroupedLabel("未分组");
       assert.equal(pluginForTemplateGroups.getTemplateUngroupedLabel(), "未分组");
     } finally {
       global.confirm = originalConfirm;
     }
+  }
+
+  {
+    const pluginForEdit = createPlugin(PluginClass, {
+      fileContents: new Map([[".模板库/六问法.md", "| A | B |\n| - | - |"]]),
+    });
+    pluginForEdit.dataStore.templateFolderPath = ".模板库";
+    pluginForEdit.app.vault.getAbstractFileByPath = () => null;
+    pluginForEdit.app.vault.getFiles = () => [];
+    let openedPath = null;
+    pluginForEdit.app.workspace.getLeaf = () => ({
+      openFile: async () => {},
+    });
+    pluginForEdit.app.workspace.openLinkText = async (path) => {
+      openedPath = path;
+    };
+    const ok = await pluginForEdit.editTemplateAtPath(".模板库/六问法.md");
+    assert.equal(ok, true, "editTemplateAtPath should open hidden-folder templates via openLinkText fallback");
+    assert.equal(openedPath, ".模板库/六问法.md", "editTemplateAtPath should target the template path");
+  }
+
+  {
+    assert.equal(plugin.isEmbeddedModuleEnabled("file-auto-localizer"), true, "file-auto-localizer should default to enabled");
+    assert.equal(plugin.isEmbeddedModuleEnabled("block-link-plus"), true, "block-link-plus embedded should default to enabled");
   }
 
   {
@@ -1613,10 +1658,7 @@ async function run() {
       ]),
     });
     pluginForTrash.dataStore.templateFolderPath = ".模板库";
-    pluginForTrash.app.vault.getMarkdownFiles = () => [
-      { path: ".模板库/思维力/5why.md", basename: "5why", stat: { mtime: 10 } },
-      { path: ".模板库/六问法.md", basename: "六问法", stat: { mtime: 20 } },
-    ];
+    pluginForTrash.app.vault.getMarkdownFiles = () => [];
     pluginForTrash.app.vault.getAbstractFileByPath = () => null;
 
     const originalConfirm = global.confirm;
@@ -1766,6 +1808,7 @@ async function run() {
     };
     const fileContents = new Map();
     const pluginForSave = createPlugin(PluginClass, { fileContents });
+    pluginForSave.dataStore.templateFolderPath = ".模板库";
     pluginForSave.saveData = async () => {};
     const editor = new FakeEditor([
       "前言",

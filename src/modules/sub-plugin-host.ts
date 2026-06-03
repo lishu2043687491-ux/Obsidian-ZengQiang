@@ -34,6 +34,11 @@ export class SubPluginHost {
   private readonly disposers: Array<() => void> = [];
   private destroyed = false;
 
+  /** 本宿主注册的所有内嵌编辑器扩展，集中放进一个 Compartment，关闭/失败时可整体撤销 */
+  private editorCompartment: any = null;
+  private editorExtensions: unknown[] = [];
+  private editorCompartmentRegistered = false;
+
   constructor(backend: ModuleHostBackend, moduleId: string) {
     this.backend = backend;
     this.moduleId = moduleId;
@@ -134,8 +139,93 @@ export class SubPluginHost {
     return this.backend.plugin.registerMarkdownCodeBlockProcessor(language, handler, sortOrder);
   }
 
+  /**
+   * 内嵌模块的编辑器扩展隔离注册。
+   *
+   * 红线（22/23）：内嵌模块的 CM 扩展不得裸挂到总插件全局数组——
+   *  - 裸挂后单个坏扩展会让所有 MarkdownView 的 EditorState 构建失败（历史文件全打不开）
+   *  - 且关闭/启动失败时无法从全局数组撤销，污染会一直残留
+   *
+   * 对策：统一放进一个 Compartment，destroy() 时整体重配为空并刷新所有打开的编辑器，
+   * 实现「可回滚」。拿不到 Compartment（测试 mock / 老环境）时退回原始注册，但仍登记
+   * disposer，至少在 destroy 时尽力清理。
+   */
   registerEditorExtension(extension: unknown): void {
-    this.backend.plugin.registerEditorExtension(extension as never);
+    const cm = this.getCmStateModule();
+
+    if (cm?.Compartment) {
+      const extensions = Array.isArray(extension) ? extension.slice() : [extension];
+      this.editorExtensions.push(...extensions);
+
+      if (!this.editorCompartmentRegistered) {
+        this.editorCompartment = new cm.Compartment();
+        this.editorCompartmentRegistered = true;
+        try {
+          this.backend.plugin.registerEditorExtension(
+            this.editorCompartment.of(this.editorExtensions) as never
+          );
+        } catch (error) {
+          console.warn(`[feishu-doc-toolbar] [${this.moduleId}] 编辑器扩展注册失败`, error);
+        }
+        this.disposers.push(() => this.clearEditorExtensions());
+      } else {
+        // compartment 已挂载，追加扩展后重配，刷新已打开编辑器
+        this.reconfigureEditorCompartment(this.editorExtensions);
+      }
+      return;
+    }
+
+    // 退路：拿不到 CM Compartment，按原始方式注册（仍登记 disposer 尽力清理）
+    try {
+      this.backend.plugin.registerEditorExtension(extension as never);
+    } catch (error) {
+      console.warn(`[feishu-doc-toolbar] [${this.moduleId}] 编辑器扩展注册失败`, error);
+    }
+  }
+
+  private getCmStateModule(): { Compartment?: new () => any } | null {
+    try {
+      const req =
+        (typeof window !== "undefined"
+          ? (window as { require?: (id: string) => unknown }).require
+          : undefined) ?? (globalThis as { require?: (id: string) => unknown }).require;
+      if (typeof req !== "function") return null;
+      return req("@codemirror/state") as { Compartment?: new () => any };
+    } catch {
+      return null;
+    }
+  }
+
+  private reconfigureEditorCompartment(extensions: unknown[]): void {
+    if (!this.editorCompartment) return;
+    const effect = this.editorCompartment.reconfigure(extensions);
+    this.forEachEditorView((view) => {
+      try {
+        view.dispatch({ effects: effect });
+      } catch (error) {
+        console.warn(`[feishu-doc-toolbar] [${this.moduleId}] 刷新编辑器扩展失败`, error);
+      }
+    });
+  }
+
+  /** 关闭/失败时把本宿主的编辑器扩展整体撤销，避免残留污染全局 */
+  private clearEditorExtensions(): void {
+    this.editorExtensions = [];
+    if (this.editorCompartment) {
+      this.reconfigureEditorCompartment([]);
+    }
+  }
+
+  private forEachEditorView(fn: (view: any) => void): void {
+    try {
+      const leaves = (this.app.workspace as any).getLeavesOfType?.("markdown") ?? [];
+      for (const leaf of leaves) {
+        const cmView = leaf?.view?.editor?.cm;
+        if (cmView && typeof cmView.dispatch === "function") fn(cmView);
+      }
+    } catch (error) {
+      console.warn(`[feishu-doc-toolbar] [${this.moduleId}] 遍历编辑器视图失败`, error);
+    }
   }
 
   registerObsidianProtocolHandler(protocol: string, handler: (...args: any[]) => any): void {
@@ -143,8 +233,36 @@ export class SubPluginHost {
   }
 
   registerView(viewType: string, viewConstructor: (...args: any[]) => any): void {
-    // 内嵌模块重载/开关时，宿主可能仍持有同名 view type，先 unregister 避免 Obsidian 抛错
+    // 内嵌模块重载/开关时，先 detach + viewRegistry 释放全局 view type，再走宿主 unregister
+    const appAny = this.app as {
+      workspace?: { detachLeavesOfType?: (type: string) => void };
+      viewRegistry?: { unregisterView?: (type: string) => void };
+    };
+    try {
+      appAny.workspace?.detachLeavesOfType?.(viewType);
+    } catch {
+      // ignore
+    }
+    try {
+      appAny.viewRegistry?.unregisterView?.(viewType);
+    } catch {
+      // ignore
+    }
     this.unregisterView(viewType);
+    // destroy 时撤销视图注册，避免启动失败/关闭后残留导致下次 registerView 冲突
+    this.disposers.push(() => {
+      try {
+        appAny.workspace?.detachLeavesOfType?.(viewType);
+      } catch {
+        // ignore
+      }
+      try {
+        appAny.viewRegistry?.unregisterView?.(viewType);
+      } catch {
+        // ignore
+      }
+      this.unregisterView(viewType);
+    });
     try {
       this.backend.plugin.registerView(viewType, viewConstructor);
     } catch (error) {

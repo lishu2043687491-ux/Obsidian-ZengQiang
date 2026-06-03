@@ -12,24 +12,23 @@ import {
   CLAUDIAN_META_DIR,
   DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS,
   buildArchiveRecord,
-  dedupeArchiveItems,
   getArchiveRelativePath,
-  inheritMessagesFromPeerArchive,
   normalizeClaudianArchiveSettings,
   parseSessionMeta,
-  pickRicherArchiveRecord,
-  planPeerArchiveUpgrades,
   resolveDeviceId,
-  sanitizePathSegment,
   type ChatArchiveMessage,
   type ChatArchiveRecord,
   type ClaudianChatArchiveSettings,
   type ClaudianSessionMeta,
-  type ArchiveListItem,
 } from "./claudian-archive-core";
 import { parseCodexJsonlFilePath, resolveCodexSessionFilePath } from "./claudian-codex-parser";
-import { getNodeModule } from "./node-bridge";
 import { EmbeddedSubModule, SubPluginHost } from "./sub-plugin-host";
+
+export type ArchiveListItem = {
+  path: string;
+  record: ChatArchiveRecord;
+  isCrossDevice: boolean;
+};
 
 /** 功能开关页展开「详细设置」时使用 */
 let activeClaudianRunner: ClaudianChatArchiveRunner | null = null;
@@ -38,7 +37,6 @@ export class ClaudianChatArchiveRunner {
   settings: ClaudianChatArchiveSettings = { ...DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS };
   private autoTimer: number | null = null;
   private archiving = false;
-  private statusBarItem: HTMLElement | null = null;
 
   constructor(public host: SubPluginHost) {}
 
@@ -51,20 +49,12 @@ export class ClaudianChatArchiveRunner {
     this.registerCommands();
     this.syncAutoArchiveTimer();
     if (this.settings.enabled) {
-      window.setTimeout(() => void this.bootstrapArchives(), 2500);
+      window.setTimeout(() => void this.scanAndArchiveAll({ manual: false }), 2500);
     }
   }
 
   async stop() {
     this.clearAutoArchiveTimer();
-    this.statusBarItem?.remove();
-    this.statusBarItem = null;
-  }
-
-  /** 启动时扫描 + 跨设备正文补齐 + 状态栏提示 */
-  private async bootstrapArchives() {
-    await this.scanAndArchiveAll({ manual: false });
-    await this.refreshCrossDeviceStatusBar();
   }
 
   async updateSettings(patch: Partial<ClaudianChatArchiveSettings>) {
@@ -125,13 +115,8 @@ export class ClaudianChatArchiveRunner {
           console.error("[claudian-archive] archive failed", meta.id, error);
         }
       }
-      const reconciled = await this.reconcilePeerArchives();
-      await this.refreshCrossDeviceStatusBar();
       if (options.manual) {
-        const reconcileHint = reconciled > 0 ? `，${reconciled} 个跨设备正文已补齐` : "";
-        new Notice(`归档完成：${archived} 个会话已更新，${skipped} 个跳过，${errors} 个失败${reconcileHint}`);
-      } else if (reconciled > 0) {
-        new Notice(`已从其它设备补齐 ${reconciled} 条聊天正文，可在「打开跨设备存档」查看`, 8000);
+        new Notice(`归档完成：${archived} 个会话已更新，${skipped} 个跳过，${errors} 个失败`);
       }
     } finally {
       this.archiving = false;
@@ -139,55 +124,20 @@ export class ClaudianChatArchiveRunner {
     return { archived, skipped, errors };
   }
 
-  /** iCloud 同步到 richer 存档后，把本机/其它设备的空 JSON 补齐为只读正文 */
-  async reconcilePeerArchives(): Promise<number> {
-    const items = await this.listAllArchiveItems();
-    const upgrades = planPeerArchiveUpgrades(items);
-    if (upgrades.length === 0) return 0;
-
-    const adapter = this.host.app.vault.adapter;
-    for (const item of upgrades) {
-      await adapter.write(item.path, JSON.stringify(item.record, null, 2));
-    }
-    return upgrades.length;
-  }
-
   async listSessionMetas(): Promise<ClaudianSessionMeta[]> {
     const adapter = this.host.app.vault.adapter;
     const dir = normalizePath(CLAUDIAN_META_DIR);
-    const byId = new Map<string, ClaudianSessionMeta>();
-
-    const pushMeta = (meta: ClaudianSessionMeta) => {
-      const existing = byId.get(meta.id);
-      if (!existing || (Number(meta.updatedAt) || 0) >= (Number(existing.updatedAt) || 0)) {
-        byId.set(meta.id, meta);
-      }
-    };
-
     const listed = await adapter.list(dir).catch(() => null);
-    if (listed?.files?.length) {
-      for (const filePath of listed.files) {
-        if (!filePath.endsWith(".meta.json")) continue;
-        const content = await adapter.read(filePath).catch(() => "");
-        const meta = parseSessionMeta(content);
-        if (meta) pushMeta(meta);
-      }
+    if (!listed?.files?.length) return [];
+    const metas: ClaudianSessionMeta[] = [];
+    for (const filePath of listed.files) {
+      if (!filePath.endsWith(".meta.json")) continue;
+      const content = await adapter.read(filePath).catch(() => "");
+      const meta = parseSessionMeta(content);
+      if (meta) metas.push(meta);
     }
-
-    // Obsidian adapter 对 .claudian 等点目录常漏列；合并磁盘扫描（含 iCloud 同步的 meta）
-    await this.listSessionMetasViaFs(pushMeta);
-
-    const metas = Array.from(byId.values());
     metas.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
     return metas;
-  }
-
-  private async listSessionMetasViaFs(pushMeta: (meta: ClaudianSessionMeta) => void): Promise<void> {
-    await this.walkFilesViaFs(CLAUDIAN_META_DIR, (relPath, content) => {
-      if (!relPath.endsWith(".meta.json")) return;
-      const meta = parseSessionMeta(content);
-      if (meta) pushMeta(meta);
-    });
   }
 
   async archiveOneSession(meta: ClaudianSessionMeta, deviceId: string): Promise<"archived" | "skipped"> {
@@ -224,15 +174,7 @@ export class ClaudianChatArchiveRunner {
       }
     }
 
-    let record = buildArchiveRecord(meta, messages, deviceId, omitted);
-    if (record.messages.length === 0 && (omitted.noLocalSessionFile || omitted.providerSkipped)) {
-      const peer = await this.findPeerArchiveRecord(providerId, meta.id);
-      if (peer?.messages?.length) {
-        record = inheritMessagesFromPeerArchive(record, peer);
-        omitted.noLocalSessionFile = record.omitted.noLocalSessionFile;
-      }
-    }
-
+    const record = buildArchiveRecord(meta, messages, deviceId, omitted);
     const json = JSON.stringify(record, null, 2);
     if (Buffer.byteLength(json, "utf-8") > this.settings.maxArchiveBytes * 1.1) {
       record.messages = record.messages.slice(0, Math.max(1, Math.floor(record.messages.length / 2)));
@@ -240,187 +182,17 @@ export class ClaudianChatArchiveRunner {
       record.omitted.largeOutputs = true;
     }
 
-    const existingContent = await adapter.read(relPath).catch(() => "");
-    if (messages.length === 0 && omitted.noLocalSessionFile && existingContent) {
-      try {
-        const existingRecord = JSON.parse(existingContent) as ChatArchiveRecord;
-        if (existingRecord.messages?.length > 0) {
-          existingRecord.title = record.title;
-          existingRecord.updatedAt = record.updatedAt;
-          existingRecord.lastArchivedAt = record.lastArchivedAt;
-          existingRecord.currentNote = record.currentNote;
-          existingRecord.model = record.model;
-          await adapter.write(relPath, JSON.stringify(existingRecord, null, 2));
-          return "archived";
-        }
-      } catch {
-        // fall through to fresh write
-      }
-    }
-
+    const existing = await adapter.exists(relPath).catch(() => false);
     const finalJson = JSON.stringify(record, null, 2);
     await adapter.write(relPath, finalJson);
-    return "archived";
+    return existing ? "archived" : "archived";
   }
 
   async listArchives(): Promise<ArchiveListItem[]> {
-    await this.reconcilePeerArchives();
-    const items = await this.listAllArchiveItems();
-    const currentDevice = resolveDeviceId(this.settings);
-    return dedupeArchiveItems(items, currentDevice);
-  }
-
-  private getVaultBasePath(): string | null {
-    const adapter = this.host.app.vault.adapter as {
-      getBasePath?: () => string;
-      basePath?: string;
-      getFullPath?: (normalizedPath: string) => string;
-    };
-    if (typeof adapter.getBasePath === "function") {
-      const base = adapter.getBasePath();
-      if (base) return base;
-    }
-    if (typeof adapter.basePath === "string" && adapter.basePath.trim()) {
-      return adapter.basePath.trim();
-    }
-    if (typeof adapter.getFullPath === "function") {
-      const probe = this.host.app.vault.getMarkdownFiles()[0];
-      if (probe?.path) {
-        const full = adapter.getFullPath(probe.path);
-        const pathMod = getNodeModule<typeof import("path")>("path");
-        if (pathMod && full) {
-          return pathMod.dirname(full);
-        }
-      }
-    }
-    return null;
-  }
-
-  private async refreshCrossDeviceStatusBar() {
-    const archives = await this.listArchives();
-    const readableCross = archives.filter(
-      (item) => item.isCrossDevice && (item.record.messages?.length ?? 0) > 0
-    ).length;
-    if (readableCross === 0) {
-      this.statusBarItem?.remove();
-      this.statusBarItem = null;
-      return;
-    }
-    if (!this.statusBarItem) {
-      this.statusBarItem = this.host.addStatusBarItem();
-      this.statusBarItem.addClass("fdtb-claudian-archive-status");
-      this.statusBarItem.onClickEvent(() => new ArchiveListModal(this.host.app, this).open());
-    }
-    this.statusBarItem.empty();
-    this.statusBarItem.setText(`跨设备存档 ${readableCross}`);
-    this.statusBarItem.setAttr("title", "点击查看其它设备同步来的 Claudian 聊天正文（只读）");
-  }
-
-  private async findPeerArchiveRecord(
-    providerId: string,
-    conversationId: string
-  ): Promise<ChatArchiveRecord | null> {
-    const provider = sanitizePathSegment(providerId || "unknown");
-    const conv = sanitizePathSegment(conversationId);
-    const prefix = normalizePath(`${ARCHIVE_ROOT}/${provider}/${conv}@`);
-    const peers: ChatArchiveRecord[] = [];
-    const currentDevice = resolveDeviceId(this.settings);
-
-    const collectPeer = (filePath: string, content: string) => {
-      const normalized = normalizePath(filePath);
-      if (!normalized.startsWith(prefix) || !normalized.endsWith(".json")) return;
-      try {
-        const parsed = JSON.parse(content) as ChatArchiveRecord;
-        if (parsed?.conversationId !== conversationId) return;
-        if (parsed.sourceDevice === currentDevice) return;
-        peers.push(parsed);
-      } catch {
-        // skip corrupt
-      }
-    };
-
-    await this.walkFilesViaFs(`${ARCHIVE_ROOT}/${provider}`, collectPeer);
-    if (peers.length === 0) {
-      await this.walkArchivesViaAdapter(`${ARCHIVE_ROOT}/${provider}`, collectPeer);
-    }
-
-    return pickRicherArchiveRecord(peers);
-  }
-
-  /** vault adapter 遍历（Node fs 不可用时的回退，含 iCloud 已同步的跨设备存档） */
-  private async walkArchivesViaAdapter(
-    dir: string,
-    onFile: (filePath: string, content: string) => void
-  ): Promise<void> {
-    const adapter = this.host.app.vault.adapter;
-    const listed = await adapter.list(normalizePath(dir)).catch(() => null);
-    if (!listed) return;
-    for (const file of listed.files) {
-      if (!file.endsWith(".json")) continue;
-      const content = await adapter.read(file).catch(() => "");
-      if (content) onFile(file, content);
-    }
-    for (const child of listed.folders) {
-      await this.walkArchivesViaAdapter(child, onFile);
-    }
-  }
-
-  private async walkFilesViaFs(
-    root: string,
-    onFile: (relPath: string, content: string) => void
-  ): Promise<void> {
-    const fs = getNodeModule<typeof import("fs")>("fs");
-    const path = getNodeModule<typeof import("path")>("path");
-    const base = this.getVaultBasePath();
-    if (!fs || !path || !base) return;
-
-    const absRoot = path.join(base, root);
-    if (!fs.existsSync(absRoot)) return;
-
-    const stack = [absRoot];
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (!current) continue;
-      let entries: import("fs").Dirent[];
-      try {
-        entries = fs.readdirSync(current, { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        const full = path.join(current, entry.name);
-        if (entry.isDirectory()) {
-          stack.push(full);
-          continue;
-        }
-        if (!entry.isFile()) continue;
-        const rel = normalizePath(path.relative(base, full));
-        try {
-          onFile(rel, fs.readFileSync(full, "utf-8"));
-        } catch {
-          // skip unreadable
-        }
-      }
-    }
-  }
-
-  private async listAllArchiveItems(): Promise<ArchiveListItem[]> {
     const adapter = this.host.app.vault.adapter;
     const root = normalizePath(ARCHIVE_ROOT);
     const currentDevice = resolveDeviceId(this.settings);
     const items: ArchiveListItem[] = [];
-
-    const seenPaths = new Set<string>();
-    const pushRecord = (file: string, record: ChatArchiveRecord) => {
-      const normalized = normalizePath(file);
-      if (seenPaths.has(normalized)) return;
-      seenPaths.add(normalized);
-      items.push({
-        path: normalized,
-        record,
-        isCrossDevice: record.sourceDevice !== currentDevice,
-      });
-    };
 
     const walk = async (dir: string) => {
       const listed = await adapter.list(dir).catch(() => null);
@@ -431,7 +203,11 @@ export class ClaudianChatArchiveRunner {
         try {
           const record = JSON.parse(content) as ChatArchiveRecord;
           if (!record?.conversationId) continue;
-          pushRecord(file, record);
+          items.push({
+            path: file,
+            record,
+            isCrossDevice: record.sourceDevice !== currentDevice,
+          });
         } catch {
           // skip corrupt
         }
@@ -442,31 +218,13 @@ export class ClaudianChatArchiveRunner {
     };
 
     await walk(root);
-    // Obsidian adapter 对 .claudian-sync 等点目录常漏列；桌面端始终合并磁盘扫描结果（含 iCloud 同步文件）
-    await this.listArchivesViaFs(root, pushRecord);
     items.sort((a, b) => (Number(b.record.updatedAt) || 0) - (Number(a.record.updatedAt) || 0));
     return items;
   }
 
-  private async listArchivesViaFs(
-    root: string,
-    pushRecord: (file: string, record: ChatArchiveRecord) => void
-  ): Promise<void> {
-    await this.walkFilesViaFs(root, (relPath, content) => {
-      if (!relPath.endsWith(".json")) return;
-      try {
-        const record = JSON.parse(content) as ChatArchiveRecord;
-        if (!record?.conversationId) return;
-        pushRecord(relPath, record);
-      } catch {
-        // skip corrupt
-      }
-    });
-  }
-
   async cleanupOversizedArchives(): Promise<{ removed: number; trimmed: number }> {
     const adapter = this.host.app.vault.adapter;
-    const items = await this.listAllArchiveItems();
+    const items = await this.listArchives();
     let removed = 0;
     let trimmed = 0;
     for (const item of items) {
@@ -515,13 +273,6 @@ class ArchiveListModal extends Modal {
       `存档目录：${ARCHIVE_ROOT}/ · 本机 ${resolveDeviceId(this.runner.settings)} · 共 ${archives.length} 份存档`
     );
 
-    contentEl.createEl("p", {
-      cls: "setting-item-description fdtb-claudian-archive-hint",
-      text:
-        "Claudian 侧边栏历史里标注的「Current session」只表示当前正在聊的那一条，不是跨设备同步入口。" +
-        "其它电脑的完整正文请在本窗口下方「已归档」列表查看（需先在聊天所在电脑开启同步并扫描）。",
-    });
-
     const toolbar = contentEl.createDiv({ cls: "fdtb-claudian-archive-toolbar" });
     toolbar.createEl("button", { text: "重新扫描", cls: "mod-cta" }).addEventListener("click", () => {
       void this.runner.scanAndArchiveAll({ manual: true }).then(() => this.onOpen());
@@ -552,18 +303,6 @@ class ArchiveListModal extends Modal {
       return;
     }
 
-    const emptyCrossDevice = archives.filter(
-      (item) => item.isCrossDevice && (item.record.messages?.length ?? 0) === 0
-    ).length;
-    if (emptyCrossDevice > 0) {
-      contentEl.createEl("p", {
-        cls: "setting-item-description fdtb-claudian-archive-hint",
-        text:
-          `有 ${emptyCrossDevice} 条跨设备存档仅有标题、无正文。请在聊天所在电脑开启同步并点「重新扫描」；` +
-          "正文来自本机 ~/.codex/sessions，不会随 iCloud 自动同步。Cursor/OpenCode 会话暂不支持正文归档。",
-      });
-    }
-
     const list = contentEl.createDiv({ cls: "fdtb-claudian-archive-list" });
     for (const item of archives) {
       const row = list.createDiv({ cls: "fdtb-claudian-archive-row" });
@@ -573,12 +312,8 @@ class ArchiveListModal extends Modal {
       const main = row.createDiv({ cls: "fdtb-claudian-archive-row-main" });
       main.createDiv({ cls: "fdtb-claudian-archive-row-title", text: item.record.title });
       const meta = main.createDiv({ cls: "fdtb-claudian-archive-row-meta" });
-      const peerHint =
-        item.peerSourceDevices?.length && item.record.sourceDevice === resolveDeviceId(this.runner.settings)
-          ? ` · 正文来自 ${item.peerSourceDevices.join("、")}`
-          : "";
       meta.setText(
-        `${item.record.sourceDevice} · ${new Date(item.record.lastArchivedAt).toLocaleString()} · ${item.record.messages.length} 条消息${peerHint}`
+        `${item.record.sourceDevice} · ${new Date(item.record.lastArchivedAt).toLocaleString()} · ${item.record.messages.length} 条消息`
       );
       if (showBadge && item.isCrossDevice) {
         const badge = row.createSpan({ cls: "fdtb-claudian-badge fdtb-claudian-badge-cross" });
@@ -660,9 +395,7 @@ export function renderClaudianChatArchiveSettings(containerEl: HTMLElement, onRe
 
   containerEl.createEl("p", {
     cls: "setting-item-description",
-    text:
-      "轻量 JSON 写入 .claudian-sync/chat-archives/，经 iCloud 跨设备只读查看。入口：下方「打开列表」或状态栏「跨设备存档」——不是 Claudian 侧边栏里的 Current session。" +
-      "正文仅 Codex 会话且需在聊天所在电脑先「扫描归档」（读取 ~/.codex/sessions，不会随 iCloud 同步）；Cursor/OpenCode 仅标题。",
+    text: "轻量 JSON 写入 .claudian-sync/chat-archives/，经 iCloud 跨设备只读查看；不修改 Claudian 标题。",
   });
 
   new Setting(containerEl)

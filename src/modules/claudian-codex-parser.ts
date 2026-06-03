@@ -3,8 +3,6 @@
  * 不依赖 Claudian 插件源码；不写入 sessions 目录。
  */
 
-import { getNodeModule } from "./node-bridge";
-
 export type ParsedChatMessage = {
   role: "user" | "assistant";
   createdAt: number;
@@ -139,8 +137,9 @@ export async function parseCodexJsonlFilePath(
   filePath: string,
   options: ParseCodexOptions
 ): Promise<ParseCodexResult> {
-  const fs = getNodeModule<typeof import("fs")>("fs");
-  const readline = getNodeModule<typeof import("readline")>("readline");
+  const req = typeof require !== "undefined" ? require : null;
+  const fs = req?.("fs") as typeof import("fs") | undefined;
+  const readline = req?.("readline") as typeof import("readline") | undefined;
   if (!fs?.existsSync?.(filePath) || !readline) {
     return {
       messages: [],
@@ -208,16 +207,8 @@ export async function parseCodexJsonlFilePath(
   });
 }
 
-const SAFE_SESSION_ID_PATTERN = /^[0-9a-f-]{36}$/i;
-/** 跨时区、长会话时 meta 与 jsonl 锚点可能相差数小时 */
-const HEURISTIC_MATCH_WINDOW_MS = 24 * 60 * 60 * 1000;
-
 /** 本机 Codex jsonl：优先 meta 路径，再按 threadId 在 ~/.codex/sessions 下查找 */
 export function resolveCodexSessionFilePath(meta: {
-  id?: string;
-  createdAt?: number;
-  updatedAt?: number;
-  lastResponseAt?: number;
   sessionId?: string;
   providerState?: {
     sessionFilePath?: string;
@@ -225,9 +216,10 @@ export function resolveCodexSessionFilePath(meta: {
     transcriptRootPath?: string;
   };
 }): string | null {
-  const fs = getNodeModule<typeof import("fs")>("fs");
-  const path = getNodeModule<typeof import("path")>("path");
-  const os = getNodeModule<typeof import("os")>("os");
+  const req = typeof require !== "undefined" ? require : null;
+  const fs = req?.("fs") as typeof import("fs") | undefined;
+  const path = req?.("path") as typeof import("path") | undefined;
+  const os = req?.("os") as typeof import("os") | undefined;
   if (!fs || !path || !os) return null;
 
   const rewriteHome = (p: string) => p.replace(/^\/Users\/[^/]+/, os.homedir());
@@ -239,181 +231,50 @@ export function resolveCodexSessionFilePath(meta: {
     if (rewritten !== sessionFilePath && fs.existsSync(rewritten)) return rewritten;
   }
 
-  const roots = collectCodexSessionRoots(meta.providerState?.transcriptRootPath, rewriteHome, path, os);
-
   const threadId =
     meta.providerState?.threadId || meta.sessionId || extractThreadIdFromPath(sessionFilePath);
-  if (threadId && SAFE_SESSION_ID_PATTERN.test(threadId)) {
-    for (const root of roots) {
-      const found = findCodexSessionFileInRoot(root, threadId, fs, path);
-      if (found) return found;
-    }
-  }
+  if (!threadId) return null;
 
-  return findCodexSessionByHeuristic(meta, roots, fs);
-}
-
-function collectCodexSessionRoots(
-  transcriptRootPath: string | undefined,
-  rewriteHome: (p: string) => string,
-  path: typeof import("path"),
-  os: typeof import("os")
-): string[] {
   const roots: string[] = [];
-  const seen = new Set<string>();
-  const addRoot = (value?: string) => {
-    if (!value) return;
-    const normalized = value.replace(/\\/g, "/");
-    if (seen.has(normalized)) return;
-    seen.add(normalized);
-    roots.push(value);
-  };
-  if (transcriptRootPath) addRoot(rewriteHome(transcriptRootPath));
-  addRoot(path.join(os.homedir(), ".codex", "sessions"));
-  return roots;
-}
+  const transcriptRoot = meta.providerState?.transcriptRootPath;
+  if (transcriptRoot) roots.push(rewriteHome(transcriptRoot));
+  roots.push(path.join(os.homedir(), ".codex", "sessions"));
 
-function extractThreadIdFromPath(sessionFilePath?: string): string | null {
-  if (!sessionFilePath) return null;
-  const rolloutMatch = sessionFilePath.match(/-([0-9a-f-]{36})\.jsonl$/i);
-  if (rolloutMatch?.[1]) return rolloutMatch[1];
-  const directMatch = sessionFilePath.match(/([0-9a-f-]{36})\.jsonl$/i);
-  return directMatch?.[1] ?? null;
-}
-
-function findCodexSessionFileInRoot(
-  root: string,
-  threadId: string,
-  fs: typeof import("fs"),
-  path: typeof import("path")
-): string | null {
-  if (!fs.existsSync(root)) return null;
-
-  const directPath = path.join(root, `${threadId}.jsonl`);
-  if (fs.existsSync(directPath)) return directPath;
-
-  const rolloutSuffix = `-${threadId}.jsonl`;
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!current) continue;
-    let entries: import("fs").Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(full);
-        continue;
-      }
-      if (entry.isFile() && entry.name.endsWith(rolloutSuffix)) {
-        return full;
-      }
-    }
+  const suffix = `${threadId}.jsonl`;
+  for (const root of roots) {
+    if (!fs.existsSync(root)) continue;
+    const found = walkFindJsonl(root, suffix, fs, path);
+    if (found) return found;
   }
   return null;
 }
 
-function findCodexSessionByHeuristic(
-  meta: {
-    id?: string;
-    createdAt?: number;
-    updatedAt?: number;
-    lastResponseAt?: number;
-  },
-  roots: string[],
-  fs: typeof import("fs")
+function extractThreadIdFromPath(sessionFilePath?: string): string | null {
+  if (!sessionFilePath) return null;
+  const match = sessionFilePath.match(/([0-9a-f-]{36})\.jsonl$/i);
+  return match?.[1] ?? null;
+}
+
+function walkFindJsonl(
+  dir: string,
+  suffix: string,
+  fs: typeof import("fs"),
+  path: typeof import("path")
 ): string | null {
-  const anchor =
-    Number(meta.lastResponseAt) || Number(meta.updatedAt) || Number(meta.createdAt) || extractConvTimestamp(meta.id);
-  if (!Number.isFinite(anchor) || anchor <= 0) return null;
-
-  let bestPath: string | null = null;
-  let bestDiff = Number.POSITIVE_INFINITY;
-
-  for (const root of roots) {
-    if (!fs.existsSync(root)) continue;
-    for (const filePath of listCodexJsonlFiles(root, fs)) {
-      const sessionTime = readCodexSessionAnchorMs(filePath, fs);
-      if (sessionTime === null) continue;
-      const diff = Math.abs(sessionTime - anchor);
-      if (diff >= bestDiff) continue;
-      bestDiff = diff;
-      bestPath = filePath;
-    }
-  }
-
-  if (!bestPath || bestDiff > HEURISTIC_MATCH_WINDOW_MS) return null;
-  return bestPath;
-}
-
-function extractConvTimestamp(conversationId?: string): number | null {
-  if (!conversationId) return null;
-  const match = conversationId.match(/^conv-(\d+)-/);
-  if (!match?.[1]) return null;
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : null;
-}
-
-function listCodexJsonlFiles(root: string, fs: typeof import("fs")): string[] {
-  const files: string[] = [];
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    if (!current) continue;
-    let entries: import("fs").Dirent[];
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const full = `${current}/${entry.name}`.replace(/\\/g, "/");
-      if (entry.isDirectory()) {
-        stack.push(full);
-      } else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
-        files.push(full);
-      }
-    }
-  }
-  return files;
-}
-
-function readCodexSessionAnchorMs(filePath: string, fs: typeof import("fs")): number | null {
-  let handle: number | null = null;
+  let entries: import("fs").Dirent[];
   try {
-    handle = fs.openSync(filePath, "r");
-    const buffer = Buffer.alloc(8192);
-    const bytesRead = fs.readSync(handle, buffer, 0, buffer.length, 0);
-    const firstLine = buffer.toString("utf-8", 0, bytesRead).split("\n")[0]?.trim();
-    if (firstLine) {
-      const record = JSON.parse(firstLine) as {
-        type?: string;
-        payload?: { timestamp?: string; id?: string };
-      };
-      if (record.type === "session_meta" && record.payload?.timestamp) {
-        const parsed = Date.parse(record.payload.timestamp);
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-  } catch {
-    // fall through to mtime
-  } finally {
-    if (handle !== null) {
-      try {
-        fs.closeSync(handle);
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  try {
-    return fs.statSync(filePath).mtimeMs;
+    entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
     return null;
   }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const inner = walkFindJsonl(full, suffix, fs, path);
+      if (inner) return inner;
+    } else if (entry.isFile() && entry.name.endsWith(suffix)) {
+      return full;
+    }
+  }
+  return null;
 }

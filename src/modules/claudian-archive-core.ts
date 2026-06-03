@@ -1,5 +1,4 @@
 import type { ParsedChatMessage } from "./claudian-codex-parser";
-import { getNodeModule } from "./node-bridge";
 
 function normalizeArchivePath(path: string) {
   return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//, "");
@@ -105,8 +104,8 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
 export function resolveDeviceId(settings: ClaudianChatArchiveSettings): string {
   if (settings.deviceId) return sanitizePathSegment(settings.deviceId);
   try {
-    const os = getNodeModule<typeof import("os")>("os");
-    return sanitizePathSegment(os?.hostname?.() || "unknown-device");
+    const os = require("os") as typeof import("os");
+    return sanitizePathSegment(os.hostname() || "unknown-device");
   } catch {
     return "unknown-device";
   }
@@ -168,122 +167,4 @@ export function buildArchiveRecord(
       providerSkipped: omittedExtras.providerSkipped,
     },
   };
-}
-
-export type ArchiveListItem = {
-  path: string;
-  record: ChatArchiveRecord;
-  isCrossDevice: boolean;
-  /** 同一会话在其它设备上也有存档文件时，列出设备标识（用于 UI 提示） */
-  peerSourceDevices?: string[];
-};
-
-/** 同一会话多份存档里，优先保留消息更多的那份 */
-export function pickRicherArchiveRecord(
-  candidates: ChatArchiveRecord[],
-  preferDevice?: string
-): ChatArchiveRecord | null {
-  if (candidates.length === 0) return null;
-  let best = candidates[0];
-  for (const next of candidates.slice(1)) {
-    const bestCount = best.messages?.length ?? 0;
-    const nextCount = next.messages?.length ?? 0;
-    if (nextCount > bestCount) {
-      best = next;
-      continue;
-    }
-    if (nextCount < bestCount) continue;
-    const bestAt = Number(best.lastArchivedAt) || 0;
-    const nextAt = Number(next.lastArchivedAt) || 0;
-    if (nextAt > bestAt) {
-      best = next;
-      continue;
-    }
-    if (nextAt < bestAt) continue;
-    if (preferDevice && next.sourceDevice === preferDevice && best.sourceDevice !== preferDevice) {
-      best = next;
-    }
-  }
-  return best;
-}
-
-export function inheritMessagesFromPeerArchive(
-  record: ChatArchiveRecord,
-  peer: ChatArchiveRecord
-): ChatArchiveRecord {
-  if (!peer.messages?.length) return record;
-  return {
-    ...record,
-    messages: peer.messages,
-    omitted: {
-      ...record.omitted,
-      noLocalSessionFile: record.omitted.noLocalSessionFile,
-      largeOutputs: peer.omitted?.largeOutputs ?? record.omitted.largeOutputs,
-      stoppedBySizeLimit: peer.omitted?.stoppedBySizeLimit ?? record.omitted.stoppedBySizeLimit,
-      truncatedMessages: peer.omitted?.truncatedMessages ?? record.omitted.truncatedMessages,
-    },
-  };
-}
-
-/** 将同一会话里「空存档」用其它设备已同步过来的 richer 存档补齐正文 */
-export function planPeerArchiveUpgrades(items: ArchiveListItem[]): ArchiveListItem[] {
-  const byKey = new Map<string, ArchiveListItem[]>();
-  for (const item of items) {
-    const key = `${item.record.sourceProvider}::${item.record.conversationId}`;
-    const group = byKey.get(key) ?? [];
-    group.push(item);
-    byKey.set(key, group);
-  }
-
-  const upgrades: ArchiveListItem[] = [];
-  for (const group of byKey.values()) {
-    const richest = pickRicherArchiveRecord(group.map((entry) => entry.record));
-    if (!richest?.messages?.length) continue;
-    for (const item of group) {
-      if ((item.record.messages?.length ?? 0) > 0) continue;
-      upgrades.push({
-        ...item,
-        record: inheritMessagesFromPeerArchive(item.record, richest),
-      });
-    }
-  }
-  return upgrades;
-}
-
-/** 同一会话多设备存档合并：优先保留消息更多的那份（跨设备 iCloud 同步后查看） */
-export function dedupeArchiveItems(items: ArchiveListItem[], currentDevice: string): ArchiveListItem[] {
-  const byKey = new Map<string, ArchiveListItem[]>();
-  for (const item of items) {
-    const key = `${item.record.sourceProvider}::${item.record.conversationId}`;
-    const group = byKey.get(key) ?? [];
-    group.push(item);
-    byKey.set(key, group);
-  }
-
-  const deduped: ArchiveListItem[] = [];
-  for (const group of byKey.values()) {
-    const devices = [...new Set(group.map((entry) => entry.record.sourceDevice))];
-    const peerSourceDevices = devices.filter((device) => device !== currentDevice);
-    const winnerRecord = pickRicherArchiveRecord(
-      group.map((entry) => entry.record),
-      currentDevice
-    );
-    if (!winnerRecord) continue;
-
-    const winnerItem =
-      group.find((entry) => entry.record === winnerRecord) ??
-      group.find((entry) => entry.record.sourceDevice === winnerRecord.sourceDevice) ??
-      group[0];
-
-    const hasCrossDevicePeer = peerSourceDevices.length > 0;
-    deduped.push({
-      ...winnerItem,
-      record: winnerRecord,
-      isCrossDevice: winnerRecord.sourceDevice !== currentDevice || hasCrossDevicePeer,
-      peerSourceDevices: peerSourceDevices.length > 0 ? peerSourceDevices : undefined,
-    });
-  }
-
-  deduped.sort((a, b) => (Number(b.record.updatedAt) || 0) - (Number(a.record.updatedAt) || 0));
-  return deduped;
 }

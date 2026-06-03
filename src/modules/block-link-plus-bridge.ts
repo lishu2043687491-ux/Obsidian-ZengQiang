@@ -1,7 +1,5 @@
 import { App, Notice, Plugin, Setting } from "obsidian";
 
-import { getEmbeddedBlockLinkPlusInstance } from "./block-link-plus-embedded";
-
 /** inline = 表末行内联；after = 表后独占行（旧 shouldInsertAfter 行为） */
 type TableBlockIdPlacement = "inline" | "after";
 
@@ -16,14 +14,10 @@ type BlockLinkPlusPlugin = Plugin & {
     enable_right_click_url?: boolean;
     tableBlockIdPlacement?: TableBlockIdPlacement;
     hideStandaloneBlockIdLines?: boolean;
-    /** 段末内联 ^id（复制段落链接后出现在段落末尾）；默认隐藏显示 */
-    hideInlineTrailingBlockIds?: boolean;
-    protectBlockIdAnchors?: boolean;
   };
   saveSettings: () => Promise<void>;
   api?: {
     renderFolderLinkSettings?: (containerEl: HTMLElement, onRefresh?: () => void) => void;
-    copyFolderDualLink?: (folder: import("obsidian").TFolder) => Promise<void>;
   };
 };
 
@@ -48,8 +42,8 @@ function renderTableBlockIdBridgeSettings(
     });
 
   new Setting(containerEl)
-    .setName("隐藏独占一行的 ^块ID")
-    .setDesc("仅含 ^abc1 单独占一行时，在编辑/阅读视图里不显示（链接仍有效）")
+    .setName("预览中隐藏单独一行的 ^块ID")
+    .setDesc("阅读/Live Preview 隐藏仅含 ^块ID 的独占行；源码调试可关闭")
     .addToggle((toggle) =>
       toggle.setValue(plugin.settings.hideStandaloneBlockIdLines !== false).onChange(async (value) => {
         plugin.settings.hideStandaloneBlockIdLines = value;
@@ -57,55 +51,9 @@ function renderTableBlockIdBridgeSettings(
         onRefresh();
       })
     );
-
-  new Setting(containerEl)
-    .setName("隐藏段末内联 ^块ID")
-    .setDesc(
-      "复制段落链接后出现在段落末尾的 ^6twt 等：编辑/阅读时隐藏，源码里仍保留，链接可正常跳转。关闭后可看见锚点便于排查。"
-    )
-    .addToggle((toggle) =>
-      toggle.setValue(plugin.settings.hideInlineTrailingBlockIds !== false).onChange(async (value) => {
-        plugin.settings.hideInlineTrailingBlockIds = value;
-        await plugin.saveSettings();
-        onRefresh();
-        if (typeof document?.body?.classList?.toggle === "function") {
-          document.body.classList.toggle("fdtb-hide-inline-block-ids", value);
-        }
-      })
-    );
-}
-
-function renderBlockLinkPlusExtraSettings(
-  containerEl: HTMLElement,
-  plugin: BlockLinkPlusPlugin,
-  onRefresh: () => void
-): void {
-  containerEl.createEl("h4", { text: "块 ID 显示（指向链接锚点）" });
-  containerEl.createEl("p", {
-    cls: "setting-item-description",
-    text: "段落链接必须在笔记里有一个 ^块ID 锚点才能跳转；下列选项只控制「看不看见」，不会删掉锚点。",
-  });
-  new Setting(containerEl)
-    .setName("保护块 ID 锚点（防误删）")
-    .setDesc(
-      "独占一行的 ^abc1 与段末内联 ^id 在普通删除/backspace 时不会被改掉。删除锚点请用命令面板「删除当前块锚点」；临时查看用「临时显示块锚点」。"
-    )
-    .addToggle((toggle) =>
-      toggle.setValue(plugin.settings.protectBlockIdAnchors !== false).onChange(async (value) => {
-        plugin.settings.protectBlockIdAnchors = value;
-        await plugin.saveSettings();
-        onRefresh();
-      })
-    );
-
-  renderTableBlockIdBridgeSettings(containerEl, plugin, onRefresh);
 }
 
 function getBlockLinkPlus(app: App): BlockLinkPlusPlugin | null {
-  const embedded = getEmbeddedBlockLinkPlusInstance();
-  if (embedded) {
-    return embedded as BlockLinkPlusPlugin;
-  }
   const plugin = app.plugins.plugins["block-link-plus"] as BlockLinkPlusPlugin | undefined;
   if (!plugin?.settings || typeof plugin.saveSettings !== "function") return null;
   return plugin;
@@ -121,19 +69,21 @@ export function renderBlockLinkPlusSettings(
   if (!plugin) {
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "请先在上方启用「指向链接增强」内嵌功能（并关闭外部 block-link-plus 插件以免重复）。",
+      text: "请先在上方启用「指向链接增强」（block-link-plus）插件。",
     });
     return;
   }
 
   containerEl.createEl("p", {
     cls: "setting-item-description",
-    text: "段落链接使用 ^块ID 超短锚点；文件夹链接使用 blp-folder://open?id= 超短 URI（≤50 字符）。文件树右键「复制文件夹超短双链」，或命令面板同名命令。",
+    text: "段落链接使用 ^块ID 超短锚点；文件夹链接使用 blp-folder://open?id= 超短 URI（≤50 字符）。",
   });
 
   if (plugin.api?.renderFolderLinkSettings) {
     plugin.api.renderFolderLinkSettings(containerEl, onRefresh);
-  } else {
+    return;
+  }
+
   new Setting(containerEl)
     .setName("复制段落链接")
     .addToggle((toggle) =>
@@ -179,7 +129,6 @@ export function renderBlockLinkPlusSettings(
         onRefresh();
       })
     );
-  }
 
-  renderBlockLinkPlusExtraSettings(containerEl, plugin, onRefresh);
+  renderTableBlockIdBridgeSettings(containerEl, plugin, onRefresh);
 }

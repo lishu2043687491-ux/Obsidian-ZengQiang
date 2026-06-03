@@ -6,17 +6,17 @@
 import { App, Editor, MarkdownView, Plugin, TFile } from "obsidian";
 
 import { installBlockLinkHostLayer } from "./block-link-plus-host";
-import { ensureObsidianRequireBinding, getObsidianRequire } from "./node-bridge";
+import { createObsidianModuleResolver, ensureObsidianRequireBinding } from "./node-bridge";
 import { EmbeddedSubModule, SubPluginHost } from "./sub-plugin-host";
+import {
+  BLOCK_LINK_PLUS_VIEW_TYPES,
+  releaseBlockLinkPlusViewTypes,
+} from "./block-link-plus-view-registry";
 
 const BLOCK_LINK_PLUS_ID = "block-link-plus";
 
-/** block-link-plus 注册的自定义视图；卸载时需从宿主插件 unregister，否则重载会冲突 */
-const BLOCK_LINK_PLUS_VIEW_TYPES = ["blp-file-outliner-view", "blp-journal-feed-view"] as const;
-
 const CODEMIRROR_PRIME_IDS = [
   "@codemirror/state",
-  "@codemirror/text",
   "@codemirror/view",
   "@codemirror/commands",
   "@codemirror/language",
@@ -121,12 +121,50 @@ function ensureBundleRuntimeGlobals(): void {
 }
 
 function obsidianRequire(id: string): unknown {
-  const req = ensureObsidianRequireBinding() ?? getObsidianRequire();
-  if (!req) {
-    // Node 测试环境 fallback
-    return require(id);
+  ensureObsidianRequireBinding();
+  return createObsidianModuleResolver()(id);
+}
+
+/** 启动内嵌前卸掉同名外部插件实例，避免 registerView / enabledPlugins 冲突 */
+export async function evictStandaloneBlockLinkPlus(app: App): Promise<void> {
+  const pluginManager = (app as any)?.plugins;
+  if (!pluginManager) return;
+
+  const existing = pluginManager.plugins?.[BLOCK_LINK_PLUS_ID] as BlockLinkPlusInstance | undefined;
+  if (existing && existing[FDTB_EMBEDDED_PLUGIN_MARK] !== true) {
+    releaseBlockLinkPlusViewTypes(app, existing);
+    try {
+      const runner = existing as Plugin & { unload?: () => void | Promise<void> };
+      if (typeof runner.unload === "function") await runner.unload();
+      else if (typeof runner.onunload === "function") await runner.onunload();
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 卸载外部 block-link-plus 失败", error);
+    }
+    releaseBlockLinkPlusViewTypes(app);
+    if (pluginManager.plugins?.[BLOCK_LINK_PLUS_ID] === existing) {
+      delete pluginManager.plugins[BLOCK_LINK_PLUS_ID];
+    }
   }
-  return req(id);
+
+  const enabledSet = pluginManager.enabledPlugins as Set<string> | undefined;
+  if (enabledSet?.has?.(BLOCK_LINK_PLUS_ID)) {
+    try {
+      if (typeof pluginManager.disablePluginAndSave === "function") {
+        await pluginManager.disablePluginAndSave(BLOCK_LINK_PLUS_ID);
+      } else if (typeof pluginManager.disablePlugin === "function") {
+        await pluginManager.disablePlugin(BLOCK_LINK_PLUS_ID);
+      } else {
+        enabledSet.delete(BLOCK_LINK_PLUS_ID);
+      }
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 关闭外部 block-link-plus 开关失败", error);
+      try {
+        enabledSet.delete(BLOCK_LINK_PLUS_ID);
+      } catch {
+        // ignore
+      }
+    }
+  }
 }
 
 /** 内联 bundle 求值前预热 Obsidian 白名单模块（CM + crypto 等） */
@@ -455,12 +493,31 @@ function uninstallPluginShim(app: App, instance: Plugin | null): void {
 }
 
 function unregisterBlockLinkPlusViews(host: SubPluginHost): void {
+  releaseBlockLinkPlusViewTypes(host.app, host.component);
   for (const viewType of BLOCK_LINK_PLUS_VIEW_TYPES) {
     try {
       host.unregisterView(viewType);
     } catch (error) {
       console.warn(`[feishu-doc-toolbar] unregisterView ${viewType} skipped`, error);
     }
+  }
+}
+
+async function teardownStaleEmbeddedBlockLinkPlus(host: SubPluginHost): Promise<void> {
+  const prev = activeRunner;
+  if (prev) {
+    unregisterBlockLinkPlusViews(host);
+    uninstallPluginShim(host.app, prev);
+    try {
+      const runner = prev as Plugin & { unload?: () => void | Promise<void> };
+      if (typeof runner.unload === "function") await runner.unload();
+      else if (typeof runner.onunload === "function") await runner.onunload();
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 清理上次内嵌 block-link-plus 失败", error);
+    }
+    if (activeRunner === prev) activeRunner = null;
+  } else {
+    releaseBlockLinkPlusViewTypes(host.app, host.component);
   }
 }
 
@@ -472,6 +529,10 @@ export const blockLinkPlusModule: EmbeddedSubModule = {
   defaultEnabled: true,
   replacesExternalPluginId: BLOCK_LINK_PLUS_ID,
   async load(host) {
+    ensureObsidianRequireBinding();
+    await teardownStaleEmbeddedBlockLinkPlus(host);
+    await evictStandaloneBlockLinkPlus(host.app);
+    releaseBlockLinkPlusViewTypes(host.app, host.component);
     await migrateLegacyPluginData(host);
     unregisterBlockLinkPlusViews(host);
     let BlockLinkPlusClass: BlockLinkPlusConstructor;
@@ -501,9 +562,15 @@ export const blockLinkPlusModule: EmbeddedSubModule = {
       })();
     });
     try {
-      // 内嵌实例不走 PluginManager.load()，直接 onload 避免 Obsidian 对未注册插件的 load 副作用
-      const runner = instance as Plugin & { onload?: () => void | Promise<void> };
-      await runner.onload?.();
+      const runner = instance as Plugin & {
+        load?: () => void | Promise<void>;
+        onload?: () => void | Promise<void>;
+      };
+      if (typeof runner.load === "function") {
+        await runner.load();
+      } else {
+        await runner.onload?.();
+      }
       installBlockLinkHostLayer(host, instance);
       installContextMenuLineCaptureFix(host, instance);
       installInlineTableBlockRefClickFix(host);

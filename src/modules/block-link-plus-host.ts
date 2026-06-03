@@ -25,7 +25,7 @@ type BlockLinkMenuApi = {
     menu: Menu,
     editor: Editor,
     view: MarkdownView,
-    opts?: { preferLine?: number; preferEndLine?: number }
+    opts?: { preferLine?: number; preferEndLine?: number; suppressFailureHints?: boolean }
   ) => boolean;
   copyFolderDualLink?: (folder: TFolder) => Promise<void>;
 };
@@ -213,13 +213,12 @@ function resolvePreferLines(
   return { preferLine, preferEndLine };
 }
 
+/**
+ * 段落链接生成失败时的兜底菜单。
+ * 不再插入「（此处无法生成段落链接）」这类不可点的占位死项（占菜单一行又无功能）；
+ * 只保留真正可点的「将光标移到当前块正文」帮助用户重试。
+ */
 export function appendMenuFailureHints(menu: Menu, editor: Editor, preferLine: number): void {
-  menu.addItem((item) => {
-    item
-      .setTitle("（此处无法生成段落链接）")
-      .setDesc("请把光标移到正文文字行，或避开纯空行/表格分隔行")
-      .setDisabled(true);
-  });
   menu.addItem((item) => {
     item.setTitle("将光标移到当前块正文").setIcon("arrow-down").onClick(() => {
       try {
@@ -278,16 +277,24 @@ export function appendUnifiedBlockLinkMenu(
   settings.enable_right_click_embed = true;
   settings.enable_right_click_url = true;
 
-  (menu as Menu & { addSeparator?: () => void }).addSeparator?.();
-  menu.addItem((item) => {
-    item.setTitle("指向链接增强").setIcon("link").setDisabled(true);
-  });
-
-  const added = append(menu, editor, view, lineOpts);
-
-  settings.enable_right_click_block = prev.block;
-  settings.enable_right_click_embed = prev.embed;
-  settings.enable_right_click_url = prev.url;
+  let added = false;
+  try {
+    (menu as Menu & { addSeparator?: () => void }).addSeparator?.();
+    menu.addItem((item) => {
+      item.setTitle("指向链接增强").setIcon("link").setDisabled(true);
+    });
+    added = append(menu, editor, view, lineOpts);
+    if (!added) {
+      return false;
+    }
+  } catch (error) {
+    console.warn("[feishu-doc-toolbar] 追加指向链接菜单失败", error);
+    added = false;
+  } finally {
+    settings.enable_right_click_block = prev.block;
+    settings.enable_right_click_embed = prev.embed;
+    settings.enable_right_click_url = prev.url;
+  }
 
   menuAny[FDTB_UNIFIED_LINK_MENU_MARK] = true;
   menuAny.__blpLinkMenuAugmented = true;
@@ -303,7 +310,7 @@ function wrapAppendEditorLinkMenuItems(instance: BlockLinkPlusHostInstance): voi
   api.appendEditorLinkMenuItems = (menu, editor, view, opts) => {
     const lineOpts = resolvePreferLines(instance, editor, opts);
     const added = original(menu, editor, view, lineOpts);
-    if (!added) {
+    if (!added && !opts?.suppressFailureHints) {
       appendMenuFailureHints(menu, editor, lineOpts.preferLine);
     }
     return added;
@@ -457,12 +464,19 @@ export function installBlockIdAnchorProtection(
   if (!cm?.EditorState?.transactionFilter) return;
 
   const filter = cm.EditorState.transactionFilter.of((tr) => {
-    if (instance.settings?.protectBlockIdAnchors === false) return tr;
-    if (transactionWouldDamageBlockAnchors(tr as TransactionLike)) {
-      maybeNotifyBlockIdProtected();
-      return [];
+    // 守卫（红线 22）：transactionFilter 抛错会让所有编辑器 EditorState 失效，
+    // 历史文件全打不开；任何异常一律原样放行，最多让「防误删」失效，绝不拖垮编辑器。
+    try {
+      if (instance.settings?.protectBlockIdAnchors === false) return tr;
+      if (transactionWouldDamageBlockAnchors(tr as TransactionLike)) {
+        maybeNotifyBlockIdProtected();
+        return [];
+      }
+      return tr;
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 块锚点保护过滤器异常，已放行", error);
+      return tr;
     }
-    return tr;
   });
 
   host.registerEditorExtension(filter);

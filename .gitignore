@@ -1,6 +1,8 @@
 node_modules/
 data.json
+data.json.bak*
 backups/
+file-versions/
 _git_snapshots/
 *.bak
 *.bak-*
@@ -11,3 +13,6 @@ debug.log
 tests/claudian-test-bundle.cjs
 release/
 app.js
+FIXED-*.txt
+RELOAD-ME.txt
+.synced-from-近期工作.txt

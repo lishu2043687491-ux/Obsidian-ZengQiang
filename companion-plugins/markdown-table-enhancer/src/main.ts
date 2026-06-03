@@ -1,172 +1,464 @@
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+import {
+  MarkdownPostProcessorContext,
+  MarkdownView,
+  Menu,
+  Modal,
+  Notice,
+  Plugin,
+  TFile,
+  normalizePath,
+} from "obsidian";
+import { RangeSetBuilder } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 
-// src/main.ts
-var main_exports = {};
-__export(main_exports, {
-  default: () => MarkdownTableEnhancerPlugin
-});
-module.exports = __toCommonJS(main_exports);
-var import_obsidian = require("obsidian");
-var import_state = require("@codemirror/state");
-var import_view = require("@codemirror/view");
-var PLUGIN_ID = "markdown-table-enhancer";
-var TEMPLATE_LIBRARY_FOLDER = ".\u6A21\u677F\u5E93";
-var INITIALIZE_COMMAND_ID = "initialize-current-file-table-anchors";
-var INITIALIZE_COMMAND_NAME = "\u4E3A\u5F53\u524D\u6587\u4EF6\u5168\u90E8\u8868\u683C\u542F\u7528\u589E\u5F3A\uFF08\u6279\u91CF\uFF09";
-var INITIALIZE_CURRENT_TABLE_COMMAND_ID = "initialize-current-table-enhancement";
-var INITIALIZE_CURRENT_TABLE_COMMAND_NAME = "\u5BF9\u5F53\u524D\u8868\u542F\u7528\u589E\u5F3A";
-var INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID = "initialize-current-table-native-layout";
-var INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME = "\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316";
-var INSERT_NATIVE_COLOR_TABLE_COMMAND_ID = "insert-native-color-table-template";
-var INSERT_NATIVE_COLOR_TABLE_COMMAND_NAME = "\u63D2\u5165\u5F69\u8272\u539F\u751F\u7A7A\u8868\u683C";
-var SET_NATIVE_ROW_COLOR_COMMAND_ID = "set-current-native-table-row-color";
-var SET_NATIVE_ROW_COLOR_COMMAND_NAME = "\u8BBE\u7F6E\u5F53\u524D\u539F\u751F\u8868\u683C\u9009\u4E2D\u884C\u989C\u8272";
-var OPEN_NATIVE_ROW_BANDS_COMMAND_ID = "open-current-native-table-row-bands";
-var OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "\u6253\u5F00\u5F53\u524D\u539F\u751F\u8868\u683C\u884C\u6BB5\u914D\u8272";
-var INSERT_TEMPLATE_COMMAND_ID = "insert-enhanced-table-template";
-var INSERT_TEMPLATE_COMMAND_NAME = "\u63D2\u5165\u589E\u5F3A\u8868\u683C\u6A21\u677F";
-var OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
-var OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "\u6A21\u677F\u5E93";
-var COPY_TABLE_AS_IMAGE_LABEL = "\u590D\u5236\u5F53\u524D\u8868\u683C\u6210\u56FE";
-var COPY_TABLE_AS_IMAGE_SHORT_LABEL = "\u56FE";
-var RESTORE_COMMAND_ID = "restore-last-table-enhancement-snapshot";
-var RESTORE_COMMAND_NAME = "\u6062\u590D\u5F53\u524D\u6587\u4EF6\u6700\u8FD1\u4E00\u6B21\u8868\u683C\u589E\u5F3A\u5FEB\u7167";
-var STATUS_COMMAND_ID = "show-current-file-table-enhancement-status";
-var STATUS_COMMAND_NAME = "\u67E5\u770B\u5F53\u524D\u6587\u4EF6\u8868\u683C\u589E\u5F3A\u72B6\u6001";
-var SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
-var SET_SELECTION_YELLOW_COMMAND_NAME = "\u5C06\u5F53\u524D\u8868\u683C\u9009\u533A\u8BBE\u4E3A\u6D45\u9EC4";
-var CLEAR_SELECTION_COLOR_COMMAND_ID = "clear-current-table-selection-color";
-var CLEAR_SELECTION_COLOR_COMMAND_NAME = "\u6E05\u9664\u5F53\u524D\u8868\u683C\u9009\u533A\u989C\u8272";
-var MERGE_SELECTION_COMMAND_ID = "merge-current-table-selection";
-var MERGE_SELECTION_COMMAND_NAME = "\u5408\u5E76\u5F53\u524D\u8868\u683C\u9009\u533A";
-var SPLIT_SELECTION_COMMAND_ID = "split-current-table-cell";
-var SPLIT_SELECTION_COMMAND_NAME = "\u62C6\u5206\u5F53\u524D\u8868\u683C\u5355\u5143\u683C";
-var PASTE_IMAGE_COMMAND_ID = "paste-clipboard-image-to-current-table-cell";
-var PASTE_IMAGE_COMMAND_NAME = "\u5C06\u526A\u8D34\u677F\u56FE\u7247\u7C98\u8D34\u5230\u5F53\u524D\u589E\u5F3A\u8868\u683C\u5355\u5143\u683C";
-var PASTE_ONENOTE_RICH_TABLE_COMMAND_ID = "paste-onenote-rich-table";
-var PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "\u4ECE OneNote \u7C98\u8D34\u4E3A\u589E\u5F3A\u8868\u683C";
-var TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID = "toggle-experimental-table-features";
-var TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME = "\u5207\u6362\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B";
-var SNAPSHOT_LIMIT = 60;
-var TABLE_ID_PREFIX = "tbl_";
-var HTML_TABLE_MARKER_RE = /^\s*<!--\s*mdtp:(tbl_[a-z0-9_-]+)\s*-->\s*$/i;
-var OBSIDIAN_TABLE_MARKER_RE = /^\s*%%\s*mdtp:(tbl_[a-z0-9_-]+)\s*%%\s*$/i;
-var REFERENCE_TABLE_MARKER_RE = /^\s*\[\/\/\]:\s*#\s*\(mdtp:(tbl_[a-z0-9_-]+)\)\s*$/i;
-var VISIBLE_REFERENCE_TABLE_MARKER_RE = /^\s*\/\/\s*#\s*\(mdtp:(tbl_[a-z0-9_-]+)\)\s*$/i;
-var TEMPLATE_TABLE_METADATA_RE = /^\s*%%\s*mdtp-template:(\{.*\})\s*%%\s*$/i;
-var PALETTE = [
-  { label: "\u6D45\u9EC4", value: "#FFF3BF" },
-  { label: "\u6D45\u84DD", value: "#D0EBFF" },
-  { label: "\u6D45\u7EFF", value: "#D3F9D8" },
-  { label: "\u6D45\u7EA2", value: "#FFE3E3" },
-  { label: "\u6D45\u7070", value: "#F1F3F5" }
+const PLUGIN_ID = "markdown-table-enhancer";
+const TEMPLATE_LIBRARY_FOLDER = ".模板库";
+const INITIALIZE_COMMAND_ID = "initialize-current-file-table-anchors";
+const INITIALIZE_COMMAND_NAME = "为当前文件全部表格启用增强（批量）";
+const INITIALIZE_CURRENT_TABLE_COMMAND_ID = "initialize-current-table-enhancement";
+const INITIALIZE_CURRENT_TABLE_COMMAND_NAME = "对当前表启用增强";
+const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID = "initialize-current-table-native-layout";
+const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME = "对当前表格美化";
+const INSERT_NATIVE_COLOR_TABLE_COMMAND_ID = "insert-native-color-table-template";
+const INSERT_NATIVE_COLOR_TABLE_COMMAND_NAME = "插入彩色原生空表格";
+const SET_NATIVE_ROW_COLOR_COMMAND_ID = "set-current-native-table-row-color";
+const SET_NATIVE_ROW_COLOR_COMMAND_NAME = "设置当前原生表格选中行颜色";
+const OPEN_NATIVE_ROW_BANDS_COMMAND_ID = "open-current-native-table-row-bands";
+const OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "打开当前原生表格行段配色";
+const INSERT_TEMPLATE_COMMAND_ID = "insert-enhanced-table-template";
+const INSERT_TEMPLATE_COMMAND_NAME = "插入增强表格模板";
+const OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
+const OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "模板库";
+const COPY_TABLE_AS_IMAGE_LABEL = "复制当前表格成图";
+const COPY_TABLE_AS_IMAGE_SHORT_LABEL = "图";
+const RESTORE_COMMAND_ID = "restore-last-table-enhancement-snapshot";
+const RESTORE_COMMAND_NAME = "恢复当前文件最近一次表格增强快照";
+const STATUS_COMMAND_ID = "show-current-file-table-enhancement-status";
+const STATUS_COMMAND_NAME = "查看当前文件表格增强状态";
+const SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
+const SET_SELECTION_YELLOW_COMMAND_NAME = "将当前表格选区设为浅黄";
+const CLEAR_SELECTION_COLOR_COMMAND_ID = "clear-current-table-selection-color";
+const CLEAR_SELECTION_COLOR_COMMAND_NAME = "清除当前表格选区颜色";
+const MERGE_SELECTION_COMMAND_ID = "merge-current-table-selection";
+const MERGE_SELECTION_COMMAND_NAME = "合并当前表格选区";
+const SPLIT_SELECTION_COMMAND_ID = "split-current-table-cell";
+const SPLIT_SELECTION_COMMAND_NAME = "拆分当前表格单元格";
+const PASTE_IMAGE_COMMAND_ID = "paste-clipboard-image-to-current-table-cell";
+const PASTE_IMAGE_COMMAND_NAME = "将剪贴板图片粘贴到当前增强表格单元格";
+const PASTE_ONENOTE_RICH_TABLE_COMMAND_ID = "paste-onenote-rich-table";
+const PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "从 OneNote 粘贴为增强表格";
+const TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID = "toggle-experimental-table-features";
+const TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME = "切换增强表格测试版能力";
+const SNAPSHOT_LIMIT = 60;
+const TABLE_ID_PREFIX = "tbl_";
+const HTML_TABLE_MARKER_RE = /^\s*<!--\s*mdtp:(tbl_[a-z0-9_-]+)\s*-->\s*$/i;
+const OBSIDIAN_TABLE_MARKER_RE = /^\s*%%\s*mdtp:(tbl_[a-z0-9_-]+)\s*%%\s*$/i;
+const REFERENCE_TABLE_MARKER_RE = /^\s*\[\/\/\]:\s*#\s*\(mdtp:(tbl_[a-z0-9_-]+)\)\s*$/i;
+const VISIBLE_REFERENCE_TABLE_MARKER_RE = /^\s*\/\/\s*#\s*\(mdtp:(tbl_[a-z0-9_-]+)\)\s*$/i;
+const TEMPLATE_TABLE_METADATA_RE = /^\s*%%\s*mdtp-template:(\{.*\})\s*%%\s*$/i;
+const PALETTE = [
+  { label: "浅黄", value: "#FFF3BF" },
+  { label: "浅蓝", value: "#D0EBFF" },
+  { label: "浅绿", value: "#D3F9D8" },
+  { label: "浅红", value: "#FFE3E3" },
+  { label: "浅灰", value: "#F1F3F5" },
 ];
-var NATIVE_COLOR_PRESET_BLUE_ZEBRA = "blueZebra";
-var NATIVE_COLOR_DEFAULT_PRESET_ID = "green";
-var NATIVE_COLOR_TABLE_HEADER = "#A9D18E";
-var NATIVE_COLOR_TABLE_LEGACY_HEADER = "#2F5F9F";
-var NATIVE_COLOR_TABLE_HEADER_TEXT = "#111111";
-var NATIVE_COLOR_TABLE_BASE_ROW = "#FFFFFF";
-var NATIVE_COLOR_TABLE_ALT_ROW = "#E2F0D9";
-var NATIVE_LAYOUT_SECTION_LABEL = "\u2500\u2500 \u539F\u751F\u8868\u683C\u589E\u5F3A \u2500\u2500";
-var NATIVE_LAYOUT_CURRENT_TABLE_LABEL = "\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316";
-var NATIVE_LAYOUT_PAGE_TABLES_LABEL = "\u5BF9\u672C\u9875\u9762\u6240\u6709\u7684\u8868\u683C\u7F8E\u5316";
-var NATIVE_LAYOUT_ROW_COLOR_LABEL = "\u8BBE\u7F6E\u9009\u4E2D\u884C\u989C\u8272";
-var NATIVE_LAYOUT_ROW_BANDS_LABEL = "\u884C\u6BB5\u914D\u8272";
-var MIN_COLUMN_WIDTH = 60;
-var MIN_ROW_HEIGHT = 28;
-var DRAGGER_HANDLE_SELECTOR = ".dnd-drag-handle[data-block-start]";
-var HISTORY_LIMIT = 100;
-var PASTE_EVENT_SUPPRESSION_MS = 2e3;
-var DEFAULT_CELL_IMAGE_WIDTH = 220;
-var HIDDEN_MARKER_LINE_DECORATION = import_view.Decoration.line({
-  class: "mdtp-hidden-marker-line"
+const NATIVE_COLOR_PRESET_BLUE_ZEBRA = "blueZebra";
+const NATIVE_COLOR_DEFAULT_PRESET_ID = "green";
+const NATIVE_COLOR_TABLE_HEADER = "#A9D18E";
+const NATIVE_COLOR_TABLE_LEGACY_HEADER = "#2F5F9F";
+const NATIVE_COLOR_TABLE_HEADER_TEXT = "#111111";
+const NATIVE_COLOR_TABLE_BASE_ROW = "#FFFFFF";
+const NATIVE_COLOR_TABLE_ALT_ROW = "#E2F0D9";
+const NATIVE_LAYOUT_SECTION_LABEL = "── 原生表格增强 ──";
+const NATIVE_LAYOUT_CURRENT_TABLE_LABEL = "对当前表格美化";
+const NATIVE_LAYOUT_PAGE_TABLES_LABEL = "对本页面所有的表格美化";
+const NATIVE_LAYOUT_ROW_COLOR_LABEL = "设置选中行颜色";
+const NATIVE_LAYOUT_ROW_BANDS_LABEL = "行段配色";
+const MIN_COLUMN_WIDTH = 60;
+const MIN_ROW_HEIGHT = 28;
+const DRAGGER_HANDLE_SELECTOR = ".dnd-drag-handle[data-block-start]";
+const HISTORY_LIMIT = 100;
+const PASTE_EVENT_SUPPRESSION_MS = 2000;
+const DEFAULT_CELL_IMAGE_WIDTH = 220;
+const HIDDEN_MARKER_LINE_DECORATION = Decoration.line({
+  class: "mdtp-hidden-marker-line",
 });
-var NATIVE_COLOR_PRESET_PALETTES = {
+
+type TableMergeMetadata = {
+  row: number;
+  col: number;
+  rowspan: number;
+  colspan: number;
+};
+
+type NativeColorBuiltInPresetId = "blue" | "green";
+type NativeColorPresetId = NativeColorBuiltInPresetId | "custom" | string;
+
+type NativeColorPalette = {
+  header: string;
+  headerText: string;
+  baseRow: string;
+  altRow: string;
+  border: string;
+};
+
+type NativeColorSavedPalette = {
+  id: string;
+  label: string;
+  palette: NativeColorPalette;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type TableLayoutMetadata = {
+  colWidths: Record<string, number>;
+  rowHeights: Record<string, number>;
+  cellColors: Record<string, string>;
+  rowColors: Record<string, string>;
+  colColors: Record<string, string>;
+  cellAlignments: Record<string, "left" | "center" | "right">;
+  cellImageWidths: Record<string, number>;
+  merges: TableMergeMetadata[];
+  nativeColorPreset?: "blueZebra";
+  nativeColorPalette?: NativeColorPalette;
+};
+
+type TableRecordMode = "enhanced" | "nativeLayout";
+
+type TableRecord = {
+  tableId: string;
+  mode?: TableRecordMode;
+  filePath: string;
+  createdAt: number;
+  updatedAt: number;
+  lastKnownHash: string;
+  lastKnownRange: {
+    startLine: number;
+    endLine: number;
+  };
+  layout: TableLayoutMetadata;
+};
+
+type SnapshotRecord = {
+  snapshotId: string;
+  filePath: string;
+  createdAt: number;
+  reason: string;
+  tableIds: string[];
+  backupPath: string;
+  tableRecords: Record<string, TableRecord>;
+};
+
+type PluginDataShape = {
+  version: 1;
+  tables: Record<string, TableRecord>;
+  snapshots: SnapshotRecord[];
+  experimentalFeatureGate?: boolean;
+  nativeColorDefaultPresetId?: NativeColorPresetId;
+  nativeColorCustomPalette?: NativeColorPalette;
+  nativeColorSavedPalettes?: NativeColorSavedPalette[];
+};
+
+type TemplateRecord = {
+  name: string;
+  path: string;
+  folderPath: string;
+  relativePath: string;
+  folderSegments: string[];
+};
+
+type TemplateTreeNode = {
+  folders: Map<string, TemplateTreeNode>;
+  templates: TemplateRecord[];
+};
+
+type TemplateTableMetadata = {
+  version: 1;
+  tables: Record<
+    string,
+    {
+      mode?: TableRecordMode;
+      layout?: Partial<TableLayoutMetadata>;
+    }
+  >;
+};
+
+type HistoryState = {
+  filePath: string;
+  content: string;
+  tableRecords: Record<string, TableRecord>;
+};
+
+type HistoryEntry = {
+  label: string;
+  filePath: string;
+  tableIds: string[];
+  before: HistoryState;
+  after: HistoryState;
+};
+
+type ParsedTableBlock = {
+  startLine: number;
+  endLine: number;
+  markerLine: number | null;
+  tableId: string | null;
+  raw: string;
+};
+
+type OneNoteConvertedContent = {
+  content: string;
+  tableRecords: TableRecord[];
+};
+
+type OneNoteTableConversion = {
+  markdown: string;
+  record: TableRecord;
+};
+
+const NATIVE_COLOR_PRESET_PALETTES: Record<NativeColorBuiltInPresetId, NativeColorPalette & { label: string }> = {
   blue: {
-    label: "\u84DD\u8272 / \u6D45\u84DD",
+    label: "蓝色 / 浅蓝",
     header: "#9CC2E5",
     headerText: "#111111",
     baseRow: "#FFFFFF",
     altRow: "#EAF3FF",
-    border: "#9FBAD8"
+    border: "#9FBAD8",
   },
   green: {
-    label: "\u7EFF\u8272 / \u6D45\u7EFF",
+    label: "绿色 / 浅绿",
     header: NATIVE_COLOR_TABLE_HEADER,
     headerText: NATIVE_COLOR_TABLE_HEADER_TEXT,
     baseRow: NATIVE_COLOR_TABLE_BASE_ROW,
     altRow: NATIVE_COLOR_TABLE_ALT_ROW,
-    border: "#9EAD93"
-  }
+    border: "#9EAD93",
+  },
 };
-var NATIVE_COLOR_CUSTOM_DEFAULT = {
+
+const NATIVE_COLOR_CUSTOM_DEFAULT: NativeColorPalette = {
   header: "#A9D18E",
   headerText: "#111111",
   baseRow: "#FFFFFF",
   altRow: "#E2F0D9",
-  border: "#9EAD93"
+  border: "#9EAD93",
 };
-var DEFAULT_DATA = {
+
+type CellCoord = {
+  row: number;
+  col: number;
+};
+
+type SelectionRect = {
+  startRow: number;
+  endRow: number;
+  startCol: number;
+  endCol: number;
+};
+
+type ResizeState =
+  | {
+      kind: "column";
+      tableEl: HTMLTableElement;
+      tableId: string;
+      file: TFile;
+      index: number;
+      startClient: number;
+      startSize: number;
+    }
+  | {
+      kind: "row";
+      tableEl: HTMLTableElement;
+      tableId: string;
+      file: TFile;
+      index: number;
+      startClient: number;
+      startSize: number;
+    };
+
+type SelectionDragState = {
+  tableEl: HTMLTableElement;
+  anchor: CellCoord;
+};
+
+type TableRuntimeState = {
+  file: TFile;
+  parsedTable: ParsedTableBlock | null;
+  selection: SelectionRect | null;
+  anchor: CellCoord | null;
+};
+
+type TableStructure = {
+  rows: HTMLTableRowElement[];
+  matrix: HTMLTableCellElement[][];
+};
+
+type TableContextTarget = {
+  at: number;
+  filePath: string;
+  tableEl: HTMLTableElement;
+  target: HTMLElement;
+  x: number;
+  y: number;
+};
+
+type UninitializedTableContext = {
+  file: TFile;
+  parsedTable: ParsedTableBlock;
+  coord: CellCoord;
+  tableEl?: HTMLTableElement | null;
+};
+
+type NativeTableSidebarContext = {
+  mode: "native";
+  file: TFile;
+  parsedTable: ParsedTableBlock;
+  coord: CellCoord;
+  tableEl: HTMLTableElement;
+};
+
+type NativeLayoutTableSidebarContext = {
+  mode: "nativeLayout";
+  file: TFile;
+  tableId: string;
+  parsedTable: ParsedTableBlock | null;
+  selection: SelectionRect | null;
+  coord: CellCoord;
+  tableEl: HTMLTableElement;
+};
+
+type EnhancedTableSidebarContext = {
+  mode: "enhanced";
+  file: TFile;
+  tableId: string;
+  parsedTable: ParsedTableBlock | null;
+  selection: SelectionRect | null;
+  coord: CellCoord;
+  tableEl: HTMLTableElement;
+};
+
+type TableSidebarContext = NativeTableSidebarContext | NativeLayoutTableSidebarContext | EnhancedTableSidebarContext;
+
+type ParsedRawTable = {
+  header: string[];
+  divider: string[];
+  body: string[][];
+};
+
+type InlineEditorState = {
+  tableEl: HTMLTableElement;
+  file: TFile;
+  tableId: string | null;
+  parsedTable: ParsedTableBlock | null;
+  cell: HTMLTableCellElement;
+  row: HTMLTableRowElement;
+  coord: CellCoord;
+  wrapper: HTMLDivElement;
+  textarea: HTMLTextAreaElement;
+  imageContainer: HTMLDivElement;
+  imageMarkups: string[];
+  initialValue: string;
+  originalRowHeight: string;
+  originalRowMinHeight: string;
+  originalCellHeight: string;
+  originalCellMinHeight: string;
+  layoutFrame: number | null;
+  closing: boolean;
+};
+
+type ImagePreviewTarget = {
+  displayPath: string;
+  resourcePath: string;
+  width?: number;
+};
+
+type ImageToolbarState = {
+  tableEl: HTMLTableElement;
+  file: TFile;
+  tableId: string;
+  coord: CellCoord;
+  cell: HTMLTableCellElement;
+  root: HTMLDivElement;
+};
+
+type ImageManipulatorState = {
+  tableEl: HTMLTableElement;
+  file: TFile;
+  tableId: string;
+  coord: CellCoord;
+  cell: HTMLTableCellElement;
+  imageEl: HTMLImageElement;
+  root: HTMLDivElement;
+  resizeHandle: HTMLButtonElement;
+  deleteButton: HTMLButtonElement;
+};
+
+type ImageDragState = {
+  manipulator: ImageManipulatorState;
+  startClientX: number;
+  startWidth: number;
+  previewWidth: number;
+};
+
+const DEFAULT_DATA: PluginDataShape = {
   version: 1,
   tables: {},
   snapshots: [],
   experimentalFeatureGate: false,
   nativeColorDefaultPresetId: NATIVE_COLOR_DEFAULT_PRESET_ID,
   nativeColorCustomPalette: NATIVE_COLOR_CUSTOM_DEFAULT,
-  nativeColorSavedPalettes: []
+  nativeColorSavedPalettes: [],
 };
-var TemplateNameModal = class extends import_obsidian.Modal {
-  constructor(plugin, templateContent) {
+
+type SidebarActionDescriptor = {
+  label: string;
+  wide?: boolean;
+  experimental?: boolean;
+};
+
+type SyncTableRecordsOptions = {
+  forceMode?: TableRecordMode;
+  modeOverrides?: Record<string, TableRecordMode>;
+};
+
+class TemplateNameModal extends Modal {
+  private hiddenMetadataPrefix: string;
+  private visibleTemplateContent: string;
+  private previewTextarea: HTMLTextAreaElement | null = null;
+
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private templateContent: string
+  ) {
     super(plugin.app);
-    this.plugin = plugin;
-    this.templateContent = templateContent;
-    __publicField(this, "hiddenMetadataPrefix");
-    __publicField(this, "visibleTemplateContent");
-    __publicField(this, "previewTextarea", null);
     const split = this.plugin.splitTemplateContentForPreview(templateContent);
     this.hiddenMetadataPrefix = split.hiddenPrefix;
     this.visibleTemplateContent = split.visible;
   }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.replaceChildren();
     contentEl.classList.add("mdtp-template-modal");
+
     const title = document.createElement("h2");
-    title.textContent = "\u4FDD\u5B58\u4E3A\u6A21\u677F";
+    title.textContent = "保存为模板";
     contentEl.appendChild(title);
+
     const label = document.createElement("label");
     label.className = "mdtp-template-field";
     const labelText = document.createElement("span");
-    labelText.textContent = "\u6A21\u677F\u540D\u79F0";
+    labelText.textContent = "模板名称";
     const input = document.createElement("input");
     input.type = "text";
-    input.placeholder = "\u4F8B\u5982\uFF1A\u5468\u8BA1\u5212\u8868\u683C";
+    input.placeholder = "例如：周计划表格";
     input.className = "mdtp-template-input";
     label.append(labelText, input);
     contentEl.appendChild(label);
+
     const previewLabel = document.createElement("label");
     previewLabel.className = "mdtp-template-field";
     const previewLabelText = document.createElement("span");
-    previewLabelText.textContent = "\u6A21\u677F\u5185\u5BB9\uFF08\u53EF\u7F16\u8F91\uFF09";
+    previewLabelText.textContent = "模板内容（可编辑）";
     const preview = document.createElement("textarea");
     preview.className = "mdtp-template-preview";
     preview.value = this.visibleTemplateContent;
@@ -174,19 +466,21 @@ var TemplateNameModal = class extends import_obsidian.Modal {
     previewLabel.append(previewLabelText, preview);
     contentEl.appendChild(previewLabel);
     this.previewTextarea = preview;
+
     const actions = document.createElement("div");
     actions.className = "mdtp-template-actions";
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
-    cancelButton.textContent = "\u53D6\u6D88";
+    cancelButton.textContent = "取消";
     cancelButton.addEventListener("click", () => this.close());
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "mod-cta";
-    saveButton.textContent = "\u4FDD\u5B58";
+    saveButton.textContent = "保存";
     saveButton.addEventListener("click", () => void this.submit(input.value));
     actions.append(cancelButton, saveButton);
     contentEl.appendChild(actions);
+
     input.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
@@ -194,14 +488,16 @@ var TemplateNameModal = class extends import_obsidian.Modal {
     });
     window.setTimeout(() => input.focus(), 50);
   }
+
   onClose() {
     this.contentEl.replaceChildren();
     this.previewTextarea = null;
   }
-  async submit(rawName) {
+
+  private async submit(rawName: string) {
     const name = rawName.trim();
     if (!name) {
-      new import_obsidian.Notice("\u8BF7\u5148\u586B\u5199\u6A21\u677F\u540D\u79F0");
+      new Notice("请先填写模板名称");
       return;
     }
     const visibleValue = this.previewTextarea?.value ?? this.visibleTemplateContent;
@@ -209,52 +505,60 @@ var TemplateNameModal = class extends import_obsidian.Modal {
     const created = await this.plugin.createTemplateFromContent(name, finalContent);
     if (created) this.close();
   }
-};
-var TemplateCreateModal = class extends import_obsidian.Modal {
-  constructor(plugin, onCreated) {
+}
+
+class TemplateCreateModal extends Modal {
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private onCreated?: () => void | Promise<void>
+  ) {
     super(plugin.app);
-    this.plugin = plugin;
-    this.onCreated = onCreated;
   }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.replaceChildren();
     contentEl.classList.add("mdtp-template-modal");
+
     const title = document.createElement("h2");
-    title.textContent = "\u65B0\u5EFA\u6A21\u677F";
+    title.textContent = "新建模板";
     contentEl.appendChild(title);
+
     const nameLabel = document.createElement("label");
     nameLabel.className = "mdtp-template-field";
     const nameText = document.createElement("span");
-    nameText.textContent = "\u6A21\u677F\u540D\u79F0";
+    nameText.textContent = "模板名称";
     const input = document.createElement("input");
     input.type = "text";
-    input.placeholder = "\u4F8B\u5982\uFF1A\u5468\u8BA1\u5212/\u590D\u76D8\u6A21\u677F";
+    input.placeholder = "例如：周计划/复盘模板";
     input.className = "mdtp-template-input";
     nameLabel.append(nameText, input);
     contentEl.appendChild(nameLabel);
+
     const contentLabel = document.createElement("label");
     contentLabel.className = "mdtp-template-field";
     const contentText = document.createElement("span");
-    contentText.textContent = "\u6A21\u677F\u5185\u5BB9";
+    contentText.textContent = "模板内容";
     const textarea = document.createElement("textarea");
     textarea.className = "mdtp-template-editor";
-    textarea.placeholder = "\u53EF\u4EE5\u5148\u5199\u6A21\u677F\u5185\u5BB9\uFF1B\u4E5F\u53EF\u4EE5\u7559\u7A7A\uFF0C\u65B0\u5EFA\u540E\u518D\u7F16\u8F91\u3002";
+    textarea.placeholder = "可以先写模板内容；也可以留空，新建后再编辑。";
     contentLabel.append(contentText, textarea);
     contentEl.appendChild(contentLabel);
+
     const actions = document.createElement("div");
     actions.className = "mdtp-template-actions";
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
-    cancelButton.textContent = "\u53D6\u6D88";
+    cancelButton.textContent = "取消";
     cancelButton.addEventListener("click", () => this.close());
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "mod-cta";
-    saveButton.textContent = "\u521B\u5EFA";
+    saveButton.textContent = "创建";
     saveButton.addEventListener("click", () => void this.submit(input.value, textarea.value));
     actions.append(cancelButton, saveButton);
     contentEl.appendChild(actions);
+
     input.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
@@ -262,145 +566,177 @@ var TemplateCreateModal = class extends import_obsidian.Modal {
     });
     window.setTimeout(() => input.focus(), 50);
   }
+
   onClose() {
     this.contentEl.replaceChildren();
   }
-  async submit(rawName, rawContent) {
+
+  private async submit(rawName: string, rawContent: string) {
     const created = await this.plugin.createTemplateFromModalInput(rawName, rawContent);
     if (!created) return;
     await this.onCreated?.();
     this.close();
   }
-};
-var TemplateLibraryModal = class extends import_obsidian.Modal {
-  constructor(plugin) {
+}
+
+class TemplateLibraryModal extends Modal {
+  constructor(private plugin: MarkdownTableEnhancerPlugin) {
     super(plugin.app);
-    this.plugin = plugin;
   }
+
   async onOpen() {
     this.contentEl.classList.add("mdtp-template-modal");
     await this.render();
   }
+
   onClose() {
     this.contentEl.replaceChildren();
   }
-  getFeishuToolbarPlugin() {
+
+  private getFeishuToolbarPlugin(): any {
     const id = "feishu-doc-toolbar";
-    return this.plugin.app?.plugins?.plugins?.[id] ?? null;
+    return (this.plugin.app as any)?.plugins?.plugins?.[id] ?? null;
   }
-  async render() {
+
+  private async render() {
     const { contentEl } = this;
     contentEl.replaceChildren();
+
     const title = document.createElement("h2");
-    title.textContent = "\u6A21\u677F\u5E93";
+    title.textContent = "模板库";
     contentEl.appendChild(title);
+
     const hint = document.createElement("p");
     hint.className = "mdtp-template-hint";
-    hint.textContent = "\u6A21\u677F\u4FDD\u5B58\u5728\u9690\u85CF\u6587\u4EF6\u5939\u4E2D\uFF0C\u4E0D\u4F1A\u5360\u7528\u4E3B\u76EE\u5F55\u3002";
+    hint.textContent = "模板保存在隐藏文件夹中，不会占用主目录。";
     contentEl.appendChild(hint);
+
     const feishu = this.getFeishuToolbarPlugin();
     const canBridge = !!feishu && typeof feishu.buildFullTemplateTree === "function";
+
     const toolbar = document.createElement("div");
     toolbar.className = "mdtp-template-toolbar";
     const createButton = document.createElement("button");
     createButton.type = "button";
     createButton.className = "mod-cta";
-    createButton.textContent = "\u65B0\u5EFA\u6A21\u677F";
+    createButton.textContent = "新建模板";
     createButton.addEventListener("click", () => {
       new TemplateCreateModal(this.plugin, () => this.render()).open();
     });
     toolbar.appendChild(createButton);
+
     if (canBridge && typeof feishu.createTemplateSubfolder === "function") {
       const createGroupButton = document.createElement("button");
       createGroupButton.type = "button";
-      createGroupButton.textContent = "\u65B0\u5EFA\u5206\u7EC4";
+      createGroupButton.textContent = "新建分组";
       createGroupButton.addEventListener("click", () => {
         this.beginInlineRename(createGroupButton, {
           initial: "",
-          placeholder: "\u5206\u7EC4\u540D\u79F0\uFF0C\u4F8B\u5982\u300C\u590D\u76D8\u300D\u6216\u300C\u5DE5\u4F5C/\u590D\u76D8\u300D",
+          placeholder: "分组名称，例如「复盘」或「工作/复盘」",
           onCommit: async (value) => {
             const ok = await feishu.createTemplateSubfolder(value);
             if (ok) await this.render();
-          }
+          },
         });
       });
       toolbar.appendChild(createGroupButton);
     }
     contentEl.appendChild(toolbar);
+
     if (canBridge) {
       await this.renderBridgedTree(contentEl, feishu);
       return;
     }
+
     const templates = await this.plugin.getTemplateRecords();
     if (templates.length === 0) {
       const empty = document.createElement("div");
       empty.className = "mdtp-template-empty";
-      empty.textContent = "\u8FD8\u6CA1\u6709\u6A21\u677F\u3002\u53EF\u4EE5\u5148\u9009\u4E2D\u5185\u5BB9\u53F3\u952E\u4FDD\u5B58\u4E3A\u6A21\u677F\uFF0C\u4E5F\u53EF\u4EE5\u65B0\u5EFA\u7A7A\u6A21\u677F\u540E\u7F16\u8F91\u3002";
+      empty.textContent = "还没有模板。可以先选中内容右键保存为模板，也可以新建空模板后编辑。";
       contentEl.appendChild(empty);
       return;
     }
+
     const list = document.createElement("div");
     list.className = "mdtp-template-list";
     const tree = this.buildTemplateTree(templates);
     this.appendTemplateTree(list, tree, 0);
     contentEl.appendChild(list);
   }
-  async renderBridgedTree(contentEl, feishu) {
-    let tree;
-    let groupOptions;
+
+  private async renderBridgedTree(contentEl: HTMLElement, feishu: any) {
+    let tree: { folders: Map<string, any>; templates: any[] };
+    let groupOptions: Array<{ value: string; label: string }>;
     try {
       tree = await feishu.buildFullTemplateTree();
-      groupOptions = typeof feishu.getTemplateGroupMoveOptions === "function" ? await feishu.getTemplateGroupMoveOptions() : [{ value: "", label: this.getUngroupedLabel(feishu) }];
+      groupOptions =
+        typeof feishu.getTemplateGroupMoveOptions === "function"
+          ? await feishu.getTemplateGroupMoveOptions()
+          : [{ value: "", label: this.getUngroupedLabel(feishu) }];
     } catch (error) {
       console.warn("[mdte] bridged template tree failed", error);
       const fallback = document.createElement("div");
       fallback.className = "mdtp-template-empty";
-      fallback.textContent = "\u8BFB\u53D6\u6A21\u677F\u5E93\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002";
+      fallback.textContent = "读取模板库失败，请稍后重试。";
       contentEl.appendChild(fallback);
       return;
     }
+
     const list = document.createElement("div");
     list.className = "mdtp-template-list";
+
     const hasTemplates = tree.templates.length > 0;
     const hasFolders = tree.folders.size > 0;
     if (!hasTemplates && !hasFolders) {
       const empty = document.createElement("div");
       empty.className = "mdtp-template-empty";
-      empty.textContent = "\u8FD8\u6CA1\u6709\u6A21\u677F\u6216\u5206\u7EC4\u3002\u53EF\u4EE5\u300C\u65B0\u5EFA\u5206\u7EC4\u300D\u3001\u300C\u65B0\u5EFA\u6A21\u677F\u300D\u6216\u53F3\u952E\u4FDD\u5B58\u5F53\u524D\u5185\u5BB9\u3002";
+      empty.textContent = "还没有模板或分组。可以「新建分组」、「新建模板」或右键保存当前内容。";
       contentEl.appendChild(empty);
       return;
     }
+
     this.renderUngroupedSection(list, tree, groupOptions, feishu);
-    const folders = Array.from(tree.folders.entries()).sort(
-      ([a], [b]) => String(a).localeCompare(String(b), "zh-Hans-CN")
+    const folders = Array.from(tree.folders.entries()).sort(([a], [b]) =>
+      String(a).localeCompare(String(b), "zh-Hans-CN")
     );
     for (const [folderName, child] of folders) {
       this.renderFolderSection(list, String(folderName), child, String(folderName), groupOptions, feishu);
     }
     contentEl.appendChild(list);
   }
-  getUngroupedLabel(feishu) {
+
+  private getUngroupedLabel(feishu: any): string {
     if (feishu && typeof feishu.getTemplateUngroupedLabel === "function") {
       try {
         return feishu.getTemplateUngroupedLabel();
       } catch {
+        /* noop */
       }
     }
-    return "\u672A\u5206\u7EC4";
+    return "未分组";
   }
-  sortTemplates(feishu, list) {
+
+  private sortTemplates(feishu: any, list: any[]): any[] {
     if (feishu && typeof feishu.sortTemplateDescriptors === "function") {
       try {
         return feishu.sortTemplateDescriptors(list);
       } catch {
+        /* noop */
       }
     }
     return [...list];
   }
-  renderUngroupedSection(container, root, groupOptions, feishu) {
+
+  private renderUngroupedSection(
+    container: HTMLElement,
+    root: { folders: Map<string, any>; templates: any[] },
+    groupOptions: Array<{ value: string; label: string }>,
+    feishu: any
+  ) {
     const group = document.createElement("details");
     group.className = "mdtp-template-folder";
     group.open = true;
+
     const summary = document.createElement("summary");
     summary.className = "mdtp-template-folder-title";
     const titleWrap = document.createElement("span");
@@ -409,12 +745,13 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     titleText.className = "mdtp-template-folder-title-text";
     titleText.textContent = this.getUngroupedLabel(feishu);
     titleWrap.appendChild(titleText);
+
     if (typeof feishu.setTemplateUngroupedLabel === "function") {
       const renameBtn = document.createElement("button");
       renameBtn.type = "button";
       renameBtn.className = "mdtp-template-folder-rename-btn";
-      renameBtn.textContent = "\u6539\u540D";
-      renameBtn.title = "\u4FEE\u6539\u300C\u672A\u5206\u7EC4\u300D\u5728\u754C\u9762\u4E0A\u7684\u663E\u793A\u540D\u79F0\uFF08\u4E0D\u79FB\u52A8\u6587\u4EF6\uFF09";
+      renameBtn.textContent = "改名";
+      renameBtn.title = "修改「未分组」在界面上的显示名称（不移动文件）";
       renameBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -423,21 +760,22 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
           onCommit: async (value) => {
             await feishu.setTemplateUngroupedLabel(value);
             await this.render();
-          }
+          },
         });
       });
       titleWrap.appendChild(renameBtn);
     }
+
     if (typeof feishu.deleteUngroupedTemplateGroup === "function") {
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "mdtp-template-folder-delete-btn";
-      deleteBtn.textContent = "\u5220\u9664";
-      deleteBtn.title = "\u65E0\u6A21\u677F\u65F6\u6062\u590D\u9ED8\u8BA4\u540D\u79F0\u300C\u672A\u5206\u7EC4\u300D\uFF1B\u6709\u6A21\u677F\u65F6\u5220\u9664\u6839\u76EE\u5F55\u5168\u90E8\u6A21\u677F";
+      deleteBtn.textContent = "删除";
+      deleteBtn.title = "无模板时恢复默认名称「未分组」；有模板时删除根目录全部模板";
       deleteBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        void feishu.deleteUngroupedTemplateGroup().then((ok) => {
+        void feishu.deleteUngroupedTemplateGroup().then((ok: boolean) => {
           if (ok) void this.render();
         });
       });
@@ -445,12 +783,13 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     }
     summary.appendChild(titleWrap);
     group.appendChild(summary);
+
     const body = document.createElement("div");
     body.className = "mdtp-template-folder-children";
     if (root.templates.length === 0) {
       const note = document.createElement("p");
       note.className = "mdtp-template-empty";
-      note.textContent = "\u6839\u76EE\u5F55\u6682\u65E0\u6A21\u677F\u3002\u53EF\u7528\u6BCF\u884C\u300C\u79FB\u5230\u300D\u628A\u5176\u4ED6\u5206\u7EC4\u7684\u6A21\u677F\u8FC1\u56DE\u8FD9\u91CC\u3002";
+      note.textContent = "根目录暂无模板。可用每行「移到」把其他分组的模板迁回这里。";
       body.appendChild(note);
     } else {
       for (const template of this.sortTemplates(feishu, root.templates)) {
@@ -460,10 +799,19 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     group.appendChild(body);
     container.appendChild(group);
   }
-  renderFolderSection(container, folderName, node, relativePath, groupOptions, feishu) {
+
+  private renderFolderSection(
+    container: HTMLElement,
+    folderName: string,
+    node: { folders: Map<string, any>; templates: any[] },
+    relativePath: string,
+    groupOptions: Array<{ value: string; label: string }>,
+    feishu: any
+  ) {
     const group = document.createElement("details");
     group.className = "mdtp-template-folder";
     group.open = true;
+
     const summary = document.createElement("summary");
     summary.className = "mdtp-template-folder-title";
     const titleWrap = document.createElement("span");
@@ -472,11 +820,12 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     titleText.className = "mdtp-template-folder-title-text";
     titleText.textContent = folderName;
     titleWrap.appendChild(titleText);
+
     if (typeof feishu.renameTemplateGroup === "function") {
       const renameBtn = document.createElement("button");
       renameBtn.type = "button";
       renameBtn.className = "mdtp-template-folder-rename-btn";
-      renameBtn.textContent = "\u6539\u540D";
+      renameBtn.textContent = "改名";
       renameBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -485,21 +834,22 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
           onCommit: async (value) => {
             const ok = await feishu.renameTemplateGroup(relativePath, value);
             if (ok) await this.render();
-          }
+          },
         });
       });
       titleWrap.appendChild(renameBtn);
     }
+
     if (typeof feishu.deleteTemplateGroup === "function") {
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
       deleteBtn.className = "mdtp-template-folder-delete-btn";
-      deleteBtn.textContent = "\u5220\u9664";
-      deleteBtn.title = "\u5220\u9664\u5206\u7EC4\uFF1B\u7EC4\u5185\u6A21\u677F\u5C06\u79FB\u81F3\u6839\u76EE\u5F55";
+      deleteBtn.textContent = "删除";
+      deleteBtn.title = "删除分组；组内模板将移至根目录";
       deleteBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        void feishu.deleteTemplateGroup(relativePath).then((ok) => {
+        void feishu.deleteTemplateGroup(relativePath).then((ok: boolean) => {
           if (ok) void this.render();
         });
       });
@@ -507,28 +857,41 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     }
     summary.appendChild(titleWrap);
     group.appendChild(summary);
+
     const body = document.createElement("div");
     body.className = "mdtp-template-folder-children";
+
     if (node.templates.length === 0 && node.folders.size === 0) {
       const note = document.createElement("p");
       note.className = "mdtp-template-empty";
-      note.textContent = "\u5206\u7EC4\u5DF2\u521B\u5EFA\uFF0C\u6682\u65E0\u6A21\u677F\u3002\u53EF\u5728\u4E0A\u65B9\u300C\u65B0\u5EFA\u6A21\u677F\u300D\u586B\u5199\u300C\u5206\u7EC4\u540D/\u6A21\u677F\u540D\u300D\uFF0C\u6216\u628A\u5176\u4ED6\u6A21\u677F\u79FB\u5165\u672C\u5206\u7EC4\u3002";
+      note.textContent = "分组已创建，暂无模板。可在上方「新建模板」填写「分组名/模板名」，或把其他模板移入本分组。";
       body.appendChild(note);
     }
+
     for (const template of this.sortTemplates(feishu, node.templates)) {
       body.appendChild(this.createTemplateRow(template, groupOptions, feishu));
     }
-    const nested = Array.from(node.folders.entries()).sort(
-      ([a], [b]) => String(a).localeCompare(String(b), "zh-Hans-CN")
+
+    const nested = Array.from(node.folders.entries()).sort(([a], [b]) =>
+      String(a).localeCompare(String(b), "zh-Hans-CN")
     );
     for (const [childName, childNode] of nested) {
       const childRel = `${relativePath}/${String(childName)}`;
       this.renderFolderSection(body, String(childName), childNode, childRel, groupOptions, feishu);
     }
+
     group.appendChild(body);
     container.appendChild(group);
   }
-  beginInlineRename(anchor, options) {
+
+  private beginInlineRename(
+    anchor: HTMLElement,
+    options: {
+      initial: string;
+      placeholder?: string;
+      onCommit: (value: string) => void | Promise<void>;
+    }
+  ) {
     const parent = anchor.parentElement;
     if (!parent) return;
     const input = document.createElement("input");
@@ -541,8 +904,9 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     parent.appendChild(input);
     input.focus();
     input.select();
+
     let finished = false;
-    const finish = async (commit) => {
+    const finish = async (commit: boolean) => {
       if (finished) return;
       finished = true;
       input.remove();
@@ -553,6 +917,7 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
       if (next === options.initial) return;
       await options.onCommit(next);
     };
+
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -564,34 +929,39 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
     });
     input.addEventListener("blur", () => void finish(true));
   }
-  buildTemplateTree(templates) {
-    const root = { folders: /* @__PURE__ */ new Map(), templates: [] };
+
+  private buildTemplateTree(templates: TemplateRecord[]) {
+    const root: TemplateTreeNode = { folders: new Map(), templates: [] };
     for (const template of templates) {
       let node = root;
       for (const segment of template.folderSegments) {
         if (!node.folders.has(segment)) {
-          node.folders.set(segment, { folders: /* @__PURE__ */ new Map(), templates: [] });
+          node.folders.set(segment, { folders: new Map(), templates: [] });
         }
-        node = node.folders.get(segment);
+        node = node.folders.get(segment)!;
       }
       node.templates.push(template);
     }
     return root;
   }
-  appendTemplateTree(container, node, depth) {
+
+  private appendTemplateTree(container: HTMLElement, node: TemplateTreeNode, depth: number) {
     for (const template of node.templates) {
       container.appendChild(this.createTemplateRow(template));
     }
+
     const folders = Array.from(node.folders.entries()).sort(([a], [b]) => a.localeCompare(b, "zh-Hans-CN"));
     for (const [folderName, childNode] of folders) {
       const details = document.createElement("details");
       details.className = "mdtp-template-folder";
       details.open = true;
       details.dataset.depth = String(depth);
+
       const summary = document.createElement("summary");
       summary.className = "mdtp-template-folder-title";
       summary.textContent = folderName;
       details.appendChild(summary);
+
       const children = document.createElement("div");
       children.className = "mdtp-template-folder-children";
       this.appendTemplateTree(children, childNode, depth + 1);
@@ -599,26 +969,36 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
       container.appendChild(details);
     }
   }
-  createTemplateRow(template, groupOptions, feishu) {
+
+  private createTemplateRow(
+    template: TemplateRecord | any,
+    groupOptions?: Array<{ value: string; label: string }>,
+    feishu?: any
+  ) {
     const row = document.createElement("div");
     row.className = "mdtp-template-row";
+
     const name = document.createElement("div");
     name.className = "mdtp-template-name";
-    const displayName = template.name ?? template.title ?? "";
+    const displayName = (template as any).name ?? (template as any).title ?? "";
     name.textContent = displayName;
-    name.title = template.relativePath ?? template.path ?? displayName;
+    name.title = (template as any).relativePath ?? (template as any).path ?? displayName;
+
     const actions = document.createElement("div");
     actions.className = "mdtp-template-row-actions";
+
     if (groupOptions && feishu && typeof feishu.moveTemplateToGroup === "function") {
       const moveWrap = document.createElement("label");
       moveWrap.className = "mdtp-template-move-wrap";
-      moveWrap.title = "\u79FB\u5230\u5176\u4ED6\u5206\u7EC4";
+      moveWrap.title = "移到其他分组";
       const moveLabel = document.createElement("span");
       moveLabel.className = "mdtp-template-move-label";
-      moveLabel.textContent = "\u79FB\u5230";
+      moveLabel.textContent = "移到";
       const moveSelect = document.createElement("select");
       moveSelect.className = "mdtp-template-move-select";
-      const segments = Array.isArray(template.folderSegments) ? template.folderSegments : [];
+      const segments: string[] = Array.isArray((template as any).folderSegments)
+        ? (template as any).folderSegments
+        : [];
       const currentGroup = segments.join("/");
       for (const option of groupOptions) {
         const opt = document.createElement("option");
@@ -642,110 +1022,131 @@ var TemplateLibraryModal = class extends import_obsidian.Modal {
       moveWrap.append(moveLabel, moveSelect);
       actions.appendChild(moveWrap);
     }
+
     const insertButton = document.createElement("button");
     insertButton.type = "button";
-    insertButton.textContent = "\u63D2\u5165";
+    insertButton.textContent = "插入";
     insertButton.addEventListener("click", async () => {
       const inserted = await this.plugin.insertTemplateByPath(template.path);
       if (inserted) this.close();
     });
+
     const editButton = document.createElement("button");
     editButton.type = "button";
-    editButton.textContent = "\u7F16\u8F91";
+    editButton.textContent = "编辑";
     editButton.addEventListener("click", async () => {
       this.close();
       await this.plugin.openTemplateForEdit(template.path);
     });
+
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "mdtp-template-delete-button";
-    deleteButton.textContent = "\u5220\u9664";
-    deleteButton.setAttribute("aria-label", `\u5220\u9664\u6A21\u677F\uFF1A${displayName}`);
+    deleteButton.textContent = "删除";
+    deleteButton.setAttribute("aria-label", `删除模板：${displayName}`);
     deleteButton.addEventListener("click", async () => {
       const deleted = await this.plugin.deleteTemplateByPath(template.path);
       if (deleted) await this.render();
     });
+
     actions.append(insertButton, editButton, deleteButton);
     row.append(name, actions);
     return row;
   }
-};
-var TemplateEditModal = class extends import_obsidian.Modal {
-  constructor(plugin, template) {
+}
+
+class TemplateEditModal extends Modal {
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private template: TemplateRecord
+  ) {
     super(plugin.app);
-    this.plugin = plugin;
-    this.template = template;
   }
+
   async onOpen() {
     const { contentEl } = this;
     contentEl.replaceChildren();
     contentEl.classList.add("mdtp-template-modal");
+
     const title = document.createElement("h2");
-    title.textContent = `\u7F16\u8F91\u6A21\u677F\uFF1A${this.template.name}`;
+    title.textContent = `编辑模板：${this.template.name}`;
     contentEl.appendChild(title);
+
     const textarea = document.createElement("textarea");
     textarea.className = "mdtp-template-editor";
     textarea.value = await this.plugin.readTemplateContent(this.template.path);
     contentEl.appendChild(textarea);
+
     const actions = document.createElement("div");
     actions.className = "mdtp-template-actions";
     const cancelButton = document.createElement("button");
     cancelButton.type = "button";
-    cancelButton.textContent = "\u53D6\u6D88";
+    cancelButton.textContent = "取消";
     cancelButton.addEventListener("click", () => this.close());
     const saveButton = document.createElement("button");
     saveButton.type = "button";
     saveButton.className = "mod-cta";
-    saveButton.textContent = "\u4FDD\u5B58";
+    saveButton.textContent = "保存";
     saveButton.addEventListener("click", async () => {
       await this.plugin.writeTemplateContent(this.template.path, textarea.value);
-      new import_obsidian.Notice("\u6A21\u677F\u5DF2\u66F4\u65B0");
+      new Notice("模板已更新");
       this.close();
     });
     actions.append(cancelButton, saveButton);
     contentEl.appendChild(actions);
+
     window.setTimeout(() => textarea.focus(), 50);
   }
+
   onClose() {
     this.contentEl.replaceChildren();
   }
-};
-var OneNoteRichPasteModal = class extends import_obsidian.Modal {
-  constructor(plugin, file) {
+}
+
+class OneNoteRichPasteModal extends Modal {
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private file: TFile
+  ) {
     super(plugin.app);
-    this.plugin = plugin;
-    this.file = file;
   }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.replaceChildren();
     contentEl.classList.add("mdtp-onenote-paste-modal");
+
     const title = document.createElement("h2");
-    title.textContent = "\u7C98\u8D34 OneNote \u589E\u5F3A\u8868\u683C";
+    title.textContent = "粘贴 OneNote 增强表格";
     contentEl.appendChild(title);
+
     const hint = document.createElement("p");
-    hint.textContent = "\u4ECE OneNote \u590D\u5236\u9875\u9762\u6216\u8868\u683C\u540E\uFF0C\u70B9\u4E0B\u9762\u533A\u57DF\u6309 \u2318V \u7C98\u8D34\uFF0C\u63D2\u4EF6\u4F1A\u76F4\u63A5\u8F6C\u6210\u53EF\u7F16\u8F91\u589E\u5F3A\u8868\u683C\u3002";
+    hint.textContent = "从 OneNote 复制页面或表格后，点下面区域按 ⌘V 粘贴，插件会直接转成可编辑增强表格。";
     contentEl.appendChild(hint);
+
     const pasteZone = document.createElement("div");
     pasteZone.className = "mdtp-onenote-paste-zone";
     pasteZone.tabIndex = 0;
     pasteZone.setAttribute("contenteditable", "true");
     pasteZone.setAttribute("role", "textbox");
-    pasteZone.setAttribute("aria-label", "\u7C98\u8D34 OneNote \u5185\u5BB9");
-    pasteZone.textContent = "\u5728\u8FD9\u91CC\u7C98\u8D34";
+    pasteZone.setAttribute("aria-label", "粘贴 OneNote 内容");
+    pasteZone.textContent = "在这里粘贴";
     pasteZone.addEventListener("focus", () => {
-      if (pasteZone.textContent === "\u5728\u8FD9\u91CC\u7C98\u8D34") {
+      if (pasteZone.textContent === "在这里粘贴") {
         pasteZone.textContent = "";
       }
     });
-    pasteZone.addEventListener("paste", (event) => void this.handlePaste(event));
+    pasteZone.addEventListener("paste", (event) => void this.handlePaste(event as ClipboardEvent));
     contentEl.appendChild(pasteZone);
+
     window.setTimeout(() => pasteZone.focus(), 50);
   }
+
   onClose() {
     this.contentEl.replaceChildren();
   }
-  async handlePaste(event) {
+
+  private async handlePaste(event: ClipboardEvent) {
     event.preventDefault();
     event.stopPropagation();
     const ok = await this.plugin.importOneNoteRichClipboardEvent(this.file, event);
@@ -753,24 +1154,28 @@ var OneNoteRichPasteModal = class extends import_obsidian.Modal {
       this.close();
     }
   }
-};
-var NativeRowBandColorModal = class extends import_obsidian.Modal {
-  constructor(plugin, file, tableId, tableEl) {
+}
+
+class NativeRowBandColorModal extends Modal {
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private file: TFile,
+    private tableId: string,
+    private tableEl: HTMLTableElement
+  ) {
     super(plugin.app);
-    this.plugin = plugin;
-    this.file = file;
-    this.tableId = tableId;
-    this.tableEl = tableEl;
   }
+
   onOpen() {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("mdtp-template-modal");
-    contentEl.createEl("h2", { text: "\u884C\u6BB5\u914D\u8272" });
+    contentEl.createEl("h2", { text: "行段配色" });
     contentEl.createEl("p", {
-      text: "\u6309\u884C\u53F7\u6279\u91CF\u8BBE\u7F6E\u5E95\u8272\u3002\u8868\u5934\u662F\u7B2C 0 \u884C\uFF0C\u6B63\u6587\u4ECE\u7B2C 1 \u884C\u5F00\u59CB\u3002",
-      cls: "setting-item-description"
+      text: "按行号批量设置底色。表头是第 0 行，正文从第 1 行开始。",
+      cls: "setting-item-description",
     });
+
     const rowCount = Math.max(1, this.tableEl.rows.length);
     const palette = this.plugin.getNativeRowColorChoicesForTable(this.tableId);
     const controls = contentEl.createDiv({ cls: "mdtp-row-band-controls" });
@@ -778,7 +1183,7 @@ var NativeRowBandColorModal = class extends import_obsidian.Modal {
     const endInput = controls.createEl("input", { type: "number", attr: { min: "0", max: String(rowCount - 1), value: "1" } });
     const colorInput = controls.createEl("input", { type: "color" });
     colorInput.value = palette[0]?.value ?? NATIVE_COLOR_TABLE_ALT_ROW;
-    const applyBtn = controls.createEl("button", { text: "\u5E94\u7528\u5230\u884C\u6BB5" });
+    const applyBtn = controls.createEl("button", { text: "应用到行段" });
     applyBtn.addEventListener("click", () => {
       const start = this.normalizeRowIndex(startInput.value, 0, rowCount - 1);
       const end = this.normalizeRowIndex(endInput.value, start, rowCount - 1);
@@ -791,6 +1196,7 @@ var NativeRowBandColorModal = class extends import_obsidian.Modal {
         colorInput.value
       );
     });
+
     const quickWrap = contentEl.createDiv({ cls: "mdtp-row-band-palette" });
     for (const item of palette) {
       const btn = quickWrap.createEl("button", { text: item.label });
@@ -800,53 +1206,54 @@ var NativeRowBandColorModal = class extends import_obsidian.Modal {
         colorInput.value = item.value;
       });
     }
+
     const list = contentEl.createDiv({ cls: "mdtp-row-band-list" });
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
       const row = list.createDiv({ cls: "mdtp-row-band-row" });
-      row.createEl("span", { text: rowIndex === 0 ? "\u8868\u5934 0" : `\u6B63\u6587 ${rowIndex}` });
+      row.createEl("span", { text: rowIndex === 0 ? "表头 0" : `正文 ${rowIndex}` });
       const rowColorInput = row.createEl("input", { type: "color" });
       rowColorInput.value = this.plugin.getNativeLayoutResolvedRowColor(this.tableId, rowIndex);
       rowColorInput.addEventListener("change", () => {
         void this.plugin.setNativeLayoutRowRangeColor(this.tableId, this.file, this.tableEl, rowIndex, rowIndex, rowColorInput.value);
       });
-      const clearBtn = row.createEl("button", { text: "\u6062\u590D\u9ED8\u8BA4" });
+      const clearBtn = row.createEl("button", { text: "恢复默认" });
       clearBtn.addEventListener("click", () => {
         void this.plugin.setNativeLayoutRowRangeColor(this.tableId, this.file, this.tableEl, rowIndex, rowIndex, null);
       });
     }
   }
-  normalizeRowIndex(value, fallback, max) {
+
+  private normalizeRowIndex(value: string, fallback: number, max: number) {
     const parsed = Number.parseInt(value, 10);
     if (!Number.isFinite(parsed)) return fallback;
     return Math.max(0, Math.min(max, parsed));
   }
-};
-var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
-  constructor() {
-    super(...arguments);
-    __publicField(this, "dataStore", DEFAULT_DATA);
-    __publicField(this, "runtimeState", /* @__PURE__ */ new Map());
-    __publicField(this, "activeResize", null);
-    __publicField(this, "activeSelectionDrag", null);
-    __publicField(this, "refreshTimer", null);
-    __publicField(this, "lastTableContext", null);
-    __publicField(this, "refreshBurstToken", 0);
-    __publicField(this, "injectedStyleEl", null);
-    __publicField(this, "activeEditor", null);
-    __publicField(this, "activeNativeTableContext", null);
-    __publicField(this, "tableSidebarHandleEl", null);
-    __publicField(this, "tableCopyImageHandleEl", null);
-    __publicField(this, "tableSidebarPopoverEl", null);
-    __publicField(this, "activeTableSidebarContext", null);
-    __publicField(this, "activeImageToolbar", null);
-    __publicField(this, "activeImageManipulator", null);
-    __publicField(this, "activeImageDrag", null);
-    __publicField(this, "undoStack", []);
-    __publicField(this, "redoStack", []);
-    __publicField(this, "historyApplying", false);
-    __publicField(this, "suppressDocumentPasteUntil", 0);
-    __publicField(this, "oneNoteStatusButtonEl", null);
-  }
+}
+
+export default class MarkdownTableEnhancerPlugin extends Plugin {
+  private dataStore: PluginDataShape = DEFAULT_DATA;
+  private runtimeState = new Map<HTMLTableElement, TableRuntimeState>();
+  private activeResize: ResizeState | null = null;
+  private activeSelectionDrag: SelectionDragState | null = null;
+  private refreshTimer: number | null = null;
+  private lastTableContext: TableContextTarget | null = null;
+  private refreshBurstToken = 0;
+  private injectedStyleEl: HTMLStyleElement | null = null;
+  private activeEditor: InlineEditorState | null = null;
+  private activeNativeTableContext: UninitializedTableContext | null = null;
+  private tableSidebarHandleEl: HTMLButtonElement | null = null;
+  private tableCopyImageHandleEl: HTMLButtonElement | null = null;
+  private tableSidebarPopoverEl: HTMLDivElement | null = null;
+  private activeTableSidebarContext: TableSidebarContext | null = null;
+  private activeImageToolbar: ImageToolbarState | null = null;
+  private activeImageManipulator: ImageManipulatorState | null = null;
+  private activeImageDrag: ImageDragState | null = null;
+  private undoStack: HistoryEntry[] = [];
+  private redoStack: HistoryEntry[] = [];
+  private historyApplying = false;
+  private suppressDocumentPasteUntil = 0;
+  private oneNoteStatusButtonEl: HTMLElement | null = null;
+
   async onload() {
     await this.installRuntimeStyles();
     this.registerEditorExtension(this.createHiddenMarkerEditorExtension());
@@ -857,18 +1264,20 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     const savedNativeColorPalettes = this.normalizeNativeColorSavedPalettes(savedData?.nativeColorSavedPalettes);
     this.dataStore = {
       ...DEFAULT_DATA,
-      ...savedData ?? {},
+      ...(savedData ?? {}),
       tables: {
         ...DEFAULT_DATA.tables,
-        ...savedTables
+        ...savedTables,
       },
       snapshots: Array.isArray(savedData?.snapshots) ? savedData.snapshots : [],
       experimentalFeatureGate: !!savedData?.experimentalFeatureGate,
       nativeColorSavedPalettes: savedNativeColorPalettes,
       nativeColorDefaultPresetId: this.normalizeNativeColorPresetId(savedData?.nativeColorDefaultPresetId, savedNativeColorPalettes),
-      nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT)
+      nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
     };
+
     await this.migrateLegacyMarkersToHtmlComments();
+
     this.addCommand({
       id: INITIALIZE_COMMAND_ID,
       name: INITIALIZE_COMMAND_NAME,
@@ -880,8 +1289,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.initializeCurrentFileTables(file);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: INITIALIZE_CURRENT_TABLE_COMMAND_ID,
       name: INITIALIZE_CURRENT_TABLE_COMMAND_NAME,
@@ -893,8 +1303,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.initializeCurrentTable();
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID,
       name: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME,
@@ -905,8 +1316,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.initializeCurrentTableNativeLayout();
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: INSERT_NATIVE_COLOR_TABLE_COMMAND_ID,
       name: INSERT_NATIVE_COLOR_TABLE_COMMAND_NAME,
@@ -917,8 +1329,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.insertNativeColorTableTemplate();
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: SET_NATIVE_ROW_COLOR_COMMAND_ID,
       name: SET_NATIVE_ROW_COLOR_COMMAND_NAME,
@@ -935,8 +1348,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           );
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: OPEN_NATIVE_ROW_BANDS_COMMAND_ID,
       name: OPEN_NATIVE_ROW_BANDS_COMMAND_NAME,
@@ -947,8 +1361,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           new NativeRowBandColorModal(this, context.file, context.tableId, context.tableEl).open();
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: INSERT_TEMPLATE_COMMAND_ID,
       name: INSERT_TEMPLATE_COMMAND_NAME,
@@ -960,18 +1375,21 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.insertEnhancedTableTemplate();
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: OPEN_TEMPLATE_LIBRARY_COMMAND_ID,
       name: OPEN_TEMPLATE_LIBRARY_COMMAND_NAME,
       callback: () => {
         this.openTemplateLibraryModal();
-      }
+      },
     });
+
     this.addRibbonIcon("copy", OPEN_TEMPLATE_LIBRARY_COMMAND_NAME, () => {
       this.openTemplateLibraryModal();
     });
+
     this.addCommand({
       id: RESTORE_COMMAND_ID,
       name: RESTORE_COMMAND_NAME,
@@ -983,8 +1401,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.restoreLatestSnapshot(file);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: STATUS_COMMAND_ID,
       name: STATUS_COMMAND_NAME,
@@ -996,8 +1415,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.showCurrentFileStatus(file);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: SET_SELECTION_YELLOW_COMMAND_ID,
       name: SET_SELECTION_YELLOW_COMMAND_NAME,
@@ -1009,8 +1429,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.setColor(context.tableId, context.file, context.tableEl, "cell", this.getCellKey(context.anchor), PALETTE[0].value);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: CLEAR_SELECTION_COLOR_COMMAND_ID,
       name: CLEAR_SELECTION_COLOR_COMMAND_NAME,
@@ -1028,8 +1449,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           );
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: MERGE_SELECTION_COMMAND_ID,
       name: MERGE_SELECTION_COMMAND_NAME,
@@ -1037,7 +1459,10 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         if (!this.isExperimentalFeatureEnabled()) return false;
         const context = this.getActiveSelectionCommandContext(checking);
         if (!context?.selection) return false;
-        if (context.selection.startRow === context.selection.endRow && context.selection.startCol === context.selection.endCol) {
+        if (
+          context.selection.startRow === context.selection.endRow &&
+          context.selection.startCol === context.selection.endCol
+        ) {
           return false;
         }
         if (!this.canMergeSelection(context.tableEl, this.dataStore.tables[context.tableId].layout, context.selection)) {
@@ -1047,8 +1472,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.mergeSelection(context.file, context.tableId, context.tableEl, context.selection);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: SPLIT_SELECTION_COMMAND_ID,
       name: SPLIT_SELECTION_COMMAND_NAME,
@@ -1064,8 +1490,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.splitMerge(context.file, context.tableId, context.tableEl, merge);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: PASTE_IMAGE_COMMAND_ID,
       name: PASTE_IMAGE_COMMAND_NAME,
@@ -1077,8 +1504,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.handleClipboardPasteForSelectedCell(context.file, context.tableId, context.anchor);
         }
         return true;
-      }
+      },
     });
+
     this.addCommand({
       id: PASTE_ONENOTE_RICH_TABLE_COMMAND_ID,
       name: PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME,
@@ -1090,31 +1518,35 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
           void this.pasteOneNoteFromSystemClipboardOrOpenModal(file);
         }
         return true;
-      }
+      },
     });
+
     this.oneNoteStatusButtonEl = this.addStatusBarItem();
     this.oneNoteStatusButtonEl.addClass("mdtp-onenote-status-button");
-    this.oneNoteStatusButtonEl.setText("\u7C98\u8D34 OneNote");
+    this.oneNoteStatusButtonEl.setText("粘贴 OneNote");
     this.oneNoteStatusButtonEl.setAttr("role", "button");
-    this.oneNoteStatusButtonEl.setAttr("aria-label", "\u4ECE OneNote \u7C98\u8D34\u4E3A\u589E\u5F3A\u8868\u683C");
+    this.oneNoteStatusButtonEl.setAttr("aria-label", "从 OneNote 粘贴为增强表格");
     this.oneNoteStatusButtonEl.style.display = "none";
     this.oneNoteStatusButtonEl.addEventListener("click", () => {
       const file = this.getActiveMarkdownFile();
       if (!file) {
-        new import_obsidian.Notice("\u8BF7\u5148\u6253\u5F00\u4E00\u4E2A Markdown \u7B14\u8BB0");
+        new Notice("请先打开一个 Markdown 笔记");
         return;
       }
       void this.pasteOneNoteFromSystemClipboardOrOpenModal(file);
     });
+
     this.addCommand({
       id: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID,
       name: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME,
-      callback: () => void this.toggleExperimentalFeatureGate()
+      callback: () => void this.toggleExperimentalFeatureGate(),
     });
+
     this.registerMarkdownPostProcessor((element, context) => {
       this.decorateOneNoteRichTables(element, context);
       void this.decorateRenderedTables(element, context);
     });
+
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor, info) => {
         const view = this.resolveMarkdownViewFromMenuInfo(info);
@@ -1122,39 +1554,49 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         this.addEditorMenuItems(menu, view);
       })
     );
+
     this.registerEvent(this.app.workspace.on("file-open", () => this.queueRefreshBurst()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.queueRefreshBurst()));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.queueRefreshBurst()));
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (!(file instanceof import_obsidian.TFile) || file.extension !== "md") return;
+        if (!(file instanceof TFile) || file.extension !== "md") return;
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile?.path !== file.path) return;
         this.queueRefreshBurst();
       })
     );
-    this.registerDomEvent(document, "pointerdown", (event) => this.handleDocumentPointerDown(event), true);
-    this.registerDomEvent(document, "click", (event) => void this.handleDocumentClick(event), true);
-    this.registerDomEvent(document, "dblclick", (event) => void this.handleDocumentDoubleClick(event), true);
-    this.registerDomEvent(document, "contextmenu", (event) => void this.handleDocumentContextMenu(event), true);
-    this.registerDomEvent(document, "keydown", (event) => void this.handleDocumentKeyDown(event), true);
-    this.registerDomEvent(document, "paste", (event) => void this.handleDocumentPaste(event), true);
-    this.registerDomEvent(document, "pointermove", (event) => this.handleGlobalPointerMove(event), true);
+
+    this.registerDomEvent(document, "pointerdown", (event) => this.handleDocumentPointerDown(event as PointerEvent), true);
+    this.registerDomEvent(document, "click", (event) => void this.handleDocumentClick(event as MouseEvent), true);
+    this.registerDomEvent(document, "dblclick", (event) => void this.handleDocumentDoubleClick(event as MouseEvent), true);
+    this.registerDomEvent(document, "contextmenu", (event) => void this.handleDocumentContextMenu(event as MouseEvent), true);
+    this.registerDomEvent(document, "keydown", (event) => void this.handleDocumentKeyDown(event as KeyboardEvent), true);
+    this.registerDomEvent(document, "paste", (event) => void this.handleDocumentPaste(event as ClipboardEvent), true);
+    this.registerDomEvent(document, "pointermove", (event) => this.handleGlobalPointerMove(event as PointerEvent), true);
     this.registerDomEvent(document, "pointerup", () => void this.handleGlobalPointerUp(), true);
     this.registerDomEvent(document, "pointercancel", () => void this.handleGlobalPointerUp(), true);
+
     this.queueRefreshBurst();
   }
-  async migrateLegacyMarkersToHtmlComments() {
+
+  private async migrateLegacyMarkersToHtmlComments() {
     const markdownFiles = this.app.vault.getMarkdownFiles();
     for (const file of markdownFiles) {
       const originalContent = await this.app.vault.cachedRead(file);
-      if (!originalContent.includes("[//]: # (mdtp:") && !originalContent.includes("// # (mdtp:") && !originalContent.includes("<!-- mdtp:")) {
+      if (
+        !originalContent.includes("[//]: # (mdtp:") &&
+        !originalContent.includes("// # (mdtp:") &&
+        !originalContent.includes("<!-- mdtp:")
+      ) {
         continue;
       }
+
       const originalEndsWithNewline = /\r?\n$/.test(originalContent);
       const lines = originalContent.split(/\r?\n/);
-      const markerIds = [];
+      const markerIds: string[] = [];
       let changed = false;
+
       for (let index = 0; index < lines.length; index += 1) {
         const referenceMatch = lines[index].match(REFERENCE_TABLE_MARKER_RE);
         const visibleMatch = lines[index].match(VISIBLE_REFERENCE_TABLE_MARKER_RE);
@@ -1165,17 +1607,22 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         lines[index] = this.formatTableMarker(tableId);
         changed = true;
       }
+
       if (!changed) {
         continue;
       }
+
       const updatedContent = this.joinLines(lines, originalEndsWithNewline);
+
       if (updatedContent === originalContent) {
         continue;
       }
+
       await this.createSnapshot(file, "before-marker-html-migration", markerIds);
       await this.app.vault.modify(file, updatedContent);
     }
   }
+
   onunload() {
     void this.closeActiveEditor("cancel");
     this.hideImageToolbar();
@@ -1184,55 +1631,69 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     this.injectedStyleEl?.remove();
     this.injectedStyleEl = null;
   }
-  getActiveMarkdownFile(silent = false) {
+
+  private getActiveMarkdownFile(silent = false) {
     const file = this.app.workspace.getActiveFile();
-    if (!(file instanceof import_obsidian.TFile) || file.extension !== "md") {
+    if (!(file instanceof TFile) || file.extension !== "md") {
       if (!silent) {
-        new import_obsidian.Notice("\u5F53\u524D\u6CA1\u6709\u6253\u5F00 Markdown \u6587\u4EF6");
+        new Notice("当前没有打开 Markdown 文件");
       }
       return null;
     }
     return file;
   }
-  getActiveInteractionContext(silent = false) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+  private getActiveInteractionContext(silent = false) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view?.file || !(view.contentEl instanceof HTMLElement)) {
-      if (!silent) new import_obsidian.Notice("\u5F53\u524D\u6CA1\u6709\u6253\u5F00 Markdown \u8868\u683C\u89C6\u56FE");
+      if (!silent) new Notice("当前没有打开 Markdown 表格视图");
       return null;
     }
-    let tableEl = null;
+
+    let tableEl: HTMLTableElement | null = null;
     let anchorCell = view.contentEl.querySelector(
       "table.mdtp-table-shell .mdtp-cell-anchor"
-    );
+    ) as HTMLTableCellElement | null;
+
     if (anchorCell) {
-      tableEl = anchorCell.closest("table.mdtp-table-shell");
+      tableEl = anchorCell.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     }
+
     let runtime = tableEl ? this.runtimeState.get(tableEl) ?? null : null;
     let anchor = anchorCell ? this.getCellCoord(anchorCell) : null;
+
     if (!tableEl || !runtime || !anchor) {
-      const focusedElement = document.activeElement;
+      const focusedElement = document.activeElement as HTMLElement | null;
       const candidateTables = Array.from(
         view.contentEl.querySelectorAll("table.mdtp-table-shell")
-      );
-      let fallbackTable = focusedElement?.closest("table.mdtp-table-shell");
+      ) as HTMLTableElement[];
+
+      let fallbackTable: HTMLTableElement | null =
+        focusedElement?.closest("table.mdtp-table-shell") as HTMLTableElement | null;
+
       if (!fallbackTable || !candidateTables.includes(fallbackTable)) {
-        fallbackTable = candidateTables.find((candidate) => {
-          const candidateRuntime = this.runtimeState.get(candidate);
-          return !!candidateRuntime?.anchor;
-        }) ?? null;
+        fallbackTable =
+          candidateTables.find((candidate) => {
+            const candidateRuntime = this.runtimeState.get(candidate);
+            return !!candidateRuntime?.anchor;
+          }) ?? null;
       }
+
       if (!fallbackTable) {
-        if (!silent) new import_obsidian.Notice("\u5F53\u524D\u6CA1\u6709\u9009\u4E2D\u8868\u683C\u5355\u5143\u683C");
+        if (!silent) new Notice("当前没有选中表格单元格");
         return null;
       }
+
       tableEl = fallbackTable;
       runtime = this.runtimeState.get(tableEl) ?? null;
       anchor = runtime?.anchor ?? null;
+
       if (!runtime || !anchor) {
-        if (!silent) new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u9009\u533A\u72B6\u6001\u4E0D\u53EF\u7528");
+        if (!silent) new Notice("当前表格选区状态不可用");
         return null;
       }
     }
+
     const tableId = tableEl.dataset.mdtpTableId || "";
     return {
       file: view.file,
@@ -1240,10 +1701,11 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       tableId: tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced" ? tableId : null,
       parsedTable: runtime.parsedTable,
       anchor,
-      selection: runtime.selection
+      selection: runtime.selection,
     };
   }
-  getPlainTableCellCoord(cell) {
+
+  private getPlainTableCellCoord(cell: HTMLTableCellElement): CellCoord | null {
     const rowEl = cell.parentElement;
     if (!(rowEl instanceof HTMLTableRowElement)) return null;
     const row = rowEl.rowIndex;
@@ -1251,53 +1713,73 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     if (!Number.isFinite(row) || !Number.isFinite(col) || row < 0 || col < 0) return null;
     return { row, col };
   }
+
   /** Resolve a plain (non-mdtp-shell) markdown table from click/right-click target, including Obsidian Table Widget. */
-  resolvePlainMarkdownTableFromTarget(target) {
+  private resolvePlainMarkdownTableFromTarget(target: HTMLElement | null): {
+    tableEl: HTMLTableElement;
+    cell: HTMLTableCellElement | null;
+    coord: CellCoord | null;
+  } | null {
     if (!target) return null;
     if (target.closest(".mdtp-table-shell")) return null;
-    let cell = target.closest("th, td");
-    let tableEl = cell?.closest("table");
+
+    let cell = target.closest("th, td") as HTMLTableCellElement | null;
+    let tableEl = cell?.closest("table") as HTMLTableElement | null;
+
     if (!tableEl) {
-      tableEl = target.closest("table") ?? target.closest(".cm-table-widget")?.querySelector("table");
+      tableEl = (target.closest("table") ??
+        target.closest(".cm-table-widget")?.querySelector("table")) as HTMLTableElement | null;
       if (tableEl && !cell) {
-        cell = target.closest("th, td") ?? tableEl.querySelector("th, td");
+        cell = (target.closest("th, td") ??
+          tableEl.querySelector("th, td")) as HTMLTableCellElement | null;
       }
     }
+
     if (!tableEl || tableEl.matches(".mdtp-table-shell")) return null;
+
     const coord = cell ? this.getPlainTableCellCoord(cell) : null;
     return { tableEl, cell, coord };
   }
-  async getTargetUninitializedTableContext(target) {
-    const focusTarget = target ?? document.activeElement;
+
+  private async getTargetUninitializedTableContext(target?: HTMLElement | null): Promise<UninitializedTableContext | null> {
+    const focusTarget = target ?? (document.activeElement as HTMLElement | null);
     if (!focusTarget) return null;
+
     const resolved = this.resolvePlainMarkdownTableFromTarget(focusTarget);
     if (!resolved) return null;
+
     const view = this.getContainingMarkdownView(focusTarget);
     if (!view?.file || !(view.contentEl instanceof HTMLElement)) return null;
-    const renderedTables = Array.from(view.contentEl.querySelectorAll("table"));
+
+    const renderedTables = Array.from(view.contentEl.querySelectorAll("table")) as HTMLTableElement[];
     const tableIndex = renderedTables.indexOf(resolved.tableEl);
     if (tableIndex < 0) return null;
+
     const parsedTables = this.parseMarkdownTables(await this.app.vault.cachedRead(view.file));
     const parsedTable = parsedTables[tableIndex] ?? null;
     if (!parsedTable || parsedTable.tableId) return null;
+
     const coord = resolved.coord ?? { row: 0, col: 0 };
+
     return {
       file: view.file,
       parsedTable,
       coord,
-      tableEl: resolved.tableEl
+      tableEl: resolved.tableEl,
     };
   }
-  async getActiveUninitializedTableContext(target) {
+
+  private async getActiveUninitializedTableContext(target?: HTMLElement | null) {
     const targetContext = await this.getTargetUninitializedTableContext(target);
     if (targetContext) return targetContext;
-    const focusTarget = target ?? document.activeElement;
+
+    const focusTarget = target ?? (document.activeElement as HTMLElement | null);
     if (focusTarget) {
       const resolved = this.resolvePlainMarkdownTableFromTarget(focusTarget);
       if (resolved) {
         const view = this.getContainingMarkdownView(focusTarget);
         if (view?.file && view.contentEl instanceof HTMLElement) {
-          const renderedTables = Array.from(view.contentEl.querySelectorAll("table"));
+          const renderedTables = Array.from(view.contentEl.querySelectorAll("table")) as HTMLTableElement[];
           const tableIndex = renderedTables.indexOf(resolved.tableEl);
           if (tableIndex >= 0) {
             const parsedTables = this.parseMarkdownTables(await this.app.vault.cachedRead(view.file));
@@ -1307,48 +1789,63 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
                 file: view.file,
                 parsedTable,
                 coord: resolved.coord ?? { row: 0, col: 0 },
-                tableEl: resolved.tableEl
+                tableEl: resolved.tableEl,
               };
             }
           }
         }
       }
     }
+
     return this.getCursorBasedUninitializedTableContext();
   }
-  async getCursorBasedUninitializedTableContext() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+  private async getCursorBasedUninitializedTableContext() {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     const file = view?.file;
-    const editor = view?.editor;
+    const editor = (view as any)?.editor;
     if (!file || typeof editor?.getCursor !== "function") return null;
+
     const cursor = editor.getCursor();
     if (!cursor || !Number.isFinite(cursor.line) || !Number.isFinite(cursor.ch)) return null;
+
     const content = await this.app.vault.cachedRead(file);
     const parsedTables = this.parseMarkdownTables(content).filter((table) => !table.tableId);
-    const parsedTable = parsedTables.find((table) => cursor.line >= table.startLine && cursor.line <= table.endLine) ?? null;
+    const parsedTable =
+      parsedTables.find((table) => cursor.line >= table.startLine && cursor.line <= table.endLine) ?? null;
     if (!parsedTable) return null;
+
     if (cursor.line === parsedTable.startLine + 1) {
       return null;
     }
+
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) return null;
-    const lineText = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : content.split(/\r?\n/)[cursor.line] ?? "";
+
+    const lineText =
+      typeof editor.getLine === "function"
+        ? String(editor.getLine(cursor.line) ?? "")
+        : content.split(/\r?\n/)[cursor.line] ?? "";
     const col = this.resolveCursorTableColumn(lineText, cursor.ch, rawTable.header.length);
     if (col === null) return null;
+
     const row = cursor.line === parsedTable.startLine ? 0 : cursor.line - parsedTable.startLine - 1;
     if (row < 0) return null;
+
     return {
       file,
       parsedTable,
       coord: { row, col },
-      tableEl: null
+      tableEl: null,
     };
   }
-  resolveCursorTableColumn(line, cursorCh, expectedLength) {
+
+  private resolveCursorTableColumn(line: string, cursorCh: number, expectedLength: number) {
     if (!expectedLength) return null;
     const safeCursor = Math.max(0, Math.min(cursorCh, line.length));
     let cellIndex = 0;
     const scanStart = line.startsWith("|") ? 1 : 0;
+
     for (let index = scanStart; index < line.length; index += 1) {
       const char = line[index];
       const nextChar = line[index + 1];
@@ -1356,48 +1853,58 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         index += 1;
         continue;
       }
+
       if (char !== "|") continue;
       if (safeCursor <= index) {
         return Math.max(0, Math.min(cellIndex, expectedLength - 1));
       }
       cellIndex += 1;
     }
+
     return Math.max(0, Math.min(cellIndex, expectedLength - 1));
   }
-  getActiveSelectionCommandContext(silent = false) {
+
+  private getActiveSelectionCommandContext(silent = false) {
     const context = this.getActiveInteractionContext(silent);
     if (!context) return null;
     if (!context.tableId) {
-      if (!silent) new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u8FD8\u6CA1\u6709\u542F\u7528\u589E\u5F3A");
+      if (!silent) new Notice("当前表格还没有启用增强");
       return null;
     }
+
     return context;
   }
-  getActiveNativeLayoutCommandContext(silent = false) {
+
+  private getActiveNativeLayoutCommandContext(silent = false) {
     const context = this.getActiveInteractionContext(silent);
     if (!context) return null;
     const tableId = context.tableEl.dataset.mdtpTableId || context.parsedTable?.tableId || "";
     const record = tableId ? this.dataStore.tables[tableId] : null;
     if (!tableId || record?.mode !== "nativeLayout") {
-      if (!silent) new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u8FD8\u6CA1\u6709\u542F\u7528\u989C\u8272+\u957F\u5BBD\u9AD8");
+      if (!silent) new Notice("当前表格还没有启用颜色+长宽高");
       return null;
     }
+
     return {
       ...context,
-      tableId
+      tableId,
     };
   }
-  async initializeCurrentFileTables(file) {
+
+  async initializeCurrentFileTables(file: TFile) {
     const originalContent = await this.app.vault.cachedRead(file);
     const parsedTables = this.parseMarkdownTables(originalContent);
+
     if (parsedTables.length === 0) {
-      new import_obsidian.Notice("\u5F53\u524D\u6587\u4EF6\u6CA1\u6709\u8BC6\u522B\u5230 Markdown \u8868\u683C");
+      new Notice("当前文件没有识别到 Markdown 表格");
       return;
     }
+
     const missingTables = parsedTables.filter((table) => !table.tableId);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const lines = originalContent.split(/\r?\n/);
     let didNormalizeSpacing = false;
+
     for (const table of [...parsedTables].sort((left, right) => right.startLine - left.startLine)) {
       if (!table.tableId) continue;
       const normalized = this.normalizeMarkerSpacing(lines, table.startLine);
@@ -1405,61 +1912,77 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         didNormalizeSpacing = true;
       }
     }
+
     if (missingTables.length === 0 && !didNormalizeSpacing) {
       await this.syncTableRecords(file, parsedTables, { forceMode: "enhanced" });
-      new import_obsidian.Notice(`\u5F53\u524D\u6587\u4EF6 ${parsedTables.length} \u5F20\u8868\u683C\u5DF2\u5177\u5907\u589E\u5F3A\u6807\u8BC6`);
+      new Notice(`当前文件 ${parsedTables.length} 张表格已具备增强标识`);
       return;
     }
+
     await this.createSnapshot(file, "before-anchor", []);
+
     for (const table of [...missingTables].sort((left, right) => right.startLine - left.startLine)) {
       const tableId = this.generateTableId();
       lines.splice(table.startLine, 0, this.formatTableMarker(tableId), "");
     }
+
     const updatedContent = this.joinLines(lines, originalEndsWithNewline);
     await this.app.vault.modify(file, updatedContent);
     const updatedTables = this.parseMarkdownTables(updatedContent);
     await this.syncTableRecords(file, updatedTables, { forceMode: "enhanced" });
     this.scheduleVisibleTableRefresh();
     if (missingTables.length > 0) {
-      new import_obsidian.Notice(`\u5DF2\u4E3A\u5F53\u524D\u6587\u4EF6 ${missingTables.length} \u5F20\u8868\u683C\u5EFA\u7ACB\u589E\u5F3A\u6807\u8BC6`);
+      new Notice(`已为当前文件 ${missingTables.length} 张表格建立增强标识`);
       return;
     }
+
     if (didNormalizeSpacing) {
-      new import_obsidian.Notice("\u5DF2\u4FEE\u590D\u5F53\u524D\u6587\u4EF6\u8868\u683C\u589E\u5F3A\u6807\u8BC6\u7684\u5B89\u5168\u95F4\u8DDD");
+      new Notice("已修复当前文件表格增强标识的安全间距");
       return;
     }
-    new import_obsidian.Notice(`\u5F53\u524D\u6587\u4EF6 ${parsedTables.length} \u5F20\u8868\u683C\u5DF2\u5177\u5907\u589E\u5F3A\u6807\u8BC6`);
+
+    new Notice(`当前文件 ${parsedTables.length} 张表格已具备增强标识`);
   }
-  async initializeCurrentTable() {
+
+  private async initializeCurrentTable() {
     const context = await this.getActiveUninitializedTableContext();
     if (!context) {
-      new import_obsidian.Notice("\u5F53\u524D\u6CA1\u6709\u53EF\u542F\u7528\u589E\u5F3A\u7684 Markdown \u8868\u683C");
+      new Notice("当前没有可启用增强的 Markdown 表格");
       return false;
     }
     return this.initializeSpecificTable(context.file, context.parsedTable);
   }
-  async initializeCurrentTableNativeLayout() {
+
+  private async initializeCurrentTableNativeLayout() {
     const context = await this.getActiveUninitializedTableContext();
     if (!context) {
-      new import_obsidian.Notice("\u5F53\u524D\u6CA1\u6709\u53EF\u542F\u7528\u539F\u751F\u8868\u683C\u589E\u5F3A\u7684 Markdown \u8868\u683C");
+      new Notice("当前没有可启用原生表格增强的 Markdown 表格");
       return false;
     }
     return this.initializeSpecificTableNativeLayout(context.file, context.parsedTable);
   }
-  async initializeSpecificTable(file, parsedTable) {
+
+  private async initializeSpecificTable(file: TFile, parsedTable: ParsedTableBlock | null) {
     if (!parsedTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u76EE\u6807\u8868\u683C");
+      new Notice("没有识别到目标表格");
       return false;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const currentTables = this.parseMarkdownTables(originalContent);
-    const targetTable = currentTables.find(
-      (table) => table.startLine === parsedTable.startLine && table.endLine === parsedTable.endLine && table.raw === parsedTable.raw
-    ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
+    const targetTable =
+      currentTables.find(
+        (table) =>
+          table.startLine === parsedTable.startLine &&
+          table.endLine === parsedTable.endLine &&
+          table.raw === parsedTable.raw
+      ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
+
     if (!targetTable) {
-      new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u5B9A\u4F4D\u5931\u8D25\uFF0C\u8BF7\u91CD\u65B0\u9009\u4E2D\u8868\u683C\u540E\u518D\u8BD5");
+      new Notice("当前表格定位失败，请重新选中表格后再试");
       return false;
     }
+
     if (targetTable.tableId) {
       await this.syncTableRecords(file, currentTables);
       const record = this.dataStore.tables[targetTable.tableId];
@@ -1468,71 +1991,85 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         record.updatedAt = Date.now();
         await this.savePluginData();
         this.scheduleVisibleTableRefresh();
-        new import_obsidian.Notice("\u5DF2\u5C06\u5F53\u524D\u8868\u4ECE\u957F\u5BBD\u9AD8\u8C03\u8282\u6A21\u5F0F\u5347\u7EA7\u4E3A\u589E\u5F3A\u8868\u683C");
+        new Notice("已将当前表从长宽高调节模式升级为增强表格");
         return true;
       }
       this.scheduleVisibleTableRefresh();
-      new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u5DF2\u7ECF\u542F\u7528\u589E\u5F3A");
+      new Notice("当前表格已经启用增强");
       return true;
     }
+
     await this.createSnapshot(file, "before-anchor-current-table", []);
+
     const lines = originalContent.split(/\r?\n/);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const tableId = this.generateTableId();
     lines.splice(targetTable.startLine, 0, this.formatTableMarker(tableId), "");
+
     const updatedContent = this.joinLines(lines, originalEndsWithNewline);
     await this.app.vault.modify(file, updatedContent);
     const updatedTables = this.parseMarkdownTables(updatedContent);
     await this.syncTableRecords(file, updatedTables, { modeOverrides: { [tableId]: "enhanced" } });
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice("\u5DF2\u5BF9\u5F53\u524D\u8868\u542F\u7528\u589E\u5F3A");
+    new Notice("已对当前表启用增强");
     return true;
   }
-  async initializeSpecificTableNativeLayout(file, parsedTable) {
+
+  private async initializeSpecificTableNativeLayout(file: TFile, parsedTable: ParsedTableBlock | null) {
     if (!parsedTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u76EE\u6807\u8868\u683C");
+      new Notice("没有识别到目标表格");
       return false;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const currentTables = this.parseMarkdownTables(originalContent);
-    const targetTable = currentTables.find(
-      (table) => table.startLine === parsedTable.startLine && table.endLine === parsedTable.endLine && table.raw === parsedTable.raw
-    ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
+    const targetTable =
+      currentTables.find(
+        (table) =>
+          table.startLine === parsedTable.startLine &&
+          table.endLine === parsedTable.endLine &&
+          table.raw === parsedTable.raw
+      ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
+
     if (!targetTable) {
-      new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u5B9A\u4F4D\u5931\u8D25\uFF0C\u8BF7\u91CD\u65B0\u9009\u4E2D\u8868\u683C\u540E\u518D\u8BD5");
+      new Notice("当前表格定位失败，请重新选中表格后再试");
       return false;
     }
+
     if (targetTable.tableId) {
       await this.syncTableRecords(file, currentTables);
-      const record2 = this.dataStore.tables[targetTable.tableId];
-      if (record2?.mode === "enhanced") {
-        if (this.canConvertEnhancedRecordToNativeLayout(record2)) {
-          record2.mode = "nativeLayout";
-          this.applyNativeColorPresetToLayout(record2.layout);
-          record2.updatedAt = Date.now();
+      const record = this.dataStore.tables[targetTable.tableId];
+      if (record?.mode === "enhanced") {
+        if (this.canConvertEnhancedRecordToNativeLayout(record)) {
+          record.mode = "nativeLayout";
+          this.applyNativeColorPresetToLayout(record.layout);
+          record.updatedAt = Date.now();
           await this.savePluginData();
           this.scheduleVisibleTableRefresh();
-          new import_obsidian.Notice("\u5DF2\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316");
+          new Notice("已对当前表格美化");
           return true;
         }
-        new import_obsidian.Notice("\u5F53\u524D\u8868\u5DF2\u542F\u7528\u589E\u5F3A\uFF0C\u5DF2\u7ECF\u652F\u6301\u957F\u5BBD\u9AD8\u8C03\u8282");
+        new Notice("当前表已启用增强，已经支持长宽高调节");
         return true;
       }
-      if (record2) {
-        record2.mode = "nativeLayout";
-        this.applyNativeColorPresetToLayout(record2.layout);
-        record2.updatedAt = Date.now();
+      if (record) {
+        record.mode = "nativeLayout";
+        this.applyNativeColorPresetToLayout(record.layout);
+        record.updatedAt = Date.now();
         await this.savePluginData();
       }
       this.scheduleVisibleTableRefresh();
-      new import_obsidian.Notice("\u5DF2\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316");
+      new Notice("已对当前表格美化");
       return true;
     }
+
     await this.createSnapshot(file, "before-native-layout-color-anchor", []);
+
     const lines = originalContent.split(/\r?\n/);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const tableId = this.generateTableId();
     lines.splice(targetTable.startLine, 0, this.formatTableMarker(tableId), "");
+
     const updatedContent = this.joinLines(lines, originalEndsWithNewline);
     await this.app.vault.modify(file, updatedContent);
     const updatedTables = this.parseMarkdownTables(updatedContent);
@@ -1544,91 +2081,119 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       await this.savePluginData();
     }
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice("\u5DF2\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316");
+    new Notice("已对当前表格美化");
     return true;
   }
-  resolveParsedTableInContent(parsedTable, currentTables) {
-    return currentTables.find(
-      (table) => table.startLine === parsedTable.startLine && table.endLine === parsedTable.endLine && table.raw === parsedTable.raw
-    ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine) ?? null;
+
+  private resolveParsedTableInContent(parsedTable: ParsedTableBlock, currentTables: ParsedTableBlock[]) {
+    return (
+      currentTables.find(
+        (table) =>
+          table.startLine === parsedTable.startLine &&
+          table.endLine === parsedTable.endLine &&
+          table.raw === parsedTable.raw
+      ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine) ??
+      null
+    );
   }
-  isTableNativeLayoutBeautified(tableId) {
+
+  private isTableNativeLayoutBeautified(tableId: string | null | undefined) {
     return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "nativeLayout";
   }
-  canBeautifyParsedTableAsNativeLayout(parsedTable, record) {
+
+  private canBeautifyParsedTableAsNativeLayout(parsedTable: ParsedTableBlock, record: TableRecord | null | undefined) {
     if (!parsedTable.tableId) return true;
     if (!record) return true;
     if (record.mode === "nativeLayout") return false;
     if (record.mode === "enhanced") return this.canConvertEnhancedRecordToNativeLayout(record);
     return true;
   }
-  applyNativeLayoutBeautifyToRecord(record) {
+
+  private applyNativeLayoutBeautifyToRecord(record: TableRecord) {
     record.mode = "nativeLayout";
     this.applyNativeColorPresetToLayout(record.layout);
     record.updatedAt = Date.now();
   }
-  async getVisibleParsedTablesInActiveView(file) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+  private async getVisibleParsedTablesInActiveView(file: TFile): Promise<ParsedTableBlock[]> {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view?.file || view.file.path !== file.path) return [];
     const contentEl = view.contentEl;
     if (!(contentEl instanceof HTMLElement)) return [];
+
     const renderedTables = this.getRenderedTables(contentEl);
     if (renderedTables.length === 0) return [];
+
     const parsedTables = this.parseMarkdownTables(await this.app.vault.cachedRead(file));
-    const visible = [];
+    const visible: ParsedTableBlock[] = [];
     for (let index = 0; index < renderedTables.length && index < parsedTables.length; index += 1) {
       const parsedTable = parsedTables[index];
       if (parsedTable) visible.push(parsedTable);
     }
     return visible;
   }
-  async initializeVisiblePageTablesNativeLayout(file) {
+
+  private async initializeVisiblePageTablesNativeLayout(file: TFile): Promise<boolean> {
     const visibleTables = await this.getVisibleParsedTablesInActiveView(file);
     if (visibleTables.length === 0) {
-      new import_obsidian.Notice("\u5F53\u524D\u9875\u9762\u6CA1\u6709\u53EF\u89C1\u8868\u683C");
+      new Notice("当前页面没有可见表格");
       return false;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     let currentTables = this.parseMarkdownTables(originalContent);
     await this.syncTableRecords(file, currentTables);
-    const tablesToAnchor = [];
-    const tableIdsToConvert = [];
+
+    const tablesToAnchor: ParsedTableBlock[] = [];
+    const tableIdsToConvert: string[] = [];
+
     for (const parsedTable of visibleTables) {
       const targetTable = this.resolveParsedTableInContent(parsedTable, currentTables);
       if (!targetTable) continue;
+
       const record = targetTable.tableId ? this.dataStore.tables[targetTable.tableId] : null;
       if (!this.canBeautifyParsedTableAsNativeLayout(targetTable, record)) continue;
+
       if (!targetTable.tableId) {
         tablesToAnchor.push(targetTable);
         continue;
       }
+
       if (record?.mode === "enhanced" && !this.canConvertEnhancedRecordToNativeLayout(record)) {
         continue;
       }
+
       tableIdsToConvert.push(targetTable.tableId);
     }
+
     if (tablesToAnchor.length === 0 && tableIdsToConvert.length === 0) {
-      new import_obsidian.Notice("\u5F53\u524D\u9875\u9762\u53EF\u89C1\u8868\u683C\u90FD\u5DF2\u7F8E\u5316");
+      new Notice("当前页面可见表格都已美化");
       return true;
     }
+
     if (tablesToAnchor.length > 0) {
       await this.createSnapshot(file, "before-native-layout-color-anchor", []);
     }
+
     let updatedContent = originalContent;
-    const modeOverrides = {};
+    const modeOverrides: Record<string, TableRecordMode> = {};
+
     if (tablesToAnchor.length > 0) {
       const lines = originalContent.split(/\r?\n/);
       const originalEndsWithNewline = /\r?\n$/.test(originalContent);
+
       for (const table of [...tablesToAnchor].sort((left, right) => right.startLine - left.startLine)) {
         const tableId = this.generateTableId();
         lines.splice(table.startLine, 0, this.formatTableMarker(tableId), "");
         modeOverrides[tableId] = "nativeLayout";
       }
+
       updatedContent = this.joinLines(lines, originalEndsWithNewline);
       await this.app.vault.modify(file, updatedContent);
       currentTables = this.parseMarkdownTables(updatedContent);
       await this.syncTableRecords(file, currentTables, { modeOverrides });
     }
+
     let convertedCount = 0;
     for (const tableId of tableIdsToConvert) {
       const record = this.dataStore.tables[tableId];
@@ -1637,95 +2202,106 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       this.applyNativeLayoutBeautifyToRecord(record);
       convertedCount += 1;
     }
+
     for (const tableId of Object.keys(modeOverrides)) {
       const record = this.dataStore.tables[tableId];
       if (record) {
         this.applyNativeLayoutBeautifyToRecord(record);
       }
     }
+
     if (convertedCount > 0 || Object.keys(modeOverrides).length > 0) {
       await this.savePluginData();
     }
+
     const beautifiedCount = Object.keys(modeOverrides).length + convertedCount;
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice(`\u5DF2\u5BF9\u672C\u9875 ${beautifiedCount} \u5F20\u8868\u683C\u7F8E\u5316`);
+    new Notice(`已对本页 ${beautifiedCount} 张表格美化`);
     return beautifiedCount > 0;
   }
-  async insertEnhancedTableTemplate() {
+
+  private async insertEnhancedTableTemplate() {
     const file = this.getActiveMarkdownFile();
     if (!file) return false;
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
     const tableId = this.generateTableId();
     const template = [
       this.formatTableMarker(tableId),
       "",
       ...this.buildRawTable({
-        header: ["\u52171", "\u52172"],
+        header: ["列1", "列2"],
         divider: ["---", "---"],
-        body: [["\u5185\u5BB91", "\u5185\u5BB92"]]
+        body: [["内容1", "内容2"]],
       }),
-      ""
+      "",
     ].join("\n");
+
     if (editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() ? "\n\n" : "";
       editor.replaceRange(`${prefix}${template}`, cursor);
       window.setTimeout(() => this.queueRefreshBurst(), 120);
-      new import_obsidian.Notice("\u5DF2\u63D2\u5165\u589E\u5F3A\u8868\u683C\u6A21\u677F");
+      new Notice("已插入增强表格模板");
       return true;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const separator = originalContent.trim().length === 0 ? "" : originalEndsWithNewline ? "\n" : "\n\n";
     await this.app.vault.modify(file, `${originalContent}${separator}${template}`);
     this.queueRefreshBurst();
-    new import_obsidian.Notice("\u5DF2\u63D2\u5165\u589E\u5F3A\u8868\u683C\u6A21\u677F");
+    new Notice("已插入增强表格模板");
     return true;
   }
-  async insertNativeColorTableTemplate() {
+
+  private async insertNativeColorTableTemplate() {
     const file = this.getActiveMarkdownFile();
     if (!file) return false;
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
     const tableId = this.generateTableId();
     const rawTable = this.buildNativeColorRawTable();
     const tableLines = this.buildRawTable(rawTable);
     const tableRaw = tableLines.join("\n");
     const template = [this.formatTableMarker(tableId), "", tableRaw, ""].join("\n");
     const record = this.createNativeColorTableRecord(file, tableId, tableRaw);
+
     this.dataStore.tables[tableId] = record;
     await this.savePluginData();
+
     if (editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() ? "\n\n" : "";
-      editor.replaceRange(`${prefix}${template}
-`, cursor);
+      editor.replaceRange(`${prefix}${template}\n`, cursor);
       window.setTimeout(() => this.queueRefreshBurst(), 120);
-      new import_obsidian.Notice("\u5DF2\u63D2\u5165\u5F69\u8272\u539F\u751F\u7A7A\u8868\u683C");
+      new Notice("已插入彩色原生空表格");
       return true;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const separator = originalContent.trim().length === 0 ? "" : originalEndsWithNewline ? "\n" : "\n\n";
-    const updatedContent = `${originalContent}${separator}${template}
-`;
+    const updatedContent = `${originalContent}${separator}${template}\n`;
     await this.app.vault.modify(file, updatedContent);
     const parsedTables = this.parseMarkdownTables(updatedContent);
     await this.syncTableRecords(file, parsedTables, { modeOverrides: { [tableId]: "nativeLayout" } });
     this.dataStore.tables[tableId] = {
-      ...this.dataStore.tables[tableId] ?? record,
+      ...(this.dataStore.tables[tableId] ?? record),
       mode: "nativeLayout",
-      layout: record.layout
+      layout: record.layout,
     };
     await this.savePluginData();
     this.queueRefreshBurst();
-    new import_obsidian.Notice("\u5DF2\u63D2\u5165\u5F69\u8272\u539F\u751F\u7A7A\u8868\u683C");
+    new Notice("已插入彩色原生空表格");
     return true;
   }
-  buildNativeColorRawTable() {
+
+  private buildNativeColorRawTable(): ParsedRawTable {
     return {
       header: ["", "", ""],
       divider: ["---", "---", "---"],
@@ -1733,11 +2309,12 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         ["", "", ""],
         ["", "", ""],
         ["", "", ""],
-        ["", "", ""]
-      ]
+        ["", "", ""],
+      ],
     };
   }
-  createNativeColorTableRecord(file, tableId, tableRaw) {
+
+  private createNativeColorTableRecord(file: TFile, tableId: string, tableRaw: string): TableRecord {
     const now = Date.now();
     const layout = this.createNativeColorTableLayout();
     return {
@@ -1749,22 +2326,24 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       lastKnownHash: this.hashString(tableRaw),
       lastKnownRange: {
         startLine: 0,
-        endLine: 0
+        endLine: 0,
       },
-      layout
+      layout,
     };
   }
-  createNativeColorTableLayout() {
+
+  private createNativeColorTableLayout() {
     const layout = this.createEmptyLayout();
     this.applyNativeColorPresetToLayout(layout);
     layout.colWidths = {
       "0": 170,
       "1": 190,
-      "2": 430
+      "2": 430,
     };
     return layout;
   }
-  applyNativeColorPresetToLayout(layout) {
+
+  private applyNativeColorPresetToLayout(layout: TableLayoutMetadata) {
     const palette = this.getCurrentNativeColorPalette();
     layout.cellColors = {};
     layout.rowColors = {};
@@ -1773,7 +2352,8 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     layout.nativeColorPalette = palette;
     layout.rowColors["0"] = palette.header;
   }
-  normalizeNativeColorPresetLayout(layout) {
+
+  private normalizeNativeColorPresetLayout(layout: TableLayoutMetadata) {
     if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return;
     const palette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
     layout.nativeColorPalette = palette;
@@ -1781,42 +2361,48 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       layout.rowColors["0"] = palette.header;
     }
   }
-  canConvertEnhancedRecordToNativeLayout(record) {
+
+  private canConvertEnhancedRecordToNativeLayout(record: TableRecord | null | undefined) {
     if (!record || record.mode !== "enhanced") return false;
     return record.layout.merges.length === 0 && Object.keys(record.layout.cellImageWidths).length === 0;
   }
+
   getNativeColorSettingsForManager() {
     const savedPresets = this.getNativeColorSavedPalettes().map((item) => ({
       id: item.id,
       label: item.label,
       palette: { ...item.palette },
-      saved: true
+      saved: true,
     }));
     return {
       defaultPresetId: this.normalizeNativeColorPresetId(this.dataStore.nativeColorDefaultPresetId),
       presets: [
         {
-          id: "blue",
+          id: "blue" as const,
           label: NATIVE_COLOR_PRESET_PALETTES.blue.label,
-          palette: { ...NATIVE_COLOR_PRESET_PALETTES.blue }
+          palette: { ...NATIVE_COLOR_PRESET_PALETTES.blue },
         },
         {
-          id: "green",
+          id: "green" as const,
           label: NATIVE_COLOR_PRESET_PALETTES.green.label,
-          palette: { ...NATIVE_COLOR_PRESET_PALETTES.green }
+          palette: { ...NATIVE_COLOR_PRESET_PALETTES.green },
         },
         ...savedPresets,
         {
-          id: "custom",
-          label: "\u81EA\u5B9A\u4E49",
-          palette: this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT)
-        }
+          id: "custom" as const,
+          label: "自定义",
+          palette: this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
+        },
       ],
       customPalette: this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
-      savedPalettes: savedPresets
+      savedPalettes: savedPresets,
     };
   }
-  async updateNativeColorSettingsFromManager(input) {
+
+  async updateNativeColorSettingsFromManager(input: {
+    defaultPresetId?: string;
+    customPalette?: Partial<NativeColorPalette>;
+  }) {
     this.dataStore.nativeColorDefaultPresetId = this.normalizeNativeColorPresetId(input.defaultPresetId);
     if (input.customPalette) {
       this.dataStore.nativeColorCustomPalette = this.normalizeNativeColorPalette(
@@ -1826,28 +2412,30 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     }
     await this.savePluginData();
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice("\u5DF2\u66F4\u65B0\u539F\u751F\u8868\u683C\u989C\u8272\u9884\u8BBE");
+    new Notice("已更新原生表格颜色预设");
     return this.getNativeColorSettingsForManager();
   }
-  async saveCurrentNativeColorPaletteAsManager(label) {
+
+  async saveCurrentNativeColorPaletteAsManager(label?: string) {
     const now = Date.now();
     const palette = this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT);
     const title = this.normalizeNativeColorSavedPaletteLabel(label, this.getNextNativeColorSavedPaletteLabel());
-    const item = {
+    const item: NativeColorSavedPalette = {
       id: `saved_${now.toString(36)}`,
       label: title,
       palette,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
     };
     this.dataStore.nativeColorSavedPalettes = [...this.getNativeColorSavedPalettes(), item].slice(-12);
     this.dataStore.nativeColorDefaultPresetId = item.id;
     await this.savePluginData();
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice(`\u5DF2\u4FDD\u5B58\u914D\u8272\u65B9\u6848\uFF1A${title}`);
+    new Notice(`已保存配色方案：${title}`);
     return this.getNativeColorSettingsForManager();
   }
-  async deleteNativeColorPaletteFromManager(id) {
+
+  async deleteNativeColorPaletteFromManager(id: string) {
     const normalizedId = String(id ?? "").trim();
     if (!normalizedId.startsWith("saved_")) return this.getNativeColorSettingsForManager();
     this.dataStore.nativeColorSavedPalettes = this.getNativeColorSavedPalettes().filter((item) => item.id !== normalizedId);
@@ -1858,13 +2446,15 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     this.scheduleVisibleTableRefresh();
     return this.getNativeColorSettingsForManager();
   }
-  normalizeNativeColorPresetId(value, savedPalettes) {
+
+  private normalizeNativeColorPresetId(value: unknown, savedPalettes?: NativeColorSavedPalette[]): NativeColorPresetId {
     const raw = typeof value === "string" ? value.trim() : "";
     if (raw === "blue" || raw === "green" || raw === "custom") return raw;
     const saved = savedPalettes ?? this.getNativeColorSavedPalettes();
     return saved.some((item) => item.id === raw) ? raw : NATIVE_COLOR_DEFAULT_PRESET_ID;
   }
-  getCurrentNativeColorPalette() {
+
+  private getCurrentNativeColorPalette() {
     const presetId = this.normalizeNativeColorPresetId(this.dataStore.nativeColorDefaultPresetId);
     if (presetId === "custom") {
       return this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT);
@@ -1873,54 +2463,61 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     if (savedPreset) {
       return this.normalizeNativeColorPalette(savedPreset.palette, NATIVE_COLOR_CUSTOM_DEFAULT);
     }
-    const builtInPresetId = presetId === "blue" || presetId === "green" ? presetId : NATIVE_COLOR_DEFAULT_PRESET_ID;
+    const builtInPresetId: NativeColorBuiltInPresetId = presetId === "blue" || presetId === "green" ? presetId : NATIVE_COLOR_DEFAULT_PRESET_ID;
     return this.normalizeNativeColorPalette(NATIVE_COLOR_PRESET_PALETTES[builtInPresetId], NATIVE_COLOR_PRESET_PALETTES[builtInPresetId]);
   }
-  getNativeColorSavedPalettes() {
+
+  private getNativeColorSavedPalettes() {
     return this.normalizeNativeColorSavedPalettes(this.dataStore.nativeColorSavedPalettes);
   }
-  normalizeNativeColorSavedPalettes(value) {
+
+  private normalizeNativeColorSavedPalettes(value: unknown): NativeColorSavedPalette[] {
     if (!Array.isArray(value)) return [];
-    const result = [];
-    const seen = /* @__PURE__ */ new Set();
+    const result: NativeColorSavedPalette[] = [];
+    const seen = new Set<string>();
     for (const item of value) {
       if (!item || typeof item !== "object") continue;
-      const candidate = item;
+      const candidate = item as Partial<NativeColorSavedPalette>;
       const id = typeof candidate.id === "string" && candidate.id.trim().startsWith("saved_") ? candidate.id.trim() : "";
       if (!id || seen.has(id)) continue;
       seen.add(id);
       result.push({
         id,
-        label: this.normalizeNativeColorSavedPaletteLabel(candidate.label, `\u914D\u8272\u65B9\u6848 ${result.length + 1}`),
+        label: this.normalizeNativeColorSavedPaletteLabel(candidate.label, `配色方案 ${result.length + 1}`),
         palette: this.normalizeNativeColorPalette(candidate.palette, NATIVE_COLOR_CUSTOM_DEFAULT),
         createdAt: Number.isFinite(candidate.createdAt) ? Number(candidate.createdAt) : Date.now(),
-        updatedAt: Number.isFinite(candidate.updatedAt) ? Number(candidate.updatedAt) : Date.now()
+        updatedAt: Number.isFinite(candidate.updatedAt) ? Number(candidate.updatedAt) : Date.now(),
       });
     }
     return result.slice(-12);
   }
-  normalizeNativeColorSavedPaletteLabel(value, fallback) {
+
+  private normalizeNativeColorSavedPaletteLabel(value: unknown, fallback: string) {
     const text = typeof value === "string" ? value.trim() : "";
     return (text || fallback).slice(0, 24);
   }
-  getNextNativeColorSavedPaletteLabel() {
-    return `\u914D\u8272\u65B9\u6848 ${this.getNativeColorSavedPalettes().length + 1}`;
+
+  private getNextNativeColorSavedPaletteLabel() {
+    return `配色方案 ${this.getNativeColorSavedPalettes().length + 1}`;
   }
-  getLayoutNativeColorPalette(layout) {
+
+  private getLayoutNativeColorPalette(layout: TableLayoutMetadata) {
     if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return null;
     return this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
   }
-  normalizeNativeColorPalette(value, fallback) {
-    const candidate = value && typeof value === "object" ? value : {};
+
+  private normalizeNativeColorPalette(value: unknown, fallback: NativeColorPalette): NativeColorPalette {
+    const candidate = value && typeof value === "object" ? (value as Partial<NativeColorPalette>) : {};
     return {
       header: this.normalizeHexColor(candidate.header, fallback.header),
       headerText: this.normalizeHexColor(candidate.headerText, fallback.headerText),
       baseRow: this.normalizeHexColor(candidate.baseRow, fallback.baseRow),
       altRow: this.normalizeHexColor(candidate.altRow, fallback.altRow),
-      border: this.normalizeHexColor(candidate.border, fallback.border)
+      border: this.normalizeHexColor(candidate.border, fallback.border),
     };
   }
-  normalizeHexColor(value, fallback) {
+
+  private normalizeHexColor(value: unknown, fallback: string) {
     const raw = typeof value === "string" ? value.trim() : "";
     if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toUpperCase();
     if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
@@ -1928,36 +2525,43 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     }
     return fallback.toUpperCase();
   }
-  colorsMatch(left, right) {
+
+  private colorsMatch(left: string, right: string) {
     return left.trim().toUpperCase() === right.trim().toUpperCase();
   }
-  openTemplateNameModal(templateContent) {
+
+  private openTemplateNameModal(templateContent: string) {
     const normalized = templateContent.trim().length > 0 ? templateContent : "";
     if (!normalized) {
-      new import_obsidian.Notice("\u8BF7\u5148\u9009\u4E2D\u8981\u4FDD\u5B58\u4E3A\u6A21\u677F\u7684\u5185\u5BB9");
+      new Notice("请先选中要保存为模板的内容");
       return;
     }
     new TemplateNameModal(this, templateContent).open();
   }
+
   openTemplateLibraryModal() {
     new TemplateLibraryModal(this).open();
   }
-  getActiveTemplateSelectionContent(silent = false) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
+
+  private getActiveTemplateSelectionContent(silent = false) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
     if (editor && typeof editor.getSelection === "function") {
       const selected = String(editor.getSelection() ?? "");
       if (selected.trim().length > 0) return selected;
     }
+
     const browserSelection = typeof window !== "undefined" ? window.getSelection?.() : null;
     const selectedText = String(browserSelection?.toString?.() ?? "");
     if (selectedText.trim().length > 0) return selectedText;
+
     if (!silent) {
-      new import_obsidian.Notice("\u8BF7\u5148\u9009\u4E2D\u8981\u4FDD\u5B58\u4E3A\u6A21\u677F\u7684\u5185\u5BB9");
+      new Notice("请先选中要保存为模板的内容");
     }
     return null;
   }
-  isTemplateSectionBoundaryLine(line) {
+
+  private isTemplateSectionBoundaryLine(line: string) {
     const trimmed = String(line ?? "").trim();
     if (!trimmed) return false;
     if (/^#{1,6}\s+/.test(trimmed)) return true;
@@ -1965,7 +2569,8 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     if (/^==.+==$/.test(trimmed)) return true;
     return false;
   }
-  getTemplateSectionRangeAtLine(editor, line) {
+
+  private getTemplateSectionRangeAtLine(editor: { lineCount(): number; getLine(line: number): string }, line: number) {
     const lineCount = editor.lineCount();
     let startLine = line;
     for (let current = line; current >= 0; current -= 1) {
@@ -1976,6 +2581,7 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       }
       if (current === 0) startLine = 0;
     }
+
     let endLine = line;
     for (let current = line + 1; current < lineCount; current += 1) {
       if (this.isTemplateSectionBoundaryLine(String(editor.getLine(current) ?? ""))) {
@@ -1983,50 +2589,71 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       }
       endLine = current;
     }
+
     return { startLine, endLine };
   }
-  readEditorLines(editor, startLine, endLine) {
-    const lines = [];
+
+  private readEditorLines(editor: { getLine(line: number): string }, startLine: number, endLine: number) {
+    const lines: string[] = [];
     for (let line = startLine; line <= endLine; line += 1) {
       lines.push(String(editor.getLine(line) ?? ""));
     }
     return lines.join("\n");
   }
-  getParsedTableAtEditorLine(view) {
-    const editor = view.editor;
+
+  private getParsedTableAtEditorLine(view: MarkdownView): ParsedTableBlock | null {
+    const editor = (view as MarkdownView & { editor?: { getCursor?: () => { line: number }; getValue?: () => string } })
+      .editor;
     if (!editor || typeof editor.getCursor !== "function") return null;
     const line = Math.max(0, editor.getCursor()?.line ?? 0);
     const content = typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : "";
     if (!content.trim()) return null;
     return this.parseMarkdownTables(content).find((table) => line >= table.startLine && line <= table.endLine) ?? null;
   }
-  getEditorTemplateSaveContent(view, silent = false) {
+
+  private getEditorTemplateSaveContent(view?: MarkdownView | null, silent = false) {
     const selected = this.getActiveTemplateSelectionContent(true);
     if (selected?.trim()) return selected;
-    const activeView = view ?? this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = activeView?.editor;
-    if (editor && typeof editor.getCursor === "function" && typeof editor.lineCount === "function" && typeof editor.getLine === "function") {
+
+    const activeView = view ?? this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (
+      activeView as MarkdownView & {
+        editor?: { getCursor?: () => { line: number }; lineCount?: () => number; getLine?: (line: number) => string };
+      }
+    )?.editor;
+    if (
+      editor &&
+      typeof editor.getCursor === "function" &&
+      typeof editor.lineCount === "function" &&
+      typeof editor.getLine === "function"
+    ) {
       const cursorLine = Math.max(0, editor.getCursor()?.line ?? 0);
       const sectionRange = this.getTemplateSectionRangeAtLine(editor, cursorLine);
       const sectionContent = this.readEditorLines(editor, sectionRange.startLine, sectionRange.endLine);
       if (sectionContent.trim().length > 0) return sectionContent;
     }
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
+
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { getTemplateContentForEditor?: (editor: unknown, line: number) => string | null }
+      | undefined;
     if (typeof feishu?.getTemplateContentForEditor === "function" && editor && typeof editor.getCursor === "function") {
       const bridged = feishu.getTemplateContentForEditor(editor, Math.max(0, editor.getCursor()?.line ?? 0));
       if (bridged?.trim()) return bridged;
     }
+
     if (!silent) {
-      new import_obsidian.Notice("\u8BF7\u5148\u9009\u4E2D\u8981\u4FDD\u5B58\u4E3A\u6A21\u677F\u7684\u5185\u5BB9");
+      new Notice("请先选中要保存为模板的内容");
     }
     return null;
   }
-  async createTemplateFromContent(rawName, templateContent) {
+
+  async createTemplateFromContent(rawName: string, templateContent: string) {
     const content = templateContent.trim().length > 0 ? templateContent : "";
     if (!content) {
-      new import_obsidian.Notice("\u6A21\u677F\u5185\u5BB9\u4E3A\u7A7A\uFF0C\u672A\u4FDD\u5B58");
+      new Notice("模板内容为空，未保存");
       return false;
     }
+
     await this.ensureFolderExists(TEMPLATE_LIBRARY_FOLDER);
     const safeRelativePath = this.sanitizeTemplateRelativePath(rawName);
     const path = await this.getAvailableTemplatePath(safeRelativePath);
@@ -2037,22 +2664,26 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       console.warn("[mdtp] vault.create template failed, falling back to adapter.write", error);
       await this.app.vault.adapter.write(path, content);
     }
-    new import_obsidian.Notice(`\u5DF2\u4FDD\u5B58\u6A21\u677F\uFF1A${this.getTemplateNameFromPath(path)}`);
+    new Notice(`已保存模板：${this.getTemplateNameFromPath(path)}`);
     return true;
   }
-  async createTemplateFromModalInput(rawName, rawContent) {
+
+  async createTemplateFromModalInput(rawName: string, rawContent: string) {
     const name = rawName.trim();
     if (!name) {
-      new import_obsidian.Notice("\u8BF7\u5148\u586B\u5199\u6A21\u677F\u540D\u79F0");
+      new Notice("请先填写模板名称");
       return false;
     }
+
     const content = String(rawContent ?? "");
     if (content.trim().length > 0) {
       return this.createTemplateFromContent(name, content);
     }
+
     return this.createEmptyTemplate(name);
   }
-  async createEmptyTemplate(rawName) {
+
+  async createEmptyTemplate(rawName: string) {
     await this.ensureFolderExists(TEMPLATE_LIBRARY_FOLDER);
     const safeRelativePath = this.sanitizeTemplateRelativePath(rawName);
     const path = await this.getAvailableTemplatePath(safeRelativePath);
@@ -2063,108 +2694,124 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       console.warn("[mdtp] vault.create empty template failed, falling back to adapter.write", error);
       await this.app.vault.adapter.write(path, "");
     }
-    new import_obsidian.Notice(`\u5DF2\u65B0\u5EFA\u6A21\u677F\uFF1A${this.getTemplateNameFromPath(path)}`);
+    new Notice(`已新建模板：${this.getTemplateNameFromPath(path)}`);
     return { name: this.getTemplateNameFromPath(path), path };
   }
-  async getTemplateRecords() {
+
+  async getTemplateRecords(): Promise<TemplateRecord[]> {
     await this.ensureFolderExists(TEMPLATE_LIBRARY_FOLDER);
     const paths = await this.listTemplateMarkdownPaths(TEMPLATE_LIBRARY_FOLDER);
-    return paths.map((filePath) => this.createTemplateRecord(filePath)).sort((a, b) => {
-      const folderCompare = a.folderPath.localeCompare(b.folderPath, "zh-Hans-CN");
-      if (folderCompare !== 0) return folderCompare;
-      return a.name.localeCompare(b.name, "zh-Hans-CN");
-    });
+    return paths
+      .map((filePath: string) => this.createTemplateRecord(filePath))
+      .sort((a: TemplateRecord, b: TemplateRecord) => {
+        const folderCompare = a.folderPath.localeCompare(b.folderPath, "zh-Hans-CN");
+        if (folderCompare !== 0) return folderCompare;
+        return a.name.localeCompare(b.name, "zh-Hans-CN");
+      });
   }
-  async insertTemplateByPath(templatePath) {
+
+  async insertTemplateByPath(templatePath: string) {
     const adapter = this.app.vault.adapter;
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
-    if (!await adapter.exists(normalizedPath)) {
-      new import_obsidian.Notice("\u6A21\u677F\u6587\u4EF6\u4E0D\u5B58\u5728");
+    const normalizedPath = normalizePath(templatePath);
+    if (!(await adapter.exists(normalizedPath))) {
+      new Notice("模板文件不存在");
       return false;
     }
+
     const content = await adapter.read(normalizedPath);
     const inserted = await this.insertTemplateContentAtCursor(content);
     if (inserted) {
-      new import_obsidian.Notice(`\u5DF2\u63D2\u5165\u6A21\u677F\uFF1A${this.getTemplateNameFromPath(normalizedPath)}`);
+      new Notice(`已插入模板：${this.getTemplateNameFromPath(normalizedPath)}`);
     }
     return inserted;
   }
-  async openTemplateForEdit(templatePath) {
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
+
+  async openTemplateForEdit(templatePath: string) {
+    const normalizedPath = normalizePath(templatePath);
     const template = {
       name: this.getTemplateNameFromPath(normalizedPath),
-      path: normalizedPath
+      path: normalizedPath,
     };
     const file = this.app.vault.getAbstractFileByPath(normalizedPath);
-    if (file instanceof import_obsidian.TFile) {
+    if (file instanceof TFile) {
       await this.app.workspace.getLeaf(true).openFile(file);
       return true;
     }
-    if (!await this.app.vault.adapter.exists(normalizedPath)) {
-      new import_obsidian.Notice("\u6A21\u677F\u6587\u4EF6\u4E0D\u5B58\u5728");
+
+    if (!(await this.app.vault.adapter.exists(normalizedPath))) {
+      new Notice("模板文件不存在");
       return false;
     }
     new TemplateEditModal(this, template).open();
     return true;
   }
-  async readTemplateContent(templatePath) {
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
-    if (!await this.app.vault.adapter.exists(normalizedPath)) return "";
+
+  async readTemplateContent(templatePath: string) {
+    const normalizedPath = normalizePath(templatePath);
+    if (!(await this.app.vault.adapter.exists(normalizedPath))) return "";
     return this.app.vault.adapter.read(normalizedPath);
   }
-  async writeTemplateContent(templatePath, content) {
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
+
+  async writeTemplateContent(templatePath: string, content: string) {
+    const normalizedPath = normalizePath(templatePath);
     await this.ensureFolderExists(TEMPLATE_LIBRARY_FOLDER);
     await this.app.vault.adapter.write(normalizedPath, content);
   }
-  async deleteTemplateByPath(templatePath) {
-    const feishu = this.app.plugins?.plugins?.["feishu-doc-toolbar"];
+
+  async deleteTemplateByPath(templatePath: string) {
+    const feishu = this.app.plugins?.plugins?.["feishu-doc-toolbar"] as
+      | { deleteTemplateAtPath?: (path: string) => Promise<boolean> }
+      | undefined;
     if (typeof feishu?.deleteTemplateAtPath === "function") {
       return feishu.deleteTemplateAtPath(templatePath);
     }
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
+
+    const normalizedPath = normalizePath(templatePath);
     if (!normalizedPath.startsWith(`${TEMPLATE_LIBRARY_FOLDER}/`) || !normalizedPath.toLowerCase().endsWith(".md")) {
-      new import_obsidian.Notice("\u53EA\u80FD\u5220\u9664\u6A21\u677F\u5E93\u4E2D\u7684\u6A21\u677F\u6587\u4EF6");
+      new Notice("只能删除模板库中的模板文件");
       return false;
     }
-    const templateName = this.getTemplateNameFromPath(normalizedPath);
-    const confirmed = window.confirm(`\u786E\u5B9A\u5220\u9664\u6A21\u677F\u201C${templateName}\u201D\u5417\uFF1F
 
-\u5220\u9664\u540E\u4F1A\u4ECE\u6A21\u677F\u5E93\u79FB\u9664\u3002`);
+    const templateName = this.getTemplateNameFromPath(normalizedPath);
+    const confirmed = window.confirm(`确定删除模板“${templateName}”吗？\n\n删除后会从模板库移除。`);
     if (!confirmed) return false;
+
     const file = this.app.vault.getAbstractFileByPath(normalizedPath);
     try {
-      if (file instanceof import_obsidian.TFile && typeof this.app.vault.trash === "function") {
+      if (file instanceof TFile && typeof this.app.vault.trash === "function") {
         await this.app.vault.trash(file, true);
-      } else if (file instanceof import_obsidian.TFile && typeof this.app.vault.delete === "function") {
+      } else if (file instanceof TFile && typeof this.app.vault.delete === "function") {
         await this.app.vault.delete(file);
       } else if (await this.app.vault.adapter.exists(normalizedPath)) {
         await this.app.vault.adapter.remove(normalizedPath);
       } else {
-        new import_obsidian.Notice("\u6A21\u677F\u6587\u4EF6\u4E0D\u5B58\u5728");
+        new Notice("模板文件不存在");
         return false;
       }
-      new import_obsidian.Notice(`\u5DF2\u5220\u9664\u6A21\u677F\uFF1A${templateName}`);
+      new Notice(`已删除模板：${templateName}`);
       return true;
     } catch (error) {
       console.warn("[mdtp] delete template failed", error);
-      new import_obsidian.Notice("\u5220\u9664\u6A21\u677F\u5931\u8D25");
+      new Notice("删除模板失败");
       return false;
     }
   }
-  async insertEnhancedTemplateContentAtCursor(content, position) {
+
+  async insertEnhancedTemplateContentAtCursor(content: string, position?: { line: number; ch: number }) {
     return this.insertTemplateContentAtCursor(content, position);
   }
-  async insertTemplateContentAtCursor(content, position) {
+
+  private async insertTemplateContentAtCursor(content: string, position?: { line: number; ch: number }) {
     const file = this.getActiveMarkdownFile();
     if (!file) return false;
     if (content.trim().length === 0) {
-      new import_obsidian.Notice("\u6A21\u677F\u5185\u5BB9\u4E3A\u7A7A");
+      new Notice("模板内容为空");
       return false;
     }
+
     const prepared = this.prepareTemplateContentForInsertion(content, file);
     if (prepared.content.trim().length === 0) {
-      new import_obsidian.Notice("\u6A21\u677F\u5185\u5BB9\u4E3A\u7A7A");
+      new Notice("模板内容为空");
       return false;
     }
     for (const record of prepared.tableRecords) {
@@ -2173,8 +2820,9 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     if (prepared.tableRecords.length > 0) {
       await this.savePluginData();
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
     if (editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = position ?? editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
@@ -2183,6 +2831,7 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       window.setTimeout(() => this.queueRefreshBurst(), 120);
       return true;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const separator = originalContent.trim().length === 0 ? "" : originalEndsWithNewline ? "\n" : "\n\n";
@@ -2190,42 +2839,45 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     this.queueRefreshBurst();
     return true;
   }
-  async saveEnhancedTableSelectionAsTemplate(file, tableId, selection) {
+
+  private async saveEnhancedTableSelectionAsTemplate(
+    file: TFile,
+    tableId: string,
+    selection: SelectionRect
+  ) {
     const content = await this.buildEnhancedTableTemplateContent(file, tableId, selection);
     if (!content) return false;
     this.openTemplateNameModal(content);
     return true;
   }
-  async buildEnhancedTableTemplateContent(file, tableId, selection) {
+
+  private async buildEnhancedTableTemplateContent(file: TFile, tableId: string, selection: SelectionRect) {
     const content = await this.app.vault.cachedRead(file);
     const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId) ?? null;
     if (!parsedTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u589E\u5F3A\u8868\u683C");
+      new Notice("没有读到当前增强表格");
       return null;
     }
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+      new Notice("没有读到当前表格内容");
       return null;
     }
     const record = this.dataStore.tables[tableId];
     const fullSelection = this.isFullTableSelection(rawTable, selection);
     if (fullSelection) {
-      const metadata2 = this.serializeTemplateTableMetadata({
+      const metadata = this.serializeTemplateTableMetadata({
         [tableId]: {
           mode: "enhanced",
-          layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout()
-        }
+          layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout(),
+        },
       });
-      return `${metadata2}
-${this.formatTableMarker(tableId)}
-
-${parsedTable.raw}
-`;
+      return `${metadata}\n${this.formatTableMarker(tableId)}\n\n${parsedTable.raw}\n`;
     }
+
     const matrix = await this.readSelectionSourceMatrix(file, tableId, selection, { preserveRaw: true });
     if (!matrix) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u9009\u533A");
+      new Notice("没有读到当前表格选区");
       return null;
     }
     const rowCount = matrix.length;
@@ -2233,31 +2885,29 @@ ${parsedTable.raw}
     if (rowCount <= 1 && colCount <= 1) {
       return this.buildHighFidelityClipboardTextFromMatrix(matrix);
     }
+
     const nextTableId = this.generateTableId();
     const tableMarkdown = this.buildClipboardTextFromMatrix(matrix).trim();
     const layout = record?.layout ? this.extractLayoutForSelection(record.layout, selection) : this.createEmptyLayout();
     const metadata = this.serializeTemplateTableMetadata({
       [nextTableId]: {
         mode: "enhanced",
-        layout
-      }
+        layout,
+      },
     });
-    return `${metadata}
-${this.formatTableMarker(nextTableId)}
-
-${tableMarkdown}
-`;
+    return `${metadata}\n${this.formatTableMarker(nextTableId)}\n\n${tableMarkdown}\n`;
   }
-  async savePlainTableSelectionAsTemplate(context) {
+
+  private async savePlainTableSelectionAsTemplate(context: UninitializedTableContext) {
     const rawTable = this.parseRawTable(context.parsedTable.raw);
     if (!rawTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+      new Notice("没有读到当前表格内容");
       return false;
     }
     const rect = this.resolvePlainTableTemplateSelection(context.tableEl ?? null, context.coord);
-    const matrix = [];
+    const matrix: string[][] = [];
     for (let row = rect.startRow; row <= rect.endRow; row += 1) {
-      const values = [];
+      const values: string[] = [];
       for (let col = rect.startCol; col <= rect.endCol; col += 1) {
         values.push(this.getCellValue(rawTable, { row, col }) ?? "");
       }
@@ -2267,30 +2917,33 @@ ${tableMarkdown}
     this.openTemplateNameModal(content);
     return true;
   }
-  async savePlainTableAsTemplate(context) {
+
+  private async savePlainTableAsTemplate(context: Pick<UninitializedTableContext, "parsedTable">) {
     const content = this.normalizeTemplateTableContent(context.parsedTable.raw);
     if (!content.trim()) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+      new Notice("没有读到当前表格内容");
       return false;
     }
     this.openTemplateNameModal(content);
     return true;
   }
-  async saveManagedTableAsTemplate(file, parsedTable) {
+
+  private async saveManagedTableAsTemplate(file: TFile, parsedTable: ParsedTableBlock | null) {
     if (!parsedTable) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+      new Notice("没有读到当前表格内容");
       return false;
     }
     const content = this.buildManagedWholeTableTemplateContent(parsedTable);
     if (!content.trim()) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+      new Notice("没有读到当前表格内容");
       return false;
     }
     this.openTemplateNameModal(content);
     void file;
     return true;
   }
-  buildManagedWholeTableTemplateContent(parsedTable) {
+
+  private buildManagedWholeTableTemplateContent(parsedTable: ParsedTableBlock) {
     if (!parsedTable.tableId) {
       return this.normalizeTemplateTableContent(parsedTable.raw);
     }
@@ -2298,20 +2951,18 @@ ${tableMarkdown}
     const metadata = this.serializeTemplateTableMetadata({
       [parsedTable.tableId]: {
         mode: this.getTableRecordMode(record),
-        layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout()
-      }
+        layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout(),
+      },
     });
-    return `${metadata}
-${this.formatTableMarker(parsedTable.tableId)}
+    return `${metadata}\n${this.formatTableMarker(parsedTable.tableId)}\n\n${this.normalizeTemplateTableContent(parsedTable.raw)}`;
+  }
 
-${this.normalizeTemplateTableContent(parsedTable.raw)}`;
-  }
-  normalizeTemplateTableContent(raw) {
+  private normalizeTemplateTableContent(raw: string) {
     const trimmed = String(raw ?? "").trim();
-    return trimmed ? `${trimmed}
-` : "";
+    return trimmed ? `${trimmed}\n` : "";
   }
-  resolvePlainTableTemplateSelection(tableEl, fallbackCoord) {
+
+  private resolvePlainTableTemplateSelection(tableEl: HTMLTableElement | null, fallbackCoord: CellCoord): SelectionRect {
     if (!tableEl) return this.normalizeSelection(fallbackCoord, fallbackCoord);
     const selectedCoords = this.collectPlainTableSelectedCoords(tableEl);
     if (selectedCoords.length === 0) return this.normalizeSelection(fallbackCoord, fallbackCoord);
@@ -2321,13 +2972,14 @@ ${this.normalizeTemplateTableContent(parsedTable.raw)}`;
       startRow: Math.min(...rows),
       endRow: Math.max(...rows),
       startCol: Math.min(...cols),
-      endCol: Math.max(...cols)
+      endCol: Math.max(...cols),
     };
   }
-  collectPlainTableSelectedCoords(tableEl) {
+
+  private collectPlainTableSelectedCoords(tableEl: HTMLTableElement) {
     const selection = window.getSelection?.() ?? null;
-    const cells = Array.from(tableEl.querySelectorAll("th, td"));
-    const selected = [];
+    const cells = Array.from(tableEl.querySelectorAll("th, td")) as HTMLTableCellElement[];
+    const selected: CellCoord[] = [];
     for (const cell of cells) {
       if (!this.isPlainTableCellSelected(cell, selection)) continue;
       const coord = this.getPlainTableCellCoord(cell);
@@ -2335,34 +2987,46 @@ ${this.normalizeTemplateTableContent(parsedTable.raw)}`;
     }
     return selected;
   }
-  isPlainTableCellSelected(cell, selection) {
-    if (cell.matches(
-      [
-        ".is-selected",
-        ".mod-selected",
-        ".table-cell-selected",
-        ".table-editor-cell-selected",
-        ".cm-table-widget-cell-selected",
-        "[aria-selected='true']",
-        "[data-selected='true']",
-        "[data-is-selected='true']"
-      ].join(",")
-    )) {
+
+  private isPlainTableCellSelected(cell: HTMLTableCellElement, selection: Selection | null) {
+    if (
+      cell.matches(
+        [
+          ".is-selected",
+          ".mod-selected",
+          ".table-cell-selected",
+          ".table-editor-cell-selected",
+          ".cm-table-widget-cell-selected",
+          "[aria-selected='true']",
+          "[data-selected='true']",
+          "[data-is-selected='true']",
+        ].join(",")
+      )
+    ) {
       return true;
     }
+
     if (selection && selection.rangeCount > 0 && !selection.isCollapsed) {
       for (let index = 0; index < selection.rangeCount; index += 1) {
         const range = selection.getRangeAt(index);
         try {
           if (range.intersectsNode(cell)) return true;
         } catch {
+          // Some Obsidian virtualized nodes can disappear between contextmenu and range inspection.
         }
       }
     }
+
     return document.activeElement === cell || cell.contains(document.activeElement);
   }
-  async saveTemplateFromMenuContext(options) {
-    const selectedContent = this.getEditorTemplateSaveContent(this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView), true);
+
+  private async saveTemplateFromMenuContext(options?: {
+    file?: TFile;
+    tableId?: string;
+    tableSelection?: SelectionRect | null;
+    plainTableContext?: UninitializedTableContext | null;
+  }) {
+    const selectedContent = this.getEditorTemplateSaveContent(this.app.workspace.getActiveViewOfType(MarkdownView), true);
     if (selectedContent?.trim()) {
       this.openTemplateNameModal(selectedContent);
       return true;
@@ -2373,18 +3037,26 @@ ${this.normalizeTemplateTableContent(parsedTable.raw)}`;
     if (options?.plainTableContext) {
       return this.savePlainTableSelectionAsTemplate(options.plainTableContext);
     }
-    new import_obsidian.Notice("\u8BF7\u5148\u9009\u4E2D\u8981\u4FDD\u5B58\u4E3A\u6A21\u677F\u7684\u5185\u5BB9");
+    new Notice("请先选中要保存为模板的内容");
     return false;
   }
-  isFullTableSelection(rawTable, selection) {
-    return selection.startRow === 0 && selection.startCol === 0 && selection.endRow === rawTable.body.length && selection.endCol === rawTable.header.length - 1;
+
+  private isFullTableSelection(rawTable: ParsedRawTable, selection: SelectionRect) {
+    return (
+      selection.startRow === 0 &&
+      selection.startCol === 0 &&
+      selection.endRow === rawTable.body.length &&
+      selection.endCol === rawTable.header.length - 1
+    );
   }
-  serializeTemplateTableMetadata(tables) {
+
+  private serializeTemplateTableMetadata(tables: TemplateTableMetadata["tables"]) {
     return `%% mdtp-template:${JSON.stringify({ version: 1, tables })} %%`;
   }
-  splitTemplateContentForPreview(content) {
+
+  splitTemplateContentForPreview(content: string): { hiddenPrefix: string; visible: string } {
     const lines = String(content ?? "").split(/\r?\n/);
-    const hiddenLines = [];
+    const hiddenLines: string[] = [];
     let cursor = 0;
     while (cursor < lines.length) {
       const line = lines[cursor];
@@ -2404,29 +3076,26 @@ ${this.normalizeTemplateTableContent(parsedTable.raw)}`;
     }
     return {
       hiddenPrefix: hiddenLines.join("\n"),
-      visible: visibleLines.join("\n")
+      visible: visibleLines.join("\n"),
     };
   }
-  combineTemplateContentForSave(hiddenPrefix, visible) {
+
+  combineTemplateContentForSave(hiddenPrefix: string, visible: string): string {
     const trimmedVisible = String(visible ?? "").replace(/\r\n/g, "\n").replace(/^\n+|\n+$/g, "");
     const trimmedPrefix = String(hiddenPrefix ?? "").trim();
     if (!trimmedVisible) {
-      return trimmedPrefix ? `${trimmedPrefix}
-` : "";
+      return trimmedPrefix ? `${trimmedPrefix}\n` : "";
     }
     if (!trimmedPrefix) {
-      return `${trimmedVisible}
-`;
+      return `${trimmedVisible}\n`;
     }
-    return `${trimmedPrefix}
-
-${trimmedVisible}
-`;
+    return `${trimmedPrefix}\n\n${trimmedVisible}\n`;
   }
-  extractTemplateTableMetadata(content) {
-    const metadata = { version: 1, tables: {} };
+
+  private extractTemplateTableMetadata(content: string): { content: string; metadata: TemplateTableMetadata } {
+    const metadata: TemplateTableMetadata = { version: 1, tables: {} };
     const lines = content.split(/\r?\n/);
-    const kept = [];
+    const kept: string[] = [];
     for (const line of lines) {
       const match = line.match(TEMPLATE_TABLE_METADATA_RE);
       if (!match) {
@@ -2434,7 +3103,7 @@ ${trimmedVisible}
         continue;
       }
       try {
-        const parsed = JSON.parse(match[1]);
+        const parsed = JSON.parse(match[1]) as TemplateTableMetadata;
         if (parsed?.tables && typeof parsed.tables === "object") {
           metadata.tables = { ...metadata.tables, ...parsed.tables };
         }
@@ -2444,22 +3113,26 @@ ${trimmedVisible}
     }
     return {
       content: kept.join("\n"),
-      metadata
+      metadata,
     };
   }
-  prepareTemplateContentForInsertion(content, file) {
+
+  private prepareTemplateContentForInsertion(content: string, file: TFile) {
     const extracted = this.extractTemplateTableMetadata(content);
     const originalEndsWithNewline = /\r?\n$/.test(extracted.content);
     const lines = extracted.content.split(/\r?\n/);
     const parsedTables = this.parseMarkdownTables(extracted.content).filter((table) => !!table.tableId);
-    const idMap = /* @__PURE__ */ new Map();
+    const idMap = new Map<string, string>();
+
     for (const table of parsedTables) {
       if (!table.tableId || idMap.has(table.tableId)) continue;
       idMap.set(table.tableId, this.generateTableId());
     }
+
     if (idMap.size === 0) {
-      return { content: extracted.content, tableRecords: [] };
+      return { content: extracted.content, tableRecords: [] as TableRecord[] };
     }
+
     for (let index = 0; index < lines.length; index += 1) {
       const tableId = this.extractTableMarkerId(lines[index]);
       const nextId = tableId ? idMap.get(tableId) : null;
@@ -2467,11 +3140,14 @@ ${trimmedVisible}
         lines[index] = this.formatTableMarker(nextId);
       }
     }
+
     this.ensureBlankLineAfterTableMarkers(lines);
+
     const transformedContent = this.joinLines(lines, originalEndsWithNewline);
     const transformedTables = this.parseMarkdownTables(transformedContent).filter((table) => !!table.tableId);
     const now = Date.now();
-    const tableRecords = [];
+    const tableRecords: TableRecord[] = [];
+
     for (let index = 0; index < parsedTables.length && index < transformedTables.length; index += 1) {
       const sourceTable = parsedTables[index];
       const targetTable = transformedTables[index];
@@ -2488,29 +3164,31 @@ ${trimmedVisible}
         lastKnownHash: this.hashString(targetTable.raw),
         lastKnownRange: {
           startLine: targetTable.startLine,
-          endLine: targetTable.endLine
+          endLine: targetTable.endLine,
         },
-        layout
+        layout,
       });
     }
+
     return {
       content: transformedContent,
-      tableRecords
+      tableRecords,
     };
   }
-  extractLayoutForSelection(layout, selection) {
+
+  private extractLayoutForSelection(layout: TableLayoutMetadata, selection: SelectionRect): TableLayoutMetadata {
     const next = this.createEmptyLayout();
     for (let col = selection.startCol; col <= selection.endCol; col += 1) {
       const value = layout.colWidths[String(col)];
-      if (value !== void 0) next.colWidths[String(col - selection.startCol)] = value;
+      if (value !== undefined) next.colWidths[String(col - selection.startCol)] = value;
       const color = layout.colColors[String(col)];
-      if (color !== void 0) next.colColors[String(col - selection.startCol)] = color;
+      if (color !== undefined) next.colColors[String(col - selection.startCol)] = color;
     }
     for (let row = selection.startRow; row <= selection.endRow; row += 1) {
       const value = layout.rowHeights[String(row)];
-      if (value !== void 0) next.rowHeights[String(row - selection.startRow)] = value;
+      if (value !== undefined) next.rowHeights[String(row - selection.startRow)] = value;
       const color = layout.rowColors[String(row)];
-      if (color !== void 0) next.rowColors[String(row - selection.startRow)] = color;
+      if (color !== undefined) next.rowColors[String(row - selection.startRow)] = color;
     }
     for (const [key, value] of Object.entries(layout.cellColors)) {
       const coord = this.parseCellKey(key);
@@ -2527,21 +3205,31 @@ ${trimmedVisible}
       if (!coord || !this.selectionContains(selection, coord)) continue;
       next.cellImageWidths[this.getCellKey({ row: coord.row - selection.startRow, col: coord.col - selection.startCol })] = value;
     }
-    next.merges = layout.merges.filter((merge) => {
-      const endRow = merge.row + merge.rowspan - 1;
-      const endCol = merge.col + merge.colspan - 1;
-      return merge.row >= selection.startRow && merge.col >= selection.startCol && endRow <= selection.endRow && endCol <= selection.endCol;
-    }).map((merge) => ({
-      row: merge.row - selection.startRow,
-      col: merge.col - selection.startCol,
-      rowspan: merge.rowspan,
-      colspan: merge.colspan
-    }));
+    next.merges = layout.merges
+      .filter((merge) => {
+        const endRow = merge.row + merge.rowspan - 1;
+        const endCol = merge.col + merge.colspan - 1;
+        return (
+          merge.row >= selection.startRow &&
+          merge.col >= selection.startCol &&
+          endRow <= selection.endRow &&
+          endCol <= selection.endCol
+        );
+      })
+      .map((merge) => ({
+        row: merge.row - selection.startRow,
+        col: merge.col - selection.startCol,
+        rowspan: merge.rowspan,
+        colspan: merge.colspan,
+      }));
     return next;
   }
-  createTemplateRecord(templatePath) {
-    const normalizedPath = (0, import_obsidian.normalizePath)(templatePath);
-    const relativePath = normalizedPath.startsWith(`${TEMPLATE_LIBRARY_FOLDER}/`) ? normalizedPath.slice(TEMPLATE_LIBRARY_FOLDER.length + 1) : normalizedPath;
+
+  private createTemplateRecord(templatePath: string): TemplateRecord {
+    const normalizedPath = normalizePath(templatePath);
+    const relativePath = normalizedPath.startsWith(`${TEMPLATE_LIBRARY_FOLDER}/`)
+      ? normalizedPath.slice(TEMPLATE_LIBRARY_FOLDER.length + 1)
+      : normalizedPath;
     const segments = relativePath.split("/").filter(Boolean);
     const folderSegments = segments.slice(0, -1);
     return {
@@ -2549,40 +3237,57 @@ ${trimmedVisible}
       path: normalizedPath,
       folderPath: folderSegments.join("/"),
       relativePath,
-      folderSegments
+      folderSegments,
     };
   }
-  async listTemplateMarkdownPaths(folderPath) {
+
+  private async listTemplateMarkdownPaths(folderPath: string) {
     const adapter = this.app.vault.adapter;
-    const paths = /* @__PURE__ */ new Set();
-    if (!await adapter.exists(folderPath)) return [];
-    const collect = async (currentFolder) => {
+    const paths = new Set<string>();
+    if (!(await adapter.exists(folderPath))) return [];
+
+    const collect = async (currentFolder: string) => {
       const listing = await adapter.list(currentFolder);
       for (const filePath of listing.files ?? []) {
         if (!filePath.toLowerCase().endsWith(".md")) continue;
-        paths.add((0, import_obsidian.normalizePath)(filePath));
+        paths.add(normalizePath(filePath));
       }
       for (const childFolder of listing.folders ?? []) {
-        await collect((0, import_obsidian.normalizePath)(childFolder));
+        await collect(normalizePath(childFolder));
       }
     };
+
     await collect(folderPath);
     return Array.from(paths);
   }
-  sanitizeTemplateRelativePath(rawName) {
-    const rawSegments = rawName.trim().replace(/\\/g, "/").split("/").map((segment) => this.sanitizeTemplatePathSegment(segment)).filter(Boolean);
-    if (rawSegments.length === 0) return "\u672A\u547D\u540D\u6A21\u677F";
+
+  private sanitizeTemplateRelativePath(rawName: string) {
+    const rawSegments = rawName
+      .trim()
+      .replace(/\\/g, "/")
+      .split("/")
+      .map((segment) => this.sanitizeTemplatePathSegment(segment))
+      .filter(Boolean);
+    if (rawSegments.length === 0) return "未命名模板";
     return rawSegments.join("/");
   }
-  sanitizeTemplatePathSegment(rawName) {
-    const sanitized = rawName.trim().replace(/[:*?"<>|\n\r\t]/g, " ").replace(/\s+/g, " ").replace(/^\.+/, "").slice(0, 60).trim();
+
+  private sanitizeTemplatePathSegment(rawName: string) {
+    const sanitized = rawName
+      .trim()
+      .replace(/[:*?"<>|\n\r\t]/g, " ")
+      .replace(/\s+/g, " ")
+      .replace(/^\.+/, "")
+      .slice(0, 60)
+      .trim();
     return sanitized;
   }
-  async getAvailableTemplatePath(safeRelativePath) {
+
+  private async getAvailableTemplatePath(safeRelativePath: string) {
     const adapter = this.app.vault.adapter;
     let index = 1;
-    const normalizedRelativePath = (0, import_obsidian.normalizePath)(safeRelativePath);
-    const basePath = (0, import_obsidian.normalizePath)(`${TEMPLATE_LIBRARY_FOLDER}/${normalizedRelativePath}`);
+    const normalizedRelativePath = normalizePath(safeRelativePath);
+    const basePath = normalizePath(`${TEMPLATE_LIBRARY_FOLDER}/${normalizedRelativePath}`);
     let candidate = `${basePath}.md`;
     while (await adapter.exists(candidate)) {
       index += 1;
@@ -2590,19 +3295,23 @@ ${trimmedVisible}
     }
     return candidate;
   }
-  getParentPath(filePath) {
-    const normalizedPath = (0, import_obsidian.normalizePath)(filePath);
+
+  private getParentPath(filePath: string) {
+    const normalizedPath = normalizePath(filePath);
     const slashIndex = normalizedPath.lastIndexOf("/");
     return slashIndex > 0 ? normalizedPath.slice(0, slashIndex) : "";
   }
-  getTemplateNameFromPath(templatePath) {
+
+  private getTemplateNameFromPath(templatePath: string) {
     const fileName = templatePath.split("/").pop() ?? templatePath;
     return fileName.replace(/\.md$/i, "");
   }
-  openOneNoteRichPasteModal(file) {
+
+  private openOneNoteRichPasteModal(file: TFile) {
     new OneNoteRichPasteModal(this, file).open();
   }
-  async pasteOneNoteFromSystemClipboardOrOpenModal(file) {
+
+  private async pasteOneNoteFromSystemClipboardOrOpenModal(file: TFile) {
     const html = await this.readHtmlFromAvailableClipboard();
     if (html.trim()) {
       const ok = await this.importOneNoteRichContent(file, html, []);
@@ -2610,31 +3319,37 @@ ${trimmedVisible}
     }
     this.openOneNoteRichPasteModal(file);
   }
-  async restoreLatestSnapshot(file) {
+
+  private async restoreLatestSnapshot(file: TFile) {
     const snapshot = this.dataStore.snapshots.find((item) => item.filePath === file.path);
     if (!snapshot) {
-      new import_obsidian.Notice("\u5F53\u524D\u6587\u4EF6\u6CA1\u6709\u53EF\u6062\u590D\u7684\u8868\u683C\u589E\u5F3A\u5FEB\u7167");
+      new Notice("当前文件没有可恢复的表格增强快照");
       return;
     }
+
     const adapter = this.app.vault.adapter;
     const exists = await adapter.exists(snapshot.backupPath);
     if (!exists) {
-      new import_obsidian.Notice("\u6700\u8FD1\u4E00\u6B21\u5FEB\u7167\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u65E0\u6CD5\u6062\u590D");
+      new Notice("最近一次快照文件不存在，无法恢复");
       return;
     }
+
     await this.createSnapshot(file, "before-restore", snapshot.tableIds);
     const backupContent = await adapter.read(snapshot.backupPath);
     await this.app.vault.modify(file, backupContent);
+
     for (const [tableId, record] of Object.entries(snapshot.tableRecords)) {
       this.dataStore.tables[tableId] = this.cloneTableRecord(record);
     }
+
     const parsedTables = this.parseMarkdownTables(backupContent);
     await this.syncTableRecords(file, parsedTables);
     await this.savePluginData();
     this.scheduleVisibleTableRefresh();
-    new import_obsidian.Notice("\u5DF2\u6062\u590D\u5F53\u524D\u6587\u4EF6\u6700\u8FD1\u4E00\u6B21\u8868\u683C\u589E\u5F3A\u5FEB\u7167");
+    new Notice("已恢复当前文件最近一次表格增强快照");
   }
-  async showCurrentFileStatus(file) {
+
+  private async showCurrentFileStatus(file: TFile) {
     const content = await this.app.vault.cachedRead(file);
     const parsedTables = this.parseMarkdownTables(content);
     const anchoredCount = parsedTables.filter((table) => !!table.tableId).length;
@@ -2645,22 +3360,27 @@ ${trimmedVisible}
       (table) => !!table.tableId && this.getTableRecordMode(this.dataStore.tables[table.tableId]) === "nativeLayout"
     ).length;
     const snapshotCount = this.dataStore.snapshots.filter((snapshot) => snapshot.filePath === file.path).length;
-    new import_obsidian.Notice(
-      `\u5F53\u524D\u6587\u4EF6\u5171 ${parsedTables.length} \u5F20\u8868\u683C\uFF0C\u5DF2\u6807\u8BC6 ${anchoredCount} \u5F20\uFF0C\u5176\u4E2D\u589E\u5F3A ${enhancedCount} \u5F20\uFF0C\u957F\u5BBD\u9AD8\u8C03\u8282 ${nativeLayoutCount} \u5F20\uFF0C\u53EF\u6062\u590D\u5FEB\u7167 ${snapshotCount} \u4EFD`,
-      6e3
+    new Notice(
+      `当前文件共 ${parsedTables.length} 张表格，已标识 ${anchoredCount} 张，其中增强 ${enhancedCount} 张，长宽高调节 ${nativeLayoutCount} 张，可恢复快照 ${snapshotCount} 份`,
+      6000
     );
   }
-  isExperimentalFeatureEnabled() {
+
+  private isExperimentalFeatureEnabled() {
     return !!this.dataStore.experimentalFeatureGate;
   }
+
   shouldShowEnhancedTableEntrances() {
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { isTableEnhancerEntrancesVisible?: () => boolean }
+      | undefined;
     if (typeof feishu?.isTableEnhancerEntrancesVisible === "function") {
       return feishu.isTableEnhancerEntrancesVisible();
     }
     return this.isExperimentalFeatureEnabled();
   }
-  async setExperimentalFeatureGate(enabled) {
+
+  async setExperimentalFeatureGate(enabled: boolean) {
     this.dataStore.experimentalFeatureGate = !!enabled;
     await this.savePluginData();
     if (!enabled) {
@@ -2670,59 +3390,73 @@ ${trimmedVisible}
       }
     }
   }
-  async toggleExperimentalFeatureGate() {
+
+  private async toggleExperimentalFeatureGate() {
     this.dataStore.experimentalFeatureGate = !this.dataStore.experimentalFeatureGate;
     await this.savePluginData();
     if (!this.isExperimentalFeatureEnabled()) {
       this.hideImageManipulator();
     }
-    new import_obsidian.Notice(this.isExperimentalFeatureEnabled() ? "\u5DF2\u5F00\u542F\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B" : "\u5DF2\u5173\u95ED\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B");
+    new Notice(this.isExperimentalFeatureEnabled() ? "已开启增强表格测试版能力" : "已关闭增强表格测试版能力");
   }
-  decorateOneNoteRichTables(element, context) {
+
+  private decorateOneNoteRichTables(element: HTMLElement, context: MarkdownPostProcessorContext) {
     const file = this.app.vault.getAbstractFileByPath(context.sourcePath);
-    if (!(file instanceof import_obsidian.TFile) || file.extension !== "md") return;
+    if (!(file instanceof TFile) || file.extension !== "md") return;
+
     const roots = [
-      ...element.matches(".mdtp-onenote-rich-table") ? [element] : [],
-      ...Array.from(element.querySelectorAll(".mdtp-onenote-rich-table"))
-    ];
+      ...(element.matches(".mdtp-onenote-rich-table") ? [element] : []),
+      ...Array.from(element.querySelectorAll(".mdtp-onenote-rich-table")),
+    ] as HTMLElement[];
+
     for (const root of roots) {
       for (const table of Array.from(root.querySelectorAll("table"))) {
         table.classList.add("mdtp-onenote-table");
       }
-      for (const image of Array.from(root.querySelectorAll("img[data-mdtp-src]"))) {
+
+      for (const image of Array.from(root.querySelectorAll("img[data-mdtp-src]")) as HTMLImageElement[]) {
         const rawPath = image.dataset.mdtpSrc?.trim() ?? "";
         if (!rawPath) continue;
-        const resolved = this.app.metadataCache.getFirstLinkpathDest(rawPath, file.path) ?? this.app.vault.getAbstractFileByPath((0, import_obsidian.normalizePath)(rawPath));
-        if (resolved instanceof import_obsidian.TFile) {
+        const resolved =
+          this.app.metadataCache.getFirstLinkpathDest(rawPath, file.path) ??
+          this.app.vault.getAbstractFileByPath(normalizePath(rawPath));
+        if (resolved instanceof TFile) {
           image.src = this.app.vault.getResourcePath(resolved);
         }
       }
     }
   }
-  async decorateRenderedTables(element, context) {
+
+  private async decorateRenderedTables(element: HTMLElement, context: MarkdownPostProcessorContext) {
     const file = this.app.vault.getAbstractFileByPath(context.sourcePath);
-    if (!(file instanceof import_obsidian.TFile) || file.extension !== "md") return;
+    if (!(file instanceof TFile) || file.extension !== "md") return;
+
     const renderedTables = this.getRenderedTables(element);
     if (renderedTables.length === 0) return;
+
     const content = await this.app.vault.cachedRead(file);
     const parsedTables = this.getRelevantParsedTables(this.parseMarkdownTables(content), context, element);
     if (parsedTables.length === 0) return;
+
     for (let index = 0; index < renderedTables.length && index < parsedTables.length; index += 1) {
       const tableEl = renderedTables[index];
       const parsedTable = parsedTables[index] ?? null;
       await this.enhanceRenderedTable(tableEl, file, parsedTable);
     }
   }
-  scheduleVisibleTableRefresh() {
+
+  private scheduleVisibleTableRefresh() {
     if (this.refreshTimer !== null) {
       window.clearTimeout(this.refreshTimer);
     }
+
     this.refreshTimer = window.setTimeout(() => {
       this.refreshTimer = null;
       void this.refreshVisibleTablesInWorkspace();
     }, 80);
   }
-  queueRefreshBurst() {
+
+  private queueRefreshBurst() {
     const token = ++this.refreshBurstToken;
     const offsets = [0, 120, 360, 900, 1800];
     for (const offset of offsets) {
@@ -2732,34 +3466,42 @@ ${trimmedVisible}
       }, offset);
     }
   }
-  async refreshVisibleTablesInWorkspace() {
+
+  private async refreshVisibleTablesInWorkspace() {
     const leaves = this.app.workspace.getLeavesOfType("markdown");
     for (const leaf of leaves) {
-      const view = leaf.view;
+      const view = leaf.view as any;
       const file = view?.file;
-      if (!(file instanceof import_obsidian.TFile) || file.extension !== "md") continue;
+      if (!(file instanceof TFile) || file.extension !== "md") continue;
+
       const contentEl = view?.contentEl;
       if (!(contentEl instanceof HTMLElement)) continue;
+
       this.hideVisibleMarkerLines(contentEl);
-      this.decorateOneNoteRichTables(contentEl, { sourcePath: file.path });
+      this.decorateOneNoteRichTables(contentEl, { sourcePath: file.path } as MarkdownPostProcessorContext);
+
       const tables = this.getRenderedTables(contentEl);
       if (tables.length === 0) continue;
+
       const content = await this.app.vault.cachedRead(file);
       const parsedTables = this.parseMarkdownTables(content);
       if (parsedTables.length === 0) continue;
+
       for (let index = 0; index < tables.length && index < parsedTables.length; index += 1) {
         await this.enhanceRenderedTable(tables[index], file, parsedTables[index] ?? null);
       }
     }
   }
-  hideVisibleMarkerLines(root) {
-    const previouslyHidden = Array.from(root.querySelectorAll("[data-mdtp-marker-hidden='true']"));
+
+  private hideVisibleMarkerLines(root: HTMLElement) {
+    const previouslyHidden = Array.from(root.querySelectorAll("[data-mdtp-marker-hidden='true']")) as HTMLElement[];
     for (const element of previouslyHidden) {
       element.style.display = "";
       element.removeAttribute("data-mdtp-marker-hidden");
       element.classList.remove("mdtp-marker-line");
     }
-    const candidates = Array.from(root.querySelectorAll("*"));
+
+    const candidates = Array.from(root.querySelectorAll("*")) as HTMLElement[];
     for (const element of candidates) {
       const normalizedText = (element.textContent ?? "").replace(/\u200b/g, "").trim();
       const isMarker = this.isHiddenMarkerText(normalizedText);
@@ -2771,16 +3513,17 @@ ${trimmedVisible}
       container.dataset.mdtpMarkerHidden = "true";
     }
   }
-  resolveMarkerContainer(element, root) {
+
+  private resolveMarkerContainer(element: HTMLElement, root: HTMLElement) {
     const selectors = [
       ".cm-line",
       ".HyperMD-codeblock",
       ".HyperMD-comment",
       "p",
       "li",
-      "div"
+      "div",
     ];
-    const container = element.closest(selectors.join(", "));
+    const container = element.closest(selectors.join(", ")) as HTMLElement | null;
     if (container && root.contains(container)) {
       const normalizedText = (container.textContent ?? "").replace(/\u200b/g, "").trim();
       if (this.isHiddenMarkerText(normalizedText)) {
@@ -2789,80 +3532,100 @@ ${trimmedVisible}
     }
     return root.contains(element) ? element : null;
   }
-  createHiddenMarkerEditorExtension() {
-    const isMarkerText = (text) => this.isHiddenMarkerText(text.trim());
-    const buildDecorations = (view) => {
-      const builder = new import_state.RangeSetBuilder();
-      const seen = /* @__PURE__ */ new Set();
+
+  private createHiddenMarkerEditorExtension() {
+    const isMarkerText = (text: string) => this.isHiddenMarkerText(text.trim());
+    const buildDecorations = (view: EditorView) => {
+      const builder = new RangeSetBuilder<Decoration>();
+      const seen = new Set<number>();
+
       for (const range of view.visibleRanges) {
         let line = view.state.doc.lineAt(range.from);
+
         while (true) {
           if (!seen.has(line.from) && isMarkerText(line.text)) {
             builder.add(line.from, line.from, HIDDEN_MARKER_LINE_DECORATION);
           }
+
           seen.add(line.from);
           if (line.to >= range.to || line.number >= view.state.doc.lines) {
             break;
           }
+
           line = view.state.doc.line(line.number + 1);
         }
       }
+
       return builder.finish();
     };
-    return import_view.ViewPlugin.fromClass(
+
+    return ViewPlugin.fromClass(
       class {
-        constructor(view) {
-          __publicField(this, "decorations");
+        decorations: DecorationSet;
+
+        constructor(view: EditorView) {
           this.decorations = buildDecorations(view);
         }
-        update(update) {
+
+        update(update: ViewUpdate) {
           if (update.docChanged || update.viewportChanged || update.selectionSet) {
             this.decorations = buildDecorations(update.view);
           }
         }
       },
       {
-        decorations: (value) => value.decorations
+        decorations: (value) => value.decorations,
       }
     );
   }
-  getRenderedTables(element) {
+
+  private getRenderedTables(element: HTMLElement) {
     const tables = Array.from(element.querySelectorAll("table")).filter(
       (table) => !table.closest(".mdtp-onenote-rich-table")
     );
     if (element.matches("table") && !element.closest(".mdtp-onenote-rich-table")) {
-      return [element, ...tables];
+      return [element as HTMLTableElement, ...tables];
     }
-    return tables;
+    return tables as HTMLTableElement[];
   }
-  getRelevantParsedTables(parsedTables, context, element) {
-    const contextAny = context;
+
+  private getRelevantParsedTables(
+    parsedTables: ParsedTableBlock[],
+    context: MarkdownPostProcessorContext,
+    element: HTMLElement
+  ) {
+    const contextAny = context as any;
     const sectionInfo = contextAny.getSectionInfo?.(element) ?? contextAny.getSectionInfo?.(element.parentElement);
     if (!sectionInfo) return parsedTables;
+
     return parsedTables.filter((table) => table.endLine >= sectionInfo.lineStart && table.startLine <= sectionInfo.lineEnd);
   }
-  async enhanceRenderedTable(tableEl, file, parsedTable) {
+
+  private async enhanceRenderedTable(tableEl: HTMLTableElement, file: TFile, parsedTable: ParsedTableBlock | null) {
     const tableId = parsedTable?.tableId ?? null;
     if (!tableId || !parsedTable) {
       this.runtimeState.delete(tableEl);
       this.restoreNativeTable(tableEl);
       return;
     }
+
     tableEl.dataset.mdtpBound = "true";
     const runtime = this.runtimeState.get(tableEl) ?? {
       file,
       parsedTable,
       selection: null,
-      anchor: null
+      anchor: null,
     };
     runtime.file = file;
     runtime.parsedTable = parsedTable;
     this.runtimeState.set(tableEl, runtime);
+
     tableEl.classList.add("mdtp-table-shell");
     this.indexTableCells(tableEl);
     this.clearInjectedTableArtifacts(tableEl);
     tableEl.dataset.mdtpTableId = tableId;
     const record = await this.ensureRecordForParsedTable(file, parsedTable);
+
     if (record.mode === "nativeLayout") {
       runtime.selection = null;
       runtime.anchor = null;
@@ -2872,6 +3635,7 @@ ${trimmedVisible}
       this.injectResizeHandles(tableEl, record.layout);
       return;
     }
+
     tableEl.classList.remove("mdtp-table-uninitialized", "mdtp-table-native-layout", "mdtp-table-colored");
     tableEl.classList.add("mdtp-table-enhanced");
     this.applyLayout(tableEl, record.layout);
@@ -2879,17 +3643,20 @@ ${trimmedVisible}
     this.injectResizeHandles(tableEl, record.layout);
     this.renderSelection(tableEl, runtime.selection, runtime.anchor);
   }
-  async ensureRecordForParsedTable(file, parsedTable) {
+
+  private async ensureRecordForParsedTable(file: TFile, parsedTable: ParsedTableBlock) {
     const tableId = parsedTable.tableId;
     if (!tableId) {
       throw new Error("Cannot ensure record without tableId");
     }
+
     const existing = this.dataStore.tables[tableId];
     if (existing) {
       return existing;
     }
+
     const now = Date.now();
-    const record = {
+    const record: TableRecord = {
       tableId,
       mode: "enhanced",
       filePath: file.path,
@@ -2898,20 +3665,22 @@ ${trimmedVisible}
       lastKnownHash: this.hashString(parsedTable.raw),
       lastKnownRange: {
         startLine: parsedTable.startLine,
-        endLine: parsedTable.endLine
+        endLine: parsedTable.endLine,
       },
-      layout: this.createEmptyLayout()
+      layout: this.createEmptyLayout(),
     };
+
     this.dataStore.tables[tableId] = record;
     await this.savePluginData();
     return record;
   }
-  indexTableCells(tableEl) {
+
+  private indexTableCells(tableEl: HTMLTableElement) {
     const rows = Array.from(tableEl.rows);
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
       const row = rows[rowIndex];
       row.dataset.mdtpRow = String(rowIndex);
-      const cells = Array.from(row.cells);
+      const cells = Array.from(row.cells) as HTMLTableCellElement[];
       for (let colIndex = 0; colIndex < cells.length; colIndex += 1) {
         const cell = cells[colIndex];
         cell.dataset.mdtpRow = String(rowIndex);
@@ -2920,16 +3689,18 @@ ${trimmedVisible}
       }
     }
   }
-  clearInjectedTableArtifacts(tableEl) {
+
+  private clearInjectedTableArtifacts(tableEl: HTMLTableElement) {
     for (const element of Array.from(tableEl.querySelectorAll(".mdtp-resize-handle"))) {
       element.remove();
     }
+
     const rows = Array.from(tableEl.rows);
     for (const row of rows) {
       row.style.removeProperty("--mdtp-row-height");
       row.style.height = "";
       row.classList.remove("mdtp-row-resized");
-      const cells = Array.from(row.cells);
+      const cells = Array.from(row.cells) as HTMLTableCellElement[];
       for (const cell of cells) {
         cell.style.removeProperty("--mdtp-col-width");
         cell.style.removeProperty("--mdtp-cell-bg");
@@ -2953,12 +3724,12 @@ ${trimmedVisible}
           "mdtp-merge-start",
           "mdtp-merge-covered"
         );
-        for (const wrapper of Array.from(cell.querySelectorAll(".image-embed, .internal-embed, .media-embed"))) {
+        for (const wrapper of Array.from(cell.querySelectorAll(".image-embed, .internal-embed, .media-embed")) as HTMLElement[]) {
           wrapper.style.display = "";
           wrapper.style.maxWidth = "";
           wrapper.style.verticalAlign = "";
         }
-        for (const image of Array.from(cell.querySelectorAll("img"))) {
+        for (const image of Array.from(cell.querySelectorAll("img")) as HTMLImageElement[]) {
           image.style.display = "";
           image.style.width = "";
           image.style.maxWidth = "";
@@ -2967,17 +3738,19 @@ ${trimmedVisible}
       }
     }
   }
-  restoreNativeTable(tableEl) {
+
+  private restoreNativeTable(tableEl: HTMLTableElement) {
     this.clearInjectedTableArtifacts(tableEl);
     tableEl.classList.remove("mdtp-table-shell", "mdtp-table-enhanced", "mdtp-table-native-layout", "mdtp-table-uninitialized", "mdtp-table-colored");
     tableEl.style.tableLayout = "";
     tableEl.style.removeProperty("--mdtp-native-color-border");
     delete tableEl.dataset.mdtpBound;
     delete tableEl.dataset.mdtpTableId;
+
     const rows = Array.from(tableEl.rows);
     for (const row of rows) {
       delete row.dataset.mdtpRow;
-      const cells = Array.from(row.cells);
+      const cells = Array.from(row.cells) as HTMLTableCellElement[];
       for (const cell of cells) {
         delete cell.dataset.mdtpRow;
         delete cell.dataset.mdtpCol;
@@ -2986,14 +3759,17 @@ ${trimmedVisible}
       }
     }
   }
-  applyLayout(tableEl, layout) {
+
+  private applyLayout(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     tableEl.style.tableLayout = "fixed";
     const structure = this.collectTableStructure(tableEl);
+
     this.applySizeLayout(tableEl, layout);
     this.applyColors(structure, layout);
     this.applyMerges(structure, layout.merges);
   }
-  applyNativeLayout(tableEl, layout) {
+
+  private applyNativeLayout(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     this.normalizeNativeColorPresetLayout(layout);
     const nativePalette = this.getLayoutNativeColorPalette(layout);
     if (nativePalette) {
@@ -3006,31 +3782,42 @@ ${trimmedVisible}
     this.applySizeLayout(tableEl, layout);
     this.applyColors(this.collectTableStructure(tableEl), layout);
   }
-  hasLayoutColors(layout) {
-    return layout.nativeColorPreset === NATIVE_COLOR_PRESET_BLUE_ZEBRA || Object.keys(layout.cellColors).length > 0 || Object.keys(layout.rowColors).length > 0 || Object.keys(layout.colColors).length > 0;
+
+  private hasLayoutColors(layout: TableLayoutMetadata) {
+    return (
+      layout.nativeColorPreset === NATIVE_COLOR_PRESET_BLUE_ZEBRA ||
+      Object.keys(layout.cellColors).length > 0 ||
+      Object.keys(layout.rowColors).length > 0 ||
+      Object.keys(layout.colColors).length > 0
+    );
   }
-  applySizeLayout(tableEl, layout) {
+
+  private applySizeLayout(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     const structure = this.collectTableStructure(tableEl);
+
     for (const [colKey, width] of Object.entries(layout.colWidths)) {
       const colIndex = Number.parseInt(colKey, 10);
       if (!Number.isFinite(colIndex)) continue;
       this.applyColumnWidth(structure, colIndex, width);
     }
+
     for (const [rowKey, height] of Object.entries(layout.rowHeights)) {
       const rowIndex = Number.parseInt(rowKey, 10);
       if (!Number.isFinite(rowIndex)) continue;
       this.applyRowHeight(structure, rowIndex, height);
     }
   }
-  collectTableStructure(tableEl) {
+
+  private collectTableStructure(tableEl: HTMLTableElement): TableStructure {
     const rows = Array.from(tableEl.rows);
-    const matrix = [];
+    const matrix: HTMLTableCellElement[][] = [];
     for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-      matrix[rowIndex] = Array.from(rows[rowIndex].cells);
+      matrix[rowIndex] = Array.from(rows[rowIndex].cells) as HTMLTableCellElement[];
     }
     return { rows, matrix };
   }
-  applyColumnWidth(structure, colIndex, width) {
+
+  private applyColumnWidth(structure: TableStructure, colIndex: number, width: number) {
     const storedWidth = Number(width);
     if (!Number.isFinite(storedWidth) || storedWidth <= 0) return;
     const nextWidth = Math.max(MIN_COLUMN_WIDTH, Math.round(storedWidth));
@@ -3043,7 +3830,8 @@ ${trimmedVisible}
       cell.classList.add("mdtp-col-resized");
     }
   }
-  applyRowHeight(structure, rowIndex, height) {
+
+  private applyRowHeight(structure: TableStructure, rowIndex: number, height: number) {
     const storedHeight = Number(height);
     if (!Number.isFinite(storedHeight) || storedHeight <= 0) return;
     const nextHeight = Math.max(MIN_ROW_HEIGHT, Math.round(storedHeight));
@@ -3053,58 +3841,87 @@ ${trimmedVisible}
     row.style.height = `${nextHeight}px`;
     row.classList.add("mdtp-row-resized");
   }
-  applyColors(structure, layout) {
+
+  private applyColors(structure: TableStructure, layout: TableLayoutMetadata) {
     for (let rowIndex = 0; rowIndex < structure.matrix.length; rowIndex += 1) {
       for (let colIndex = 0; colIndex < structure.matrix[rowIndex].length; colIndex += 1) {
         const cell = structure.matrix[rowIndex][colIndex];
         if (!cell) continue;
+
         const cellKey = this.getCellKey({ row: rowIndex, col: colIndex });
         const color = this.resolveCellBackgroundColor(layout, rowIndex, colIndex, cellKey);
+
         if (color) {
           cell.style.setProperty("--mdtp-cell-bg", color);
           cell.style.backgroundColor = color;
         }
+
         const headerTextColor = rowIndex === 0 ? this.getNativeHeaderTextColor(layout, color) : "";
         if (headerTextColor) {
           cell.style.color = headerTextColor;
           cell.classList.add("mdtp-cell-dark-header");
         }
+
         const alignment = layout.cellAlignments[cellKey] ?? "";
         cell.style.textAlign = alignment;
         this.applyImagePresentationToCell(cell, layout.cellImageWidths[cellKey]);
       }
     }
   }
-  isNativeColorTableHeaderColor(color) {
+
+  private isNativeColorTableHeaderColor(color: string) {
     const normalized = color.trim().toUpperCase();
-    return normalized === NATIVE_COLOR_TABLE_HEADER.toUpperCase() || normalized === NATIVE_COLOR_TABLE_LEGACY_HEADER.toUpperCase() || normalized === NATIVE_COLOR_PRESET_PALETTES.blue.header.toUpperCase();
+    return (
+      normalized === NATIVE_COLOR_TABLE_HEADER.toUpperCase() ||
+      normalized === NATIVE_COLOR_TABLE_LEGACY_HEADER.toUpperCase() ||
+      normalized === NATIVE_COLOR_PRESET_PALETTES.blue.header.toUpperCase()
+    );
   }
-  isLegacyNativeColorTableHeaderColor(color) {
+
+  private isLegacyNativeColorTableHeaderColor(color: string) {
     return color.trim().toUpperCase() === NATIVE_COLOR_TABLE_LEGACY_HEADER.toUpperCase();
   }
-  resolveCellBackgroundColor(layout, rowIndex, colIndex, cellKey) {
-    return layout.cellColors[cellKey] ?? layout.rowColors[String(rowIndex)] ?? layout.colColors[String(colIndex)] ?? this.getNativeColorPresetRowColor(layout, rowIndex) ?? "";
+
+  private resolveCellBackgroundColor(
+    layout: TableLayoutMetadata,
+    rowIndex: number,
+    colIndex: number,
+    cellKey: string
+  ) {
+    return (
+      layout.cellColors[cellKey] ??
+      layout.rowColors[String(rowIndex)] ??
+      layout.colColors[String(colIndex)] ??
+      this.getNativeColorPresetRowColor(layout, rowIndex) ??
+      ""
+    );
   }
-  getNativeColorPresetRowColor(layout, rowIndex) {
+
+  private getNativeColorPresetRowColor(layout: TableLayoutMetadata, rowIndex: number) {
     if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return null;
     const palette = this.getLayoutNativeColorPalette(layout) ?? this.getCurrentNativeColorPalette();
     if (rowIndex === 0) return palette.header;
     return rowIndex % 2 === 0 ? palette.altRow : palette.baseRow;
   }
-  getNativeHeaderTextColor(layout, color) {
+
+  private getNativeHeaderTextColor(layout: TableLayoutMetadata, color: string) {
     if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return "";
     const palette = this.getLayoutNativeColorPalette(layout) ?? this.getCurrentNativeColorPalette();
-    return this.colorsMatch(color, palette.header) || this.isNativeColorTableHeaderColor(color) ? palette.headerText : "";
+    return this.colorsMatch(color, palette.header) || this.isNativeColorTableHeaderColor(color)
+      ? palette.headerText
+      : "";
   }
-  applyImagePresentationToCell(cell, width) {
+
+  private applyImagePresentationToCell(cell: HTMLTableCellElement, width?: number) {
     for (const wrapper of Array.from(
       cell.querySelectorAll(".image-embed, .internal-embed, .media-embed, .mdtp-rendered-image-embed")
-    )) {
+    ) as HTMLElement[]) {
       wrapper.style.display = "inline-block";
       wrapper.style.maxWidth = "100%";
       wrapper.style.verticalAlign = "top";
     }
-    for (const image of Array.from(cell.querySelectorAll("img"))) {
+
+    for (const image of Array.from(cell.querySelectorAll("img")) as HTMLImageElement[]) {
       image.style.display = "inline-block";
       image.style.maxWidth = "100%";
       image.style.height = "auto";
@@ -3113,15 +3930,23 @@ ${trimmedVisible}
       }
     }
   }
-  renderImageMarkupInEnhancedCells(tableEl, file, parsedTable, layout) {
+
+  private renderImageMarkupInEnhancedCells(
+    tableEl: HTMLTableElement,
+    file: TFile,
+    parsedTable: ParsedTableBlock,
+    layout: TableLayoutMetadata
+  ) {
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) return;
+
     const structure = this.collectTableStructure(tableEl);
     for (let row = 0; row < structure.matrix.length; row += 1) {
       for (let col = 0; col < structure.matrix[row].length; col += 1) {
         const coord = { row, col };
         const value = this.getCellValue(rawTable, coord);
         if (!value || !this.containsImageMarkup(value)) continue;
+
         const cell = structure.matrix[row]?.[col];
         if (!cell) continue;
         this.renderCellImageMarkup(cell, file, value);
@@ -3129,20 +3954,25 @@ ${trimmedVisible}
       }
     }
   }
-  renderCellImageMarkup(cell, file, value) {
+
+  private renderCellImageMarkup(cell: HTMLTableCellElement, file: TFile, value: string) {
     const segments = this.splitImageMarkupForCellRender(value, file);
     if (!segments.some((segment) => segment.kind === "image")) return;
+
     const root = document.createElement("div");
     root.className = "mdtp-rendered-cell-content";
+
     for (const segment of segments) {
       if (segment.kind === "text") {
         this.appendRenderedCellText(root, segment.value);
         continue;
       }
+
       const wrapper = document.createElement("span");
       wrapper.className = "mdtp-rendered-image-embed image-embed internal-embed";
       wrapper.dataset.mdtpImageSource = segment.displayPath;
       wrapper.title = segment.displayPath;
+
       const image = document.createElement("img");
       image.className = "mdtp-rendered-cell-image";
       image.src = segment.resourcePath;
@@ -3155,11 +3985,14 @@ ${trimmedVisible}
       wrapper.appendChild(image);
       root.appendChild(wrapper);
     }
+
     cell.replaceChildren(root);
   }
-  appendRenderedCellText(root, text) {
+
+  private appendRenderedCellText(root: HTMLElement, text: string) {
     const normalized = this.normalizeClipboardCellForPlainText(text).replace(/\n{3,}/g, "\n\n");
     if (!normalized.trim()) return;
+
     const span = document.createElement("span");
     span.className = "mdtp-rendered-cell-text";
     const lines = normalized.split("\n");
@@ -3171,14 +4004,17 @@ ${trimmedVisible}
     }
     root.appendChild(span);
   }
-  appendRenderedCellInlineContent(root, text) {
+
+  private appendRenderedCellInlineContent(root: HTMLElement, text: string) {
     const linkPattern = /(?<!!)\[([^\]\n]+)]\(([^)\n]+)\)/g;
     let lastIndex = 0;
+
     for (const match of text.matchAll(linkPattern)) {
       const matchIndex = match.index ?? 0;
       if (matchIndex > lastIndex) {
         root.appendChild(document.createTextNode(text.slice(lastIndex, matchIndex)));
       }
+
       const label = match[1] ?? "";
       const href = this.sanitizeOneNoteUrl(match[2] ?? "", false);
       if (href) {
@@ -3192,22 +4028,28 @@ ${trimmedVisible}
       } else {
         root.appendChild(document.createTextNode(match[0] ?? ""));
       }
+
       lastIndex = matchIndex + (match[0]?.length ?? 0);
     }
+
     if (lastIndex < text.length) {
       root.appendChild(document.createTextNode(text.slice(lastIndex)));
     }
   }
-  applyMerges(structure, merges) {
+
+  private applyMerges(structure: TableStructure, merges: TableMergeMetadata[]) {
     for (const merge of merges) {
       if (!this.isMergeShapeValid(structure, merge)) continue;
       if (!this.isMergeWithinSameSection(structure, merge)) continue;
+
       const startCell = structure.matrix[merge.row]?.[merge.col];
       if (!startCell) continue;
+
       startCell.rowSpan = merge.rowspan;
       startCell.colSpan = merge.colspan;
       startCell.style.verticalAlign = "top";
       startCell.classList.add("mdtp-merge-start");
+
       for (let row = merge.row; row < merge.row + merge.rowspan; row += 1) {
         for (let col = merge.col; col < merge.col + merge.colspan; col += 1) {
           if (row === merge.row && col === merge.col) continue;
@@ -3219,19 +4061,22 @@ ${trimmedVisible}
       }
     }
   }
-  isMergeShapeValid(structure, merge) {
+
+  private isMergeShapeValid(structure: TableStructure, merge: TableMergeMetadata) {
     if (merge.rowspan < 1 || merge.colspan < 1) return false;
     const endRow = merge.row + merge.rowspan - 1;
     const endCol = merge.col + merge.colspan - 1;
     return !!structure.matrix[merge.row]?.[merge.col] && !!structure.matrix[endRow]?.[endCol];
   }
-  isMergeWithinSameSection(structure, merge) {
+
+  private isMergeWithinSameSection(structure: TableStructure, merge: TableMergeMetadata) {
     const startRow = structure.rows[merge.row];
     const endRow = structure.rows[merge.row + merge.rowspan - 1];
     if (!startRow || !endRow) return false;
     return startRow.parentElement?.tagName === endRow.parentElement?.tagName;
   }
-  injectResizeHandles(tableEl, layout) {
+
+  private injectResizeHandles(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     const structure = this.collectTableStructure(tableEl);
     const firstRow = structure.matrix[0] ?? [];
     for (let colIndex = 0; colIndex < firstRow.length; colIndex += 1) {
@@ -3251,6 +4096,7 @@ ${trimmedVisible}
       handle.style.opacity = "0.12";
       cell.appendChild(handle);
     }
+
     for (let rowIndex = 0; rowIndex < structure.rows.length; rowIndex += 1) {
       const cell = structure.matrix[rowIndex]?.[0];
       if (!cell) continue;
@@ -3273,16 +4119,19 @@ ${trimmedVisible}
       }
     }
   }
-  handleDocumentPointerDown(event) {
-    const target = event.target;
+
+  private handleDocumentPointerDown(event: PointerEvent) {
+    const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover, .mdtp-copy-image-handle")) return;
     if (target.closest(".mdtp-image-manipulator")) return;
     if (target.closest(".mdtp-inline-editor")) return;
+
     if (this.tableSidebarPopoverEl) {
       this.hideTableSidebarPopover();
     }
-    const tableEl = target.closest("table.mdtp-table-shell");
+
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl) {
       if (!target.closest("table:not(.mdtp-table-shell)")) {
         this.activeNativeTableContext = null;
@@ -3293,6 +4142,7 @@ ${trimmedVisible}
       this.hideImageManipulator();
       return;
     }
+
     this.activeNativeTableContext = null;
     if (!this.isInitializedTable(tableEl)) {
       this.hideTableSidebar(true);
@@ -3301,16 +4151,20 @@ ${trimmedVisible}
       this.hideImageManipulator();
       return;
     }
+
     if (this.isInitializedEnhancedTable(tableEl) && !target.closest("img, .image-embed, .internal-embed, .media-embed")) {
       this.hideImageManipulator();
     }
+
     this.handleTablePointerDown(event, tableEl);
   }
-  async handleDocumentClick(event) {
-    const target = event.target;
+
+  private async handleDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover, .mdtp-copy-image-handle")) return;
     if (target.closest(".mdtp-image-manipulator")) return;
+
     const nativeContext = await this.getTargetUninitializedTableContext(target);
     if (nativeContext) {
       this.activeNativeTableContext = nativeContext;
@@ -3320,30 +4174,34 @@ ${trimmedVisible}
           file: nativeContext.file,
           parsedTable: nativeContext.parsedTable,
           coord: nativeContext.coord,
-          tableEl: nativeContext.tableEl
+          tableEl: nativeContext.tableEl,
         });
       }
     } else if (!target.closest("table.mdtp-table-shell")) {
       this.activeNativeTableContext = null;
       this.hideTableSidebar(true);
     }
+
     const nativeLayoutContext = this.getNativeLayoutTableSidebarContext(target);
     if (nativeLayoutContext) {
       this.activeNativeTableContext = null;
       this.showTableSidebar(nativeLayoutContext);
     }
+
     if (await this.maybeOpenEnhancedCellEditorFromClick(event, target)) {
       return;
     }
-    const imageTarget = target.closest("img, .image-embed, .internal-embed, .media-embed");
-    const tableEl = imageTarget?.closest("table.mdtp-table-shell");
+
+    const imageTarget = target.closest("img, .image-embed, .internal-embed, .media-embed") as HTMLElement | null;
+    const tableEl = imageTarget?.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!imageTarget || !tableEl || !this.isInitializedEnhancedTable(tableEl)) {
       this.hideImageToolbar();
       this.hideImageManipulator();
       return;
     }
+
     const runtime = this.runtimeState.get(tableEl);
-    const cell = imageTarget.closest("th, td");
+    const cell = imageTarget.closest("th, td") as HTMLTableCellElement | null;
     const coord = cell ? this.getCellCoord(cell) : null;
     const tableId = this.getInitializedTableId(tableEl);
     const imageEl = this.resolveImageElement(imageTarget);
@@ -3352,6 +4210,7 @@ ${trimmedVisible}
       this.hideImageManipulator();
       return;
     }
+
     this.hideImageToolbar();
     this.showImageManipulator(
       tableEl,
@@ -3362,76 +4221,94 @@ ${trimmedVisible}
       imageEl
     );
   }
-  async maybeOpenEnhancedCellEditorFromClick(event, target) {
+
+  private async maybeOpenEnhancedCellEditorFromClick(event: MouseEvent, target: HTMLElement) {
     if (event.defaultPrevented || event.button !== 0) return false;
     if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
-    if (target.closest(
-      [
-        ".mdtp-inline-editor",
-        ".mdtp-resize-handle",
-        ".mdtp-sidebar-handle",
-        ".mdtp-copy-image-handle",
-        ".mdtp-sidebar-popover",
-        ".mdtp-image-manipulator",
-        "img",
-        ".image-embed",
-        ".internal-embed",
-        ".media-embed",
-        ".markdown-embed"
-      ].join(", ")
-    )) {
+    if (
+      target.closest(
+        [
+          ".mdtp-inline-editor",
+          ".mdtp-resize-handle",
+          ".mdtp-sidebar-handle",
+          ".mdtp-copy-image-handle",
+          ".mdtp-sidebar-popover",
+          ".mdtp-image-manipulator",
+          "img",
+          ".image-embed",
+          ".internal-embed",
+          ".media-embed",
+          ".markdown-embed",
+        ].join(", ")
+      )
+    ) {
       return false;
     }
-    const cell = target.closest("th, td");
-    const tableEl = target.closest("table.mdtp-table-shell");
+
+    const cell = target.closest("th, td") as HTMLTableCellElement | null;
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!cell || !tableEl || !tableEl.contains(cell) || !this.isInitializedEnhancedTable(tableEl)) return false;
+
     const runtime = this.runtimeState.get(tableEl);
     const tableId = this.getInitializedTableId(tableEl);
     const coord = this.getCellCoord(cell);
     if (!runtime || !tableId || !coord) return false;
+
     const selection = runtime.selection;
-    const isSingleSelected = selection && selection.startRow === coord.row && selection.endRow === coord.row && selection.startCol === coord.col && selection.endCol === coord.col;
+    const isSingleSelected =
+      selection &&
+      selection.startRow === coord.row &&
+      selection.endRow === coord.row &&
+      selection.startCol === coord.col &&
+      selection.endCol === coord.col;
     const isAnchor = runtime.anchor?.row === coord.row && runtime.anchor?.col === coord.col;
     if (!isSingleSelected || !isAnchor) return false;
+
     event.preventDefault();
     event.stopPropagation();
     await this.openInlineEditor(tableEl, runtime.file, tableId, runtime.parsedTable, cell, coord);
     return true;
   }
-  async handleDocumentDoubleClick(event) {
-    const target = event.target;
+
+  private async handleDocumentDoubleClick(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
     if (!target) return;
     if (target.closest(".mdtp-inline-editor")) return;
     if (target.closest("img, .image-embed, .internal-embed, .media-embed, .markdown-embed")) return;
-    const cell = target.closest("th, td");
-    const tableEl = target.closest("table.mdtp-table-shell");
+
+    const cell = target.closest("th, td") as HTMLTableCellElement | null;
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (cell && tableEl && tableEl.contains(cell) && this.isInitializedEnhancedTable(tableEl)) {
       const runtime = this.runtimeState.get(tableEl);
       const tableId = tableEl.dataset.mdtpTableId || null;
       if (!runtime) return;
+
       const coord = this.getCellCoord(cell);
       if (!coord) return;
+
       event.preventDefault();
       event.stopPropagation();
       await this.openInlineEditor(tableEl, runtime.file, tableId, runtime.parsedTable, cell, coord);
       return;
     }
   }
-  async handleDocumentContextMenu(event) {
-    const target = event.target;
+
+  private async handleDocumentContextMenu(event: MouseEvent) {
+    const target = event.target as HTMLElement | null;
     if (!target) return;
-    const tableEl = target.closest("table.mdtp-table-shell");
+
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl) {
       const plainContext = await this.getTargetUninitializedTableContext(target);
       if (plainContext) {
-        const menu = new import_obsidian.Menu();
+        const menu = new Menu();
         this.addNativeLayoutMenuItem(menu, plainContext.file, plainContext.parsedTable);
-        menu.addSeparator?.();
+        (menu as any).addSeparator?.();
         this.addTemplateMenuItems(menu, { plainTableContext: plainContext });
-        const view2 = this.getContainingMarkdownView(target);
-        this.showTableContextMenu(menu, event, view2, {
+        const view = this.getContainingMarkdownView(target);
+        this.showTableContextMenu(menu, event, view, {
           parsedTable: plainContext.parsedTable,
-          coord: plainContext.coord
+          coord: plainContext.coord,
         });
         return;
       }
@@ -3440,19 +4317,24 @@ ${trimmedVisible}
     }
     const runtime = this.runtimeState.get(tableEl);
     if (!runtime) return;
+
     if (!this.isInitializedEnhancedTable(tableEl)) {
       if (this.isNativeLayoutTable(tableEl)) {
         this.handleTableContextMenu(event, tableEl);
       }
       return;
     }
-    const cell = target.closest("th, td");
+
+    const cell = target.closest("th, td") as HTMLTableCellElement | null;
     const coord = cell ? this.getCellCoord(cell) : null;
     if (coord) {
       runtime.anchor = coord;
-      runtime.selection = this.selectionContains(runtime.selection, coord) ? runtime.selection : this.normalizeSelection(coord, coord);
+      runtime.selection = this.selectionContains(runtime.selection, coord)
+        ? runtime.selection
+        : this.normalizeSelection(coord, coord);
       this.renderSelection(tableEl, runtime.selection, runtime.anchor);
     }
+
     const view = this.getContainingMarkdownView(target);
     if (view) {
       this.lastTableContext = {
@@ -3461,22 +4343,47 @@ ${trimmedVisible}
         tableEl,
         target,
         x: event.clientX,
-        y: event.clientY
+        y: event.clientY,
       };
     }
+
     const effectiveTableId = tableEl.dataset.mdtpTableId || runtime.parsedTable?.tableId || "";
     if (effectiveTableId || !this.shouldUseNativeEditorMenu(target, view)) {
       this.handleTableContextMenu(event, tableEl);
     }
   }
-  appendBlockLinkPlusMenuItems(menu, view, hint) {
-    const blp = this.app.plugins.plugins["block-link-plus"];
-    if (!blp?.api?.appendEditorLinkMenuItems || !view || !this.app.plugins.enabledPlugins.has("block-link-plus") || blp.settings?.injectBlockLinkInTableMenus === false) {
+
+  private appendBlockLinkPlusMenuItems(
+    menu: Menu,
+    view: MarkdownView | null,
+    hint?: { parsedTable?: ParsedTableBlock | null; coord?: CellCoord | null }
+  ) {
+    const blp = this.app.plugins.plugins["block-link-plus"] as
+      | {
+          settings?: { injectBlockLinkInTableMenus?: boolean };
+          api?: {
+            appendEditorLinkMenuItems?: (
+              menu: Menu,
+              editor: unknown,
+              view: MarkdownView,
+              opts?: { preferLine?: number; preferEndLine?: number }
+            ) => boolean;
+            tableCoordToSourceLine?: (parsedTable: ParsedTableBlock, coord: CellCoord) => number | null;
+          };
+        }
+      | undefined;
+    if (
+      !blp?.api?.appendEditorLinkMenuItems ||
+      !view ||
+      !this.app.plugins.enabledPlugins.has("block-link-plus") ||
+      blp.settings?.injectBlockLinkInTableMenus === false
+    ) {
       return;
     }
-    const editor = view.editor;
+    const editor = (view as MarkdownView & { editor?: { getCursor: (which?: string) => { line: number } } }).editor;
     if (!editor) return;
-    let preferLine;
+
+    let preferLine: number | undefined;
     if (hint?.parsedTable && hint?.coord && blp.api.tableCoordToSourceLine) {
       const line = blp.api.tableCoordToSourceLine(hint.parsedTable, hint.coord);
       if (line == null) {
@@ -3484,81 +4391,103 @@ ${trimmedVisible}
       }
       preferLine = line;
     }
-    if (preferLine != null && typeof editor.setCursor === "function") {
+
+    if (preferLine != null && typeof (editor as { setCursor?: (pos: { line: number; ch: number }) => void }).setCursor === "function") {
       try {
-        editor.setCursor({ line: preferLine, ch: 0 });
+        (editor as { setCursor: (pos: { line: number; ch: number }) => void }).setCursor({ line: preferLine, ch: 0 });
       } catch {
+        // ignore cursor sync failures in reading view
       }
     }
-    menu.addSeparator?.();
+
+    (menu as { addSeparator?: () => void }).addSeparator?.();
     const added = blp.api.appendEditorLinkMenuItems(
       menu,
       editor,
       view,
-      preferLine != null ? { preferLine, preferEndLine: preferLine, suppressFailureHints: true } : { suppressFailureHints: true }
+      preferLine != null
+        ? { preferLine, preferEndLine: preferLine, suppressFailureHints: true }
+        : { suppressFailureHints: true }
     );
     if (!added) {
       return;
     }
   }
-  showTableContextMenu(menu, event, view, hint) {
+
+  private showTableContextMenu(
+    menu: Menu,
+    event: MouseEvent,
+    view: MarkdownView | null,
+    hint?: { parsedTable?: ParsedTableBlock | null; coord?: CellCoord | null }
+  ) {
     this.appendBlockLinkPlusMenuItems(menu, view, hint);
     event.preventDefault();
     event.stopPropagation();
     menu.showAtPosition({ x: event.clientX, y: event.clientY });
   }
-  addEditorMenuItems(menu, view) {
-    const menuAny = menu;
+
+  private addEditorMenuItems(menu: Menu, view: MarkdownView) {
+    const menuAny = menu as any;
     if (menuAny.__mdtpAugmented) return;
+
     const context = this.getEditorMenuContext(view);
     if (!context) {
-      const nativeContext = this.activeNativeTableContext && this.activeNativeTableContext.file.path === view.file?.path ? this.activeNativeTableContext : null;
+      const nativeContext =
+        this.activeNativeTableContext && this.activeNativeTableContext.file.path === view.file?.path
+          ? this.activeNativeTableContext
+          : null;
       const parsedTableAtCursor = this.getParsedTableAtEditorLine(view);
       if (nativeContext && nativeContext.file.path === view.file?.path) {
         this.addNativeLayoutMenuItem(menu, nativeContext.file, nativeContext.parsedTable);
-        menu.addSeparator?.();
+        (menu as any).addSeparator?.();
       }
       if (parsedTableAtCursor?.tableId && view.file && this.dataStore.tables[parsedTableAtCursor.tableId]) {
         this.addTemplateMenuItems(menu, {
           file: view.file,
-          tableId: parsedTableAtCursor.tableId
+          tableId: parsedTableAtCursor.tableId,
         });
       } else {
         this.addTemplateMenuItems(menu, {
-          plainTableContext: nativeContext ?? (parsedTableAtCursor && view.file ? {
-            file: view.file,
-            parsedTable: parsedTableAtCursor,
-            coord: { row: 0, col: 0 },
-            tableEl: null
-          } : null)
+          plainTableContext:
+            nativeContext ??
+            (parsedTableAtCursor && view.file
+              ? {
+                  file: view.file,
+                  parsedTable: parsedTableAtCursor,
+                  coord: { row: 0, col: 0 },
+                  tableEl: null,
+                }
+              : null),
         });
       }
       this.appendBlockLinkPlusMenuItems(menu, view, {
         parsedTable: nativeContext?.parsedTable ?? null,
-        coord: nativeContext?.coord ?? null
+        coord: nativeContext?.coord ?? null,
       });
       menuAny.__mdtpAugmented = true;
       return;
     }
     const { runtime, coord, tableId } = context;
+
     if (!tableId) {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable);
-      menu.addSeparator?.();
+      (menu as any).addSeparator?.();
       this.addTemplateMenuItems(menu, {
         plainTableContext: runtime.parsedTable && coord ? {
           file: runtime.file,
           parsedTable: runtime.parsedTable,
           coord,
-          tableEl: context.tableEl
-        } : null
+          tableEl: context.tableEl,
+        } : null,
       });
       this.appendBlockLinkPlusMenuItems(menu, view, {
         parsedTable: runtime.parsedTable,
-        coord
+        coord,
       });
       menuAny.__mdtpAugmented = true;
       return;
     }
+
     const record = this.dataStore.tables[tableId];
     if (record?.mode === "nativeLayout") {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable, tableId);
@@ -3572,69 +4501,94 @@ ${trimmedVisible}
           coord
         );
       }
-      menu.addSeparator?.();
+      (menu as any).addSeparator?.();
       this.addTemplateMenuItems(menu, {
         file: runtime.file,
-        tableId
+        tableId,
       });
       this.appendBlockLinkPlusMenuItems(menu, view, {
         parsedTable: runtime.parsedTable,
-        coord
+        coord,
       });
       menuAny.__mdtpAugmented = true;
       return;
     }
+
     if (!coord) return;
+
     if (this.canConvertEnhancedRecordToNativeLayout(record)) {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable, tableId);
-      menu.addSeparator?.();
+      (menu as any).addSeparator?.();
     }
+
     this.addTemplateMenuItems(menu, {
       file: runtime.file,
       tableId,
-      tableSelection: runtime.selection ?? this.normalizeSelection(coord, coord)
+      tableSelection: runtime.selection ?? this.normalizeSelection(coord, coord),
     });
     this.appendBlockLinkPlusMenuItems(menu, view, {
       parsedTable: runtime.parsedTable,
-      coord
+      coord,
     });
     menuAny.__mdtpAugmented = true;
   }
-  addTemplateMenuItems(menu, options) {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+  private addTemplateMenuItems(
+    menu: Menu,
+    options?: {
+      file?: TFile;
+      tableId?: string;
+      tableSelection?: SelectionRect | null;
+      plainTableContext?: UninitializedTableContext | null;
+    }
+  ) {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     const hasEditorSelection = !!this.getEditorTemplateSaveContent(activeView, true)?.trim();
     const hasTableSelection = !!options?.file && !!options.tableId && !!options.tableSelection;
     const hasPlainTableSelection = !!options?.plainTableContext;
     const parsedTableAtCursor = activeView ? this.getParsedTableAtEditorLine(activeView) : null;
-    const hasCurrentTable = !!options?.plainTableContext || !!options?.file && !!options.tableId || !!parsedTableAtCursor;
+    const hasCurrentTable =
+      !!options?.plainTableContext ||
+      (!!options?.file && !!options.tableId) ||
+      !!parsedTableAtCursor;
+
     menu.addItem((item) => {
-      item.setTitle("\u4FDD\u5B58\u5F53\u524D\u8868\u683C\u4E3A\u6A21\u677F");
+      item.setTitle("保存当前表格为模板");
       item.setIcon("table-properties");
       item.setDisabled(!hasCurrentTable);
       item.onClick(() => {
         void this.saveCurrentTableTemplateFromMenuContext(options);
       });
     });
+
     menu.addItem((item) => {
-      item.setTitle("\u4FDD\u5B58\u9009\u4E2D\u5185\u5BB9\u4E3A\u6A21\u677F");
+      item.setTitle("保存选中内容为模板");
       item.setIcon("bookmark-plus");
       item.setDisabled(!hasEditorSelection && !hasTableSelection && !hasPlainTableSelection);
       item.onClick(() => {
         void this.saveTemplateFromMenuContext(options);
       });
     });
+
     menu.addItem((item) => {
-      item.setTitle("\u63D2\u5165\u6A21\u677F");
+      item.setTitle("插入模板");
       item.setIcon("list-plus");
       item.onClick(() => this.openTemplateLibraryModal());
     });
+
     menu.addItem((item) => {
-      item.setTitle("\u6A21\u677F\u5E93");
+      item.setTitle("模板库");
       item.setIcon("folder-open");
       item.onClick(() => this.openTemplateLibraryModal());
     });
   }
-  async saveCurrentTableTemplateFromMenuContext(options) {
+
+  private async saveCurrentTableTemplateFromMenuContext(options?: {
+    file?: TFile;
+    tableId?: string;
+    tableSelection?: SelectionRect | null;
+    plainTableContext?: UninitializedTableContext | null;
+  }) {
     if (options?.plainTableContext) {
       return this.savePlainTableAsTemplate(options.plainTableContext);
     }
@@ -3643,7 +4597,8 @@ ${trimmedVisible}
       const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === options.tableId) ?? null;
       return this.saveManagedTableAsTemplate(options.file, parsedTable);
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (view?.file) {
       const parsedTableAtCursor = this.getParsedTableAtEditorLine(view);
       if (parsedTableAtCursor?.tableId && this.dataStore.tables[parsedTableAtCursor.tableId]) {
@@ -3654,19 +4609,21 @@ ${trimmedVisible}
           file: view.file,
           parsedTable: parsedTableAtCursor,
           coord: { row: 0, col: 0 },
-          tableEl: null
+          tableEl: null,
         });
       }
     }
-    new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u5230\u5F53\u524D\u8868\u683C\u5185\u5BB9");
+
+    new Notice("没有读到当前表格内容");
     return false;
   }
-  getEnhancedTableSidebarContext(target) {
+
+  private getEnhancedTableSidebarContext(target: HTMLElement | null): EnhancedTableSidebarContext | null {
     if (!target) return null;
-    const tableEl = target.closest("table.mdtp-table-shell");
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl || !this.isInitializedEnhancedTable(tableEl)) return null;
     const runtime = this.runtimeState.get(tableEl);
-    const cell = target.closest("th, td");
+    const cell = target.closest("th, td") as HTMLTableCellElement | null;
     const coord = cell ? this.getCellCoord(cell) : runtime?.anchor ?? null;
     const tableId = this.getInitializedTableId(tableEl);
     if (!runtime || !coord || !tableId) return null;
@@ -3677,16 +4634,17 @@ ${trimmedVisible}
       parsedTable: runtime.parsedTable,
       selection: runtime.selection,
       coord,
-      tableEl
+      tableEl,
     };
   }
-  getNativeLayoutTableSidebarContext(target) {
+
+  private getNativeLayoutTableSidebarContext(target: HTMLElement | null): NativeLayoutTableSidebarContext | null {
     if (!target) return null;
-    const tableEl = target.closest("table.mdtp-table-shell");
+    const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl || !this.isNativeLayoutTable(tableEl)) return null;
     const runtime = this.runtimeState.get(tableEl);
     const tableId = this.getManagedTableId(tableEl);
-    const cell = target.closest("th, td");
+    const cell = target.closest("th, td") as HTMLTableCellElement | null;
     const coord = cell ? this.getCellCoord(cell) : runtime?.anchor;
     if (!runtime || !tableId || !coord) return null;
     return {
@@ -3696,15 +4654,17 @@ ${trimmedVisible}
       parsedTable: runtime.parsedTable,
       selection: runtime.selection,
       coord,
-      tableEl
+      tableEl,
     };
   }
-  ensureTableSidebarHandle() {
+
+  private ensureTableSidebarHandle() {
     if (this.tableSidebarHandleEl) return;
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mdtp-sidebar-handle";
-    button.textContent = "\u8868";
+    button.textContent = "表";
     button.style.display = "none";
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -3715,18 +4675,22 @@ ${trimmedVisible}
       event.stopPropagation();
       this.toggleTableSidebarPopover();
     });
+
     document.body.appendChild(button);
     this.tableSidebarHandleEl = button;
   }
-  showTableSidebar(context) {
+
+  private showTableSidebar(context: TableSidebarContext) {
     if (context.mode === "enhanced") return;
     this.ensureTableSidebarHandle();
     this.ensureTableCopyImageHandle();
     this.activeTableSidebarContext = context;
     this.renderTableSidebarHandle(context);
   }
-  ensureTableCopyImageHandle() {
+
+  private ensureTableCopyImageHandle() {
     if (this.tableCopyImageHandleEl) return;
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = "mdtp-sidebar-handle mdtp-copy-image-handle";
@@ -3745,32 +4709,36 @@ ${trimmedVisible}
       if (!context) return;
       void this.copyCurrentTableAsImageStable(context.tableEl);
     });
+
     document.body.appendChild(button);
     this.tableCopyImageHandleEl = button;
   }
-  renderTableSidebarHandle(context) {
+
+  private renderTableSidebarHandle(context: TableSidebarContext) {
     if (!this.tableSidebarHandleEl) return;
     const draggerHandle = this.findDraggerHandleForTableSidebarContext(context);
-    const positionHandle = (handle, top2, left2, integrated) => {
+    const positionHandle = (handle: HTMLButtonElement, top: number, left: number, integrated: boolean) => {
       if (integrated) {
         handle.dataset.mdtpIntegrated = "dragger";
       } else {
         delete handle.dataset.mdtpIntegrated;
       }
-      handle.style.left = `${left2}px`;
-      handle.style.top = `${top2}px`;
+      handle.style.left = `${left}px`;
+      handle.style.top = `${top}px`;
       handle.style.display = "flex";
     };
+
     if (draggerHandle) {
       const draggerRect = draggerHandle.getBoundingClientRect();
-      const top2 = Math.max(72, draggerRect.top + Math.max(0, (draggerRect.height - 22) / 2));
-      const left2 = Math.max(8, draggerRect.left - 25);
-      positionHandle(this.tableSidebarHandleEl, top2, left2, true);
+      const top = Math.max(72, draggerRect.top + Math.max(0, (draggerRect.height - 22) / 2));
+      const left = Math.max(8, draggerRect.left - 25);
+      positionHandle(this.tableSidebarHandleEl, top, left, true);
       if (this.tableCopyImageHandleEl) {
-        positionHandle(this.tableCopyImageHandleEl, top2 + 28, left2, true);
+        positionHandle(this.tableCopyImageHandleEl, top + 28, left, true);
       }
       return;
     }
+
     const rect = context.tableEl.getBoundingClientRect();
     const top = Math.max(72, rect.top + 8);
     const left = Math.max(12, rect.left - 44);
@@ -3779,12 +4747,14 @@ ${trimmedVisible}
       positionHandle(this.tableCopyImageHandleEl, top + 28, left, false);
     }
   }
-  findDraggerHandleForTableSidebarContext(context) {
+
+  private findDraggerHandleForTableSidebarContext(context: TableSidebarContext) {
     const line = context.parsedTable?.startLine;
     if (typeof line !== "number" || !Number.isFinite(line)) return null;
-    const root = context.tableEl.closest(".markdown-source-view, .cm-editor");
+
+    const root = context.tableEl.closest(".markdown-source-view, .cm-editor") as HTMLElement | null;
     const scope = root ?? document.body;
-    const handles = Array.from(scope.querySelectorAll(DRAGGER_HANDLE_SELECTOR));
+    const handles = Array.from(scope.querySelectorAll(DRAGGER_HANDLE_SELECTOR)) as HTMLElement[];
     for (const handle of handles) {
       if (handle.classList.contains("dnd-hidden")) continue;
       const start = Number.parseInt(handle.dataset.blockStart ?? "", 10);
@@ -3795,9 +4765,11 @@ ${trimmedVisible}
         return handle;
       }
     }
+
     return null;
   }
-  toggleTableSidebarPopover() {
+
+  private toggleTableSidebarPopover() {
     const context = this.activeTableSidebarContext;
     if (!context) return;
     if (this.tableSidebarPopoverEl) {
@@ -3806,7 +4778,8 @@ ${trimmedVisible}
     }
     this.showTableSidebarPopover(context);
   }
-  hideTableSidebar(force = false) {
+
+  private hideTableSidebar(force = false) {
     this.hideTableSidebarPopover();
     if (this.tableSidebarHandleEl) {
       this.tableSidebarHandleEl.style.display = "none";
@@ -3818,28 +4791,37 @@ ${trimmedVisible}
       this.activeTableSidebarContext = null;
     }
   }
-  hideTableSidebarPopover() {
+
+  private hideTableSidebarPopover() {
     if (!this.tableSidebarPopoverEl) return;
     this.tableSidebarPopoverEl.remove();
     this.tableSidebarPopoverEl = null;
   }
-  showTableSidebarPopover(context) {
+
+  private showTableSidebarPopover(context: TableSidebarContext) {
     this.hideTableSidebarPopover();
+
     const root = document.createElement("div");
     root.className = "mdtp-sidebar-popover";
     root.addEventListener("pointerdown", (event) => event.stopPropagation());
     root.addEventListener("click", (event) => event.stopPropagation());
-    const addSectionTitle = (label) => {
+
+    const addSectionTitle = (label: string) => {
       const title = document.createElement("div");
       title.className = "mdtp-sidebar-section-title";
       title.textContent = label;
       root.appendChild(title);
     };
-    const addButton = (label, onClick, options) => {
+
+    const addButton = (
+      label: string,
+      onClick: () => void | Promise<void>,
+      options?: { wide?: boolean; experimental?: boolean }
+    ) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `mdtp-sidebar-button${options?.wide ? " is-wide" : ""}`;
-      button.textContent = options?.experimental ? `${label}\uFF08\u5B9E\u9A8C\uFF09` : label;
+      button.textContent = options?.experimental ? `${label}（实验）` : label;
       button.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -3847,8 +4829,9 @@ ${trimmedVisible}
       });
       root.appendChild(button);
     };
+
     if (context.mode === "native") {
-      addSectionTitle("\u539F\u751F\u8868\u683C");
+      addSectionTitle("原生表格");
       const nativeLayoutTableId = context.parsedTable.tableId || context.tableEl.dataset.mdtpTableId || "";
       const nativeLayoutRecord = nativeLayoutTableId ? this.dataStore.tables[nativeLayoutTableId] : null;
       for (const descriptor of this.getNativeSidebarActionDescriptors()) {
@@ -3897,14 +4880,14 @@ ${trimmedVisible}
           }, { wide: descriptor.wide, experimental: descriptor.experimental });
           continue;
         }
-        if (descriptor.label === "\u4FDD\u5B58\u5F53\u524D\u8868\u683C\u4E3A\u6A21\u677F") {
+        if (descriptor.label === "保存当前表格为模板") {
           addButton(descriptor.label, async () => {
             await this.savePlainTableAsTemplate(context);
             this.hideTableSidebarPopover();
           }, { wide: descriptor.wide, experimental: descriptor.experimental });
           continue;
         }
-        if (descriptor.label === "\u63D2\u5165\u6A21\u677F" || descriptor.label === "\u6A21\u677F\u5E93") {
+        if (descriptor.label === "插入模板" || descriptor.label === "模板库") {
           addButton(descriptor.label, () => {
             this.openTemplateLibraryModal();
             this.hideTableSidebarPopover();
@@ -3913,7 +4896,7 @@ ${trimmedVisible}
         }
       }
     } else if (context.mode === "nativeLayout") {
-      addSectionTitle("\u539F\u751F\u8868\u683C\u5E03\u5C40");
+      addSectionTitle("原生表格布局");
       for (const descriptor of this.getNativeLayoutSidebarActionDescriptors()) {
         if (descriptor.label === NATIVE_LAYOUT_CURRENT_TABLE_LABEL) {
           addButton(descriptor.label, async () => {
@@ -3949,14 +4932,14 @@ ${trimmedVisible}
           }, { wide: descriptor.wide, experimental: descriptor.experimental });
           continue;
         }
-        if (descriptor.label === "\u4FDD\u5B58\u5F53\u524D\u8868\u683C\u4E3A\u6A21\u677F") {
+        if (descriptor.label === "保存当前表格为模板") {
           addButton(descriptor.label, async () => {
             await this.saveManagedTableAsTemplate(context.file, context.parsedTable);
             this.hideTableSidebarPopover();
           }, { wide: descriptor.wide, experimental: descriptor.experimental });
           continue;
         }
-        if (descriptor.label === "\u63D2\u5165\u6A21\u677F" || descriptor.label === "\u6A21\u677F\u5E93") {
+        if (descriptor.label === "插入模板" || descriptor.label === "模板库") {
           addButton(descriptor.label, () => {
             this.openTemplateLibraryModal();
             this.hideTableSidebarPopover();
@@ -3964,11 +4947,13 @@ ${trimmedVisible}
         }
       }
     }
+
     document.body.appendChild(root);
     this.tableSidebarPopoverEl = root;
     this.positionTableSidebarPopover(context);
   }
-  positionTableSidebarPopover(context) {
+
+  private positionTableSidebarPopover(context: TableSidebarContext) {
     if (!this.tableSidebarPopoverEl) return;
     const anchorRect = this.tableSidebarHandleEl?.getBoundingClientRect();
     const fallbackRect = context.tableEl.getBoundingClientRect();
@@ -3976,102 +4961,122 @@ ${trimmedVisible}
     this.tableSidebarPopoverEl.style.left = `${Math.max(16, rect.right + 8)}px`;
     this.tableSidebarPopoverEl.style.top = `${Math.max(72, rect.top - 4)}px`;
   }
-  getNativeSidebarActionDescriptors() {
+
+  getNativeSidebarActionDescriptors(): SidebarActionDescriptor[] {
     return [
       { label: NATIVE_LAYOUT_CURRENT_TABLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_PAGE_TABLES_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_COLOR_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_BANDS_LABEL, wide: true },
       { label: COPY_TABLE_AS_IMAGE_LABEL, wide: true },
-      { label: "\u4FDD\u5B58\u5F53\u524D\u8868\u683C\u4E3A\u6A21\u677F", wide: true },
-      { label: "\u63D2\u5165\u6A21\u677F", wide: true },
-      { label: "\u6A21\u677F\u5E93", wide: true }
+      { label: "保存当前表格为模板", wide: true },
+      { label: "插入模板", wide: true },
+      { label: "模板库", wide: true },
     ];
   }
-  getNativeLayoutSidebarActionDescriptors() {
+
+  getNativeLayoutSidebarActionDescriptors(): SidebarActionDescriptor[] {
     return [
       { label: NATIVE_LAYOUT_CURRENT_TABLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_PAGE_TABLES_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_COLOR_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_BANDS_LABEL, wide: true },
       { label: COPY_TABLE_AS_IMAGE_LABEL, wide: true },
-      { label: "\u4FDD\u5B58\u5F53\u524D\u8868\u683C\u4E3A\u6A21\u677F", wide: true },
-      { label: "\u63D2\u5165\u6A21\u677F", wide: true },
-      { label: "\u6A21\u677F\u5E93", wide: true }
+      { label: "保存当前表格为模板", wide: true },
+      { label: "插入模板", wide: true },
+      { label: "模板库", wide: true },
     ];
   }
-  async copyCurrentTableAsImageStable(tableEl) {
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
+
+  private async copyCurrentTableAsImageStable(tableEl: HTMLTableElement) {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { copyCurrentTableAsImage?: (tableEl: HTMLTableElement) => Promise<boolean> }
+      | undefined;
     if (typeof feishu?.copyCurrentTableAsImage === "function") {
       await feishu.copyCurrentTableAsImage(tableEl);
       return;
     }
-    new import_obsidian.Notice("\u8BF7\u5148\u542F\u7528 Obsidian\u589E\u5F3A\u4F53\u9A8C \u4E2D\u7684\u300C\u53F3\u952E\u590D\u5236\u6210\u56FE\u300D");
+    new Notice("请先启用 Obsidian增强体验 中的「右键复制成图」");
   }
-  getEnhancedSidebarActionDescriptors() {
+
+  getEnhancedSidebarActionDescriptors(): SidebarActionDescriptor[] {
     return [
-      { label: "\u4E0A\u65B9\u63D2\u5165\u884C" },
-      { label: "\u4E0B\u65B9\u63D2\u5165\u884C" },
-      { label: "\u5DE6\u4FA7\u63D2\u5165\u5217" },
-      { label: "\u53F3\u4FA7\u63D2\u5165\u5217" },
-      { label: "\u5220\u9664\u5F53\u524D\u884C" },
-      { label: "\u5220\u9664\u5F53\u524D\u5217" },
-      { label: "\u5408\u5E76" },
-      { label: "\u62C6\u5206" },
-      { label: "\u5355\u5143\u683C\u989C\u8272" },
-      { label: "\u5F53\u524D\u884C\u989C\u8272" },
-      { label: "\u5F53\u524D\u5217\u989C\u8272" },
-      { label: "\u6E05\u9664\u989C\u8272" },
-      { label: "\u590D\u5236\u5F53\u524D\u5757\u5185\u5BB9", wide: true },
-      { label: "\u9AD8\u4FDD\u771F\u590D\u5236", wide: true },
-      { label: "\u590D\u5236\u5F53\u524D\u5757\u6210\u56FE", wide: true },
-      { label: "\u4FDD\u5B58\u5F53\u524D\u9009\u533A\u4E3A\u6A21\u677F", wide: true },
-      { label: "\u63D2\u5165\u6A21\u677F", wide: true },
-      { label: "\u6A21\u677F\u5E93", wide: true }
+      { label: "上方插入行" },
+      { label: "下方插入行" },
+      { label: "左侧插入列" },
+      { label: "右侧插入列" },
+      { label: "删除当前行" },
+      { label: "删除当前列" },
+      { label: "合并" },
+      { label: "拆分" },
+      { label: "单元格颜色" },
+      { label: "当前行颜色" },
+      { label: "当前列颜色" },
+      { label: "清除颜色" },
+      { label: "复制当前块内容", wide: true },
+      { label: "高保真复制", wide: true },
+      { label: "复制当前块成图", wide: true },
+      { label: "保存当前选区为模板", wide: true },
+      { label: "插入模板", wide: true },
+      { label: "模板库", wide: true },
     ];
   }
-  shouldExposeExperimentalAction(experimental) {
+
+  private shouldExposeExperimentalAction(experimental?: boolean) {
     return !experimental || !!this.dataStore?.experimentalFeatureGate;
   }
-  getEditorMenuContext(view) {
+
+  private getEditorMenuContext(view: MarkdownView) {
     const freshContext = this.getFreshTableContext(view);
     if (freshContext) {
-      const runtime2 = this.runtimeState.get(freshContext.tableEl);
-      const cell = freshContext.target.closest("th, td");
+      const runtime = this.runtimeState.get(freshContext.tableEl);
+      const cell = freshContext.target.closest("th, td") as HTMLTableCellElement | null;
       const coord = cell ? this.getCellCoord(cell) : null;
-      const parsedTableId = runtime2?.parsedTable?.tableId ?? "";
-      const tableId = this.getInitializedTableId(freshContext.tableEl) || (parsedTableId && this.dataStore.tables[parsedTableId] ? parsedTableId : "");
-      if (runtime2 && cell && coord) {
+      const parsedTableId = runtime?.parsedTable?.tableId ?? "";
+      const tableId =
+        this.getInitializedTableId(freshContext.tableEl) ||
+        (parsedTableId && this.dataStore.tables[parsedTableId]
+          ? parsedTableId
+          : "");
+      if (runtime && cell && coord) {
         return {
           tableEl: freshContext.tableEl,
-          runtime: runtime2,
+          runtime,
           cell,
           coord,
           tableId,
           x: freshContext.x,
-          y: freshContext.y
+          y: freshContext.y,
         };
       }
     }
+
     const activeContext = this.getActiveInteractionContext(true);
     if (!activeContext || activeContext.file.path !== view.file?.path) return null;
     const runtime = this.runtimeState.get(activeContext.tableEl);
     if (!runtime) return null;
+
     const anchorCell = activeContext.tableEl.querySelector(
       `[data-mdtp-row='${activeContext.anchor.row}'][data-mdtp-col='${activeContext.anchor.col}']`
-    );
+    ) as HTMLTableCellElement | null;
     if (!anchorCell) return null;
+
     return {
       tableEl: activeContext.tableEl,
       runtime,
       cell: anchorCell,
       coord: activeContext.anchor,
-      tableId: activeContext.tableId || (runtime.parsedTable?.tableId && this.dataStore.tables[runtime.parsedTable.tableId] ? runtime.parsedTable.tableId : ""),
+      tableId:
+        activeContext.tableId ||
+        (runtime.parsedTable?.tableId && this.dataStore.tables[runtime.parsedTable.tableId]
+          ? runtime.parsedTable.tableId
+          : ""),
       x: 0,
-      y: 0
+      y: 0,
     };
   }
-  getFreshTableContext(view) {
+
+  private getFreshTableContext(view: MarkdownView) {
     const context = this.lastTableContext;
     if (!context) return null;
     if (Date.now() - context.at > 1500) return null;
@@ -4079,54 +5084,76 @@ ${trimmedVisible}
     if (!document.body.contains(context.tableEl)) return null;
     return context;
   }
-  resolveMarkdownViewFromMenuInfo(info) {
-    if (info instanceof import_obsidian.MarkdownView) {
+
+  private resolveMarkdownViewFromMenuInfo(info: unknown) {
+    if (info instanceof MarkdownView) {
       return info;
     }
-    const infoFilePath = info && typeof info === "object" && "file" in info && info.file instanceof import_obsidian.TFile ? info.file?.path ?? null : null;
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+    const infoFilePath =
+      info && typeof info === "object" && "file" in info && (info as { file?: TFile | null }).file instanceof TFile
+        ? (info as { file?: TFile }).file?.path ?? null
+        : null;
+
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeView?.file && (!infoFilePath || activeView.file.path === infoFilePath)) {
       return activeView;
     }
+
     const leaves = this.app.workspace.getLeavesOfType("markdown");
     for (const leaf of leaves) {
       const view = leaf.view;
-      if (!(view instanceof import_obsidian.MarkdownView) || !view.file) continue;
+      if (!(view instanceof MarkdownView) || !view.file) continue;
       if (!infoFilePath || view.file.path === infoFilePath) {
         return view;
       }
     }
+
     return null;
   }
-  getContainingMarkdownView(target) {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+
+  private getContainingMarkdownView(target: HTMLElement) {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (activeView?.contentEl instanceof HTMLElement && activeView.contentEl.contains(target)) {
       return activeView;
     }
+
     const leaves = this.app.workspace.getLeavesOfType("markdown");
     for (const leaf of leaves) {
       const view = leaf.view;
-      if (!(view instanceof import_obsidian.MarkdownView)) continue;
-      const contentEl = view.contentEl;
+      if (!(view instanceof MarkdownView)) continue;
+      const contentEl = (view as any).contentEl;
       if (contentEl instanceof HTMLElement && contentEl.contains(target)) {
         return view;
       }
     }
     return null;
   }
-  shouldUseNativeEditorMenu(target, view) {
+
+  private shouldUseNativeEditorMenu(target: HTMLElement | null, view: MarkdownView | null) {
     if (!target || !view) return false;
     if (target.closest(".mdtp-inline-editor")) return false;
     return !!target.closest(".markdown-source-view, .cm-editor, .cm-content");
   }
-  async handleDocumentKeyDown(event) {
+
+  private async handleDocumentKeyDown(event: KeyboardEvent) {
     if (event.defaultPrevented || this.historyApplying) return;
-    const target = event.target;
+    const target = event.target as HTMLElement | null;
     const context = this.getActiveInteractionContext(true);
     const isTypingTarget = !!target?.closest("input, textarea, [contenteditable='true'], .cm-content");
     const isDirectFormTypingTarget = !!target?.closest("input, textarea, select, .mdtp-inline-editor, .mdtp-onenote-paste-zone");
-    const isForeignEditableTarget = !!target?.closest("[contenteditable='true']") && !target?.closest(".cm-content") && !target?.closest(".mdtp-onenote-paste-zone");
-    if (this.activeImageManipulator && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
+    const isForeignEditableTarget =
+      !!target?.closest("[contenteditable='true']") && !target?.closest(".cm-content") && !target?.closest(".mdtp-onenote-paste-zone");
+
+    if (
+      this.activeImageManipulator &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !isDirectFormTypingTarget &&
+      !isForeignEditableTarget &&
+      (event.key === "Backspace" || event.key === "Delete")
+    ) {
       const handled = await this.removeActiveImageFromCell(this.activeImageManipulator);
       if (handled) {
         event.preventDefault();
@@ -4134,11 +5161,21 @@ ${trimmedVisible}
       }
       return;
     }
-    if (context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !isTypingTarget && event.key === "Enter") {
+
+    if (
+      context?.tableId &&
+      !this.activeEditor &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      !isTypingTarget &&
+      event.key === "Enter"
+    ) {
       const runtime = this.runtimeState.get(context.tableEl);
       const cell = context.tableEl.querySelector(
         `[data-mdtp-row='${context.anchor.row}'][data-mdtp-col='${context.anchor.col}']`
-      );
+      ) as HTMLTableCellElement | null;
       if (runtime && cell) {
         event.preventDefault();
         event.stopPropagation();
@@ -4146,7 +5183,17 @@ ${trimmedVisible}
         return;
       }
     }
-    if (context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
+
+    if (
+      context?.tableId &&
+      !this.activeEditor &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !isDirectFormTypingTarget &&
+      !isForeignEditableTarget &&
+      (event.key === "Backspace" || event.key === "Delete")
+    ) {
       const selection = context.selection ?? this.normalizeSelection(context.anchor, context.anchor);
       const handled = await this.clearSelectionContents(context.file, context.tableId, selection);
       if (handled) {
@@ -4155,12 +5202,15 @@ ${trimmedVisible}
       }
       return;
     }
+
     if (!(event.metaKey || event.ctrlKey)) return;
+
     const key = event.key.toLowerCase();
     if (target?.closest(".mdtp-inline-editor")) {
       if (key !== "v" || !this.activeEditor) return;
       const imageFile = await this.readImageFromAvailableClipboard();
       if (!imageFile) return;
+
       event.preventDefault();
       event.stopPropagation();
       const imageMarkup = await this.createAttachmentMarkup(this.activeEditor.file, imageFile);
@@ -4179,6 +5229,7 @@ ${trimmedVisible}
         }
         return;
       }
+
       if (key === "v") {
         const handled = await this.handleClipboardContentPasteForSelectedCell(context.file, context.tableId, context.anchor);
         if (handled) {
@@ -4188,31 +5239,39 @@ ${trimmedVisible}
         }
         return;
       }
+
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         event.stopPropagation();
         await this.undoLastAction(context.file.path, context.tableId);
         return;
       }
-      if (key === "z" && event.shiftKey || key === "y") {
+
+      if ((key === "z" && event.shiftKey) || key === "y") {
         event.preventDefault();
         event.stopPropagation();
         await this.redoLastAction(context.file.path, context.tableId);
         return;
       }
     }
+
     if (key !== "c" && key !== "v") return;
+
     return;
   }
-  async handleDocumentPaste(event) {
-    const target = event.target;
+
+  private async handleDocumentPaste(event: ClipboardEvent) {
+    const target = event.target as HTMLElement | null;
     if (target?.closest(".mdtp-onenote-paste-zone")) return;
+
     if (Date.now() < this.suppressDocumentPasteUntil) {
       event.preventDefault();
       event.stopPropagation();
       return;
     }
+
     const imageFile = await this.readImageFromAvailableClipboard(event);
+
     if (this.activeEditor) {
       if (!imageFile) return;
       event.preventDefault();
@@ -4222,6 +5281,7 @@ ${trimmedVisible}
       this.appendImageMarkupToActiveEditor(imageMarkup);
       return;
     }
+
     const context = this.getActiveInteractionContext(true);
     if (context) {
       if (!context.tableId) {
@@ -4232,12 +5292,14 @@ ${trimmedVisible}
         const clipboardText = this.getTextFromClipboardEvent(event);
         const matrix = this.parseClipboardHtmlMatrix(clipboardHtml) ?? this.parseClipboardMatrix(clipboardText);
         if (!matrix) return;
+
         event.preventDefault();
         event.stopPropagation();
         await this.pasteMatrixIntoTable(context.file, context.tableId, context.anchor, matrix);
         this.suppressDocumentPasteUntil = Date.now() + PASTE_EVENT_SUPPRESSION_MS;
         return;
       }
+
       event.preventDefault();
       event.stopPropagation();
       const imageMarkup = await this.createAttachmentMarkup(context.file, imageFile);
@@ -4246,12 +5308,14 @@ ${trimmedVisible}
       this.suppressDocumentPasteUntil = Date.now() + PASTE_EVENT_SUPPRESSION_MS;
       return;
     }
+
     return;
   }
-  async handleClipboardPasteForSelectedCell(file, tableId, coord) {
+
+  private async handleClipboardPasteForSelectedCell(file: TFile, tableId: string, coord: CellCoord) {
     const imageFile = await this.readImageFromAvailableClipboard();
     if (!imageFile) {
-      new import_obsidian.Notice("\u5F53\u524D\u526A\u8D34\u677F\u91CC\u6CA1\u6709\u53EF\u7528\u56FE\u7247");
+      new Notice("当前剪贴板里没有可用图片");
       return false;
     }
     const imageMarkup = await this.createAttachmentMarkup(file, imageFile);
@@ -4259,7 +5323,8 @@ ${trimmedVisible}
     await this.appendImageToCell(file, tableId, coord, imageMarkup);
     return true;
   }
-  async handleClipboardContentPasteForSelectedCell(file, tableId, coord) {
+
+  private async handleClipboardContentPasteForSelectedCell(file: TFile, tableId: string, coord: CellCoord) {
     const imageFile = await this.readImageFromAvailableClipboard();
     if (imageFile) {
       const imageMarkup = await this.createAttachmentMarkup(file, imageFile);
@@ -4267,6 +5332,7 @@ ${trimmedVisible}
       await this.appendImageToCell(file, tableId, coord, imageMarkup);
       return true;
     }
+
     const clipboardText = await this.readTextFromAvailableClipboard();
     if (!clipboardText) return false;
     const matrix = this.parseClipboardMatrix(clipboardText);
@@ -4274,8 +5340,14 @@ ${trimmedVisible}
     await this.pasteMatrixIntoTable(file, tableId, coord, matrix);
     return true;
   }
-  async handleClipboardContentPasteForUninitializedCell(file, parsedTable, coord) {
+
+  private async handleClipboardContentPasteForUninitializedCell(
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    coord: CellCoord
+  ) {
     if (!parsedTable) return false;
+
     const imageFile = await this.readImageFromAvailableClipboard();
     if (imageFile) {
       const imageMarkup = await this.createAttachmentMarkup(file, imageFile);
@@ -4283,6 +5355,7 @@ ${trimmedVisible}
       await this.appendImageToUninitializedCell(file, parsedTable, coord, imageMarkup);
       return true;
     }
+
     const clipboardText = await this.readTextFromAvailableClipboard();
     if (!clipboardText) return false;
     const matrix = this.parseClipboardMatrix(clipboardText);
@@ -4290,48 +5363,56 @@ ${trimmedVisible}
     await this.pasteMatrixIntoUninitializedTable(file, parsedTable, coord, matrix);
     return true;
   }
-  async importOneNoteRichClipboardEvent(file, event) {
+
+  async importOneNoteRichClipboardEvent(file: TFile, event: ClipboardEvent) {
     const html = this.getHtmlFromClipboardEvent(event);
     return this.importOneNoteRichContent(file, html, this.getImagesFromClipboard(event));
   }
-  async importOneNoteRichContent(file, html, clipboardImages = []) {
+
+  private async importOneNoteRichContent(file: TFile, html: string, clipboardImages: File[] = []) {
     if (!html.trim()) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u53D6\u5230 OneNote \u5BCC\u6587\u672C\uFF0C\u8BF7\u4ECE OneNote \u590D\u5236\u540E\u5728\u5F39\u7A97\u91CC\u7C98\u8D34");
+      new Notice("没有读取到 OneNote 富文本，请从 OneNote 复制后在弹窗里粘贴");
       return false;
     }
+
     const converted = await this.buildOneNoteEnhancedMarkdownContent(file, html, clipboardImages);
     if (!converted) {
-      new import_obsidian.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u53EF\u8FC1\u79FB\u7684 OneNote \u5185\u5BB9");
+      new Notice("没有识别到可迁移的 OneNote 内容");
       return false;
     }
+
     await this.createSnapshot(file, "before-onenote-paste", converted.tableRecords.map((record) => record.tableId));
     await this.insertOneNoteConvertedContentAtCursor(file, converted);
     this.queueRefreshBurst();
-    new import_obsidian.Notice("\u5DF2\u63D2\u5165 OneNote \u589E\u5F3A\u8868\u683C");
+    new Notice("已插入 OneNote 增强表格");
     return true;
   }
-  async insertOneNoteConvertedContentAtCursor(file, converted) {
-    const normalizedContent = converted.content.endsWith("\n") ? converted.content : `${converted.content}
-`;
-    const modeOverrides = Object.fromEntries(converted.tableRecords.map((record) => [record.tableId, "enhanced"]));
+
+  private async insertOneNoteConvertedContentAtCursor(file: TFile, converted: OneNoteConvertedContent) {
+    const normalizedContent = converted.content.endsWith("\n") ? converted.content : `${converted.content}\n`;
+    const modeOverrides = Object.fromEntries(converted.tableRecords.map((record) => [record.tableId, "enhanced"] as const));
+
     for (const record of converted.tableRecords) {
       this.dataStore.tables[record.tableId] = this.cloneTableRecord(record);
     }
     if (converted.tableRecords.length > 0) {
       await this.savePluginData();
     }
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
+
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
     if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() ? "\n\n" : "";
       editor.replaceRange(`${prefix}${normalizedContent}`, cursor);
-      const nextContent2 = typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : await this.app.vault.cachedRead(file);
-      const parsedTables2 = this.parseMarkdownTables(nextContent2);
-      await this.syncTableRecords(file, parsedTables2, { modeOverrides });
+      const nextContent =
+        typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : await this.app.vault.cachedRead(file);
+      const parsedTables = this.parseMarkdownTables(nextContent);
+      await this.syncTableRecords(file, parsedTables, { modeOverrides });
       return;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
     const nextContent = `${originalContent}${separator}${normalizedContent}`;
@@ -4339,11 +5420,12 @@ ${trimmedVisible}
     const parsedTables = this.parseMarkdownTables(nextContent);
     await this.syncTableRecords(file, parsedTables, { modeOverrides });
   }
-  async insertMarkdownBlockAtCursor(file, block) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
-    const normalizedBlock = block.endsWith("\n") ? block : `${block}
-`;
+
+  private async insertMarkdownBlockAtCursor(file: TFile, block: string) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
+    const normalizedBlock = block.endsWith("\n") ? block : `${block}\n`;
+
     if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
@@ -4351,61 +5433,78 @@ ${trimmedVisible}
       editor.replaceRange(`${prefix}${normalizedBlock}`, cursor);
       return;
     }
+
     const originalContent = await this.app.vault.cachedRead(file);
     const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
     await this.app.vault.modify(file, `${originalContent}${separator}${normalizedBlock}`);
   }
-  async buildOneNoteEnhancedMarkdownContent(file, html, clipboardImages = []) {
+
+  private async buildOneNoteEnhancedMarkdownContent(file: TFile, html: string, clipboardImages: File[] = []) {
     const container = await this.buildSanitizedOneNoteContainer(file, html, clipboardImages);
     if (!container) return null;
-    const blocks = [];
-    const tableRecords = [];
+
+    const blocks: string[] = [];
+    const tableRecords: TableRecord[] = [];
     for (const child of Array.from(container.childNodes)) {
       this.appendOneNoteNodeAsMarkdownBlocks(file, child, blocks, tableRecords);
     }
+
     const content = this.joinOneNoteMarkdownBlocks(blocks);
     if (!content.trim()) return null;
     return {
       content,
-      tableRecords
-    };
+      tableRecords,
+    } satisfies OneNoteConvertedContent;
   }
-  appendOneNoteNodeAsMarkdownBlocks(file, node, blocks, tableRecords) {
+
+  private appendOneNoteNodeAsMarkdownBlocks(
+    file: TFile,
+    node: Node,
+    blocks: string[],
+    tableRecords: TableRecord[]
+  ) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
       if (text) blocks.push(text);
       return;
     }
+
     if (node.nodeType !== Node.ELEMENT_NODE) return;
-    const element = node;
+    const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
+
     if (tag === "table") {
-      const converted = this.convertOneNoteTableToEnhancedMarkdown(file, element);
+      const converted = this.convertOneNoteTableToEnhancedMarkdown(file, element as HTMLTableElement);
       if (!converted) return;
       blocks.push(converted.markdown);
       tableRecords.push(converted.record);
       return;
     }
+
     if (tag === "ul" || tag === "ol") {
-      const markdown2 = this.convertOneNoteListToMarkdown(file, element);
-      if (markdown2) blocks.push(markdown2);
+      const markdown = this.convertOneNoteListToMarkdown(file, element);
+      if (markdown) blocks.push(markdown);
       return;
     }
+
     if (tag === "img") {
-      const markdown2 = this.convertOneNoteImageToMarkdown(element);
-      if (markdown2) blocks.push(markdown2);
+      const markdown = this.convertOneNoteImageToMarkdown(element as HTMLImageElement);
+      if (markdown) blocks.push(markdown);
       return;
     }
+
     if (this.shouldExpandOneNoteWrapperElement(element)) {
       for (const child of Array.from(element.childNodes)) {
         this.appendOneNoteNodeAsMarkdownBlocks(file, child, blocks, tableRecords);
       }
       return;
     }
+
     const markdown = this.convertOneNoteBlockElementToMarkdown(file, element);
     if (markdown) blocks.push(markdown);
   }
-  shouldExpandOneNoteWrapperElement(element) {
+
+  private shouldExpandOneNoteWrapperElement(element: HTMLElement) {
     const tag = element.tagName.toLowerCase();
     if (tag !== "div" && tag !== "span") return false;
     return Array.from(element.children).some((child) => {
@@ -4413,68 +5512,100 @@ ${trimmedVisible}
       return ["table", "div", "p", "ul", "ol", "img", "h1", "h2", "h3", "h4", "h5", "h6"].includes(childTag);
     });
   }
-  joinOneNoteMarkdownBlocks(blocks) {
-    return blocks.map((block) => block.trim()).filter((block) => block.length > 0).join("\n\n").replace(/\n{3,}/g, "\n\n");
+
+  private joinOneNoteMarkdownBlocks(blocks: string[]) {
+    return blocks
+      .map((block) => block.trim())
+      .filter((block) => block.length > 0)
+      .join("\n\n")
+      .replace(/\n{3,}/g, "\n\n");
   }
-  convertOneNoteBlockElementToMarkdown(file, element) {
+
+  private convertOneNoteBlockElementToMarkdown(file: TFile, element: HTMLElement) {
     const tag = element.tagName.toLowerCase();
     if (tag === "pre") {
-      const text2 = (element.textContent ?? "").trim();
-      return text2 ? `\`\`\`
-${text2}
-\`\`\`` : "";
+      const text = (element.textContent ?? "").trim();
+      return text ? `\`\`\`\n${text}\n\`\`\`` : "";
     }
+
     const text = this.serializeOneNoteInlineContent(file, Array.from(element.childNodes), false).trim();
     if (!text) return "";
+
     if (/^h[1-6]$/.test(tag)) {
       const level = Number.parseInt(tag.slice(1), 10);
       return `${"#".repeat(Math.max(1, Math.min(6, level)))} ${text}`;
     }
+
     if (tag === "blockquote") {
-      return text.split("\n").map((line) => `> ${line}`.trimEnd()).join("\n");
+      return text
+        .split("\n")
+        .map((line) => `> ${line}`.trimEnd())
+        .join("\n");
     }
+
     return text;
   }
-  convertOneNoteListToMarkdown(file, element) {
+
+  private convertOneNoteListToMarkdown(file: TFile, element: HTMLElement) {
     const ordered = element.tagName.toLowerCase() === "ol";
-    const items = Array.from(element.children).filter((child) => child.tagName.toLowerCase() === "li").map((item, index) => {
-      const content = this.serializeOneNoteInlineContent(file, Array.from(item.childNodes), false).trim();
-      if (!content) return "";
-      return ordered ? `${index + 1}. ${content}` : `- ${content}`;
-    }).filter((item) => item.length > 0);
+    const items = Array.from(element.children)
+      .filter((child) => child.tagName.toLowerCase() === "li")
+      .map((item, index) => {
+        const content = this.serializeOneNoteInlineContent(file, Array.from(item.childNodes), false).trim();
+        if (!content) return "";
+        return ordered ? `${index + 1}. ${content}` : `- ${content}`;
+      })
+      .filter((item) => item.length > 0);
     return items.join("\n");
   }
-  convertOneNoteImageToMarkdown(image) {
-    const src = image.dataset.mdtpSrc?.trim() || image.getAttribute("data-mdtp-src")?.trim() || image.getAttribute("data-asset-path")?.trim() || image.getAttribute("src")?.trim() || "";
+
+  private convertOneNoteImageToMarkdown(image: HTMLImageElement) {
+    const src =
+      image.dataset.mdtpSrc?.trim() ||
+      image.getAttribute("data-mdtp-src")?.trim() ||
+      image.getAttribute("data-asset-path")?.trim() ||
+      image.getAttribute("src")?.trim() ||
+      "";
     if (!src) return "";
     return `![[${src}]]`;
   }
-  serializeOneNoteInlineContent(file, nodes, forCell) {
-    const parts = [];
+
+  private serializeOneNoteInlineContent(file: TFile, nodes: Node[], forCell: boolean): string {
+    const parts: string[] = [];
     for (const node of nodes) {
       const value = this.serializeOneNoteInlineNode(file, node, forCell);
       if (!value) continue;
       parts.push(value);
     }
-    const joined = parts.join("").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
+
+    const joined = parts
+      .join("")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ");
     return forCell ? joined.replace(/\n/g, "<br>").trim() : joined.trim();
   }
-  serializeOneNoteInlineNode(file, node, forCell) {
+
+  private serializeOneNoteInlineNode(file: TFile, node: Node, forCell: boolean): string {
     if (node.nodeType === Node.TEXT_NODE) {
       return (node.textContent ?? "").replace(/\u00a0/g, " ");
     }
+
     if (node.nodeType !== Node.ELEMENT_NODE) return "";
-    const element = node;
+    const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
+
     if (tag === "br") return "\n";
-    if (tag === "img") return this.convertOneNoteImageToMarkdown(element);
-    if (tag === "table") return this.serializeNestedOneNoteTable(file, element);
+    if (tag === "img") return this.convertOneNoteImageToMarkdown(element as HTMLImageElement);
+    if (tag === "table") return this.serializeNestedOneNoteTable(file, element as HTMLTableElement);
     if (tag === "ul" || tag === "ol") {
       const listMarkdown = this.convertOneNoteListToMarkdown(file, element);
       return forCell ? listMarkdown.replace(/\n/g, "<br>") : listMarkdown;
     }
+
     const inner = this.serializeOneNoteInlineContent(file, Array.from(element.childNodes), false);
     if (!inner) return "";
+
     if (tag === "a") {
       const href = element.getAttribute("href")?.trim() ?? "";
       return href ? `[${inner}](${href})` : inner;
@@ -4483,26 +5614,36 @@ ${text2}
     if (tag === "em" || tag === "i") return `*${inner}*`;
     if (tag === "code") return `\`${inner.replace(/`/g, "")}\``;
     if (tag === "u") return inner;
-    if (tag === "p" || tag === "div" || tag === "li") return `${inner}
-`;
+    if (tag === "p" || tag === "div" || tag === "li") return `${inner}\n`;
+
     return inner;
   }
-  serializeNestedOneNoteTable(file, table) {
+
+  private serializeNestedOneNoteTable(file: TFile, table: HTMLTableElement) {
     const matrix = this.extractOneNoteTableMatrix(file, table);
     if (!matrix || matrix.rows.length === 0) return "";
-    return matrix.rows.map(
-      (row) => row.map((cell) => cell.trim()).filter((cell) => cell.length > 0).join(" / ")
-    ).filter((line) => line.length > 0).join("<br>");
+    return matrix.rows
+      .map((row) =>
+        row
+          .map((cell) => cell.trim())
+          .filter((cell) => cell.length > 0)
+          .join(" / ")
+      )
+      .filter((line) => line.length > 0)
+      .join("<br>");
   }
-  convertOneNoteTableToEnhancedMarkdown(file, table) {
+
+  private convertOneNoteTableToEnhancedMarkdown(file: TFile, table: HTMLTableElement): OneNoteTableConversion | null {
     const extracted = this.extractOneNoteTableMatrix(file, table);
     if (!extracted || extracted.rows.length === 0) return null;
+
     const [headerRow, ...bodyRows] = extracted.rows;
-    const rawTable = {
+    const rawTable: ParsedRawTable = {
       header: headerRow,
       divider: Array(headerRow.length).fill("---"),
-      body: bodyRows
+      body: bodyRows,
     };
+
     const tableId = this.generateTableId();
     const markdown = [this.formatTableMarker(tableId), "", ...this.buildOneNoteRawTable(rawTable)].join("\n");
     const now = Date.now();
@@ -4516,40 +5657,49 @@ ${text2}
         updatedAt: now,
         lastKnownHash: "",
         lastKnownRange: { startLine: 0, endLine: 0 },
-        layout: extracted.layout
-      }
+        layout: extracted.layout,
+      },
     };
   }
-  extractOneNoteTableMatrix(file, table) {
+
+  private extractOneNoteTableMatrix(file: TFile, table: HTMLTableElement) {
     const rowElements = this.getDirectOneNoteTableRows(table);
     if (rowElements.length === 0) return null;
-    const rows = [];
-    const occupied = /* @__PURE__ */ new Map();
+
+    const rows: string[][] = [];
+    const occupied = new Map<number, Set<number>>();
     const layout = this.createEmptyLayout();
+
     rowElements.forEach((row, rowIndex) => {
       rows[rowIndex] = rows[rowIndex] ?? [];
       let colIndex = 0;
-      const occupiedCols = occupied.get(rowIndex) ?? /* @__PURE__ */ new Set();
+      const occupiedCols = occupied.get(rowIndex) ?? new Set<number>();
       this.applyOneNoteRowLayout(row, rowIndex, layout);
-      for (const cell of Array.from(row.children).filter((child) => /^(td|th)$/i.test(child.tagName))) {
+
+      for (const cell of Array.from(row.children).filter((child) => /^(td|th)$/i.test(child.tagName)) as HTMLElement[]) {
         while (occupiedCols.has(colIndex)) {
           colIndex += 1;
         }
+
         const rowspan = this.readPositiveIntegerAttribute(cell, "rowspan");
         const colspan = this.readPositiveIntegerAttribute(cell, "colspan");
         const value = this.extractOneNoteCellMarkdownValue(file, cell);
         rows[rowIndex][colIndex] = value;
+
         this.applyOneNoteCellLayout(cell, rowIndex, colIndex, rowspan, colspan, layout);
+
         const imageWidth = this.extractPreferredImageWidthFromCell(cell);
         if (imageWidth) {
           layout.cellImageWidths[this.getCellKey({ row: rowIndex, col: colIndex })] = imageWidth;
         }
+
         if (rowspan > 1 || colspan > 1) {
           layout.merges.push({ row: rowIndex, col: colIndex, rowspan, colspan });
         }
+
         for (let rowOffset = 0; rowOffset < rowspan; rowOffset += 1) {
           const nextRowIndex = rowIndex + rowOffset;
-          const targetOccupied = occupied.get(nextRowIndex) ?? /* @__PURE__ */ new Set();
+          const targetOccupied = occupied.get(nextRowIndex) ?? new Set<number>();
           occupied.set(nextRowIndex, targetOccupied);
           rows[nextRowIndex] = rows[nextRowIndex] ?? [];
           for (let colOffset = 0; colOffset < colspan; colOffset += 1) {
@@ -4561,30 +5711,43 @@ ${text2}
             }
           }
         }
+
         colIndex += colspan;
       }
     });
+
     const columnCount = Math.max(...rows.map((row) => row.length), 0);
     const normalizedRows = rows.map((row) => this.normalizeRowCells(row, columnCount));
     return {
       rows: normalizedRows,
-      layout
+      layout,
     };
   }
-  applyOneNoteRowLayout(row, rowIndex, layout) {
+
+  private applyOneNoteRowLayout(row: HTMLElement, rowIndex: number, layout: TableLayoutMetadata) {
     const styles = this.readOneNoteStyleMap(row);
     const height = this.readOneNoteLengthPx(styles.height);
     if (height) {
       layout.rowHeights[String(rowIndex)] = Math.max(layout.rowHeights[String(rowIndex)] ?? 0, height);
     }
+
     const background = this.readOneNoteBackgroundColor(styles);
     if (background) {
       layout.rowColors[String(rowIndex)] = background;
     }
   }
-  applyOneNoteCellLayout(cell, rowIndex, colIndex, rowspan, colspan, layout) {
+
+  private applyOneNoteCellLayout(
+    cell: HTMLElement,
+    rowIndex: number,
+    colIndex: number,
+    rowspan: number,
+    colspan: number,
+    layout: TableLayoutMetadata
+  ) {
     const styles = this.readOneNoteStyleMap(cell);
     const cellKey = this.getCellKey({ row: rowIndex, col: colIndex });
+
     const width = this.readOneNoteLengthPx(styles.width);
     if (width) {
       const perColumnWidth = Math.max(MIN_COLUMN_WIDTH, Math.round(width / Math.max(1, colspan)));
@@ -4593,6 +5756,7 @@ ${text2}
         layout.colWidths[key] = Math.max(layout.colWidths[key] ?? 0, perColumnWidth);
       }
     }
+
     const height = this.readOneNoteLengthPx(styles.height);
     if (height) {
       const perRowHeight = Math.max(MIN_ROW_HEIGHT, Math.round(height / Math.max(1, rowspan)));
@@ -4601,17 +5765,20 @@ ${text2}
         layout.rowHeights[key] = Math.max(layout.rowHeights[key] ?? 0, perRowHeight);
       }
     }
+
     const background = this.readOneNoteBackgroundColor(styles);
     if (background) {
       layout.cellColors[cellKey] = background;
     }
+
     const alignment = this.readOneNoteTextAlign(styles);
     if (alignment) {
       layout.cellAlignments[cellKey] = alignment;
     }
   }
-  readOneNoteStyleMap(element) {
-    const result = {};
+
+  private readOneNoteStyleMap(element: HTMLElement) {
+    const result: Record<string, string> = {};
     const raw = element.getAttribute("style") ?? "";
     for (const declaration of raw.split(";")) {
       const [rawName, ...rawValueParts] = declaration.split(":");
@@ -4622,18 +5789,31 @@ ${text2}
     }
     return result;
   }
-  readOneNoteLengthPx(value) {
-    if (!value) return void 0;
+
+  private readOneNoteLengthPx(value: string | undefined) {
+    if (!value) return undefined;
     const match = value.trim().match(/^(-?\d+(?:\.\d+)?)(px|pt|in|cm|mm)?$/i);
-    if (!match) return void 0;
+    if (!match) return undefined;
+
     const amount = Number.parseFloat(match[1] ?? "");
-    if (!Number.isFinite(amount) || amount <= 0) return void 0;
+    if (!Number.isFinite(amount) || amount <= 0) return undefined;
+
     const unit = (match[2] ?? "px").toLowerCase();
-    const px = unit === "in" ? amount * 96 : unit === "pt" ? amount * (96 / 72) : unit === "cm" ? amount * (96 / 2.54) : unit === "mm" ? amount * (96 / 25.4) : amount;
+    const px =
+      unit === "in"
+        ? amount * 96
+        : unit === "pt"
+          ? amount * (96 / 72)
+          : unit === "cm"
+            ? amount * (96 / 2.54)
+            : unit === "mm"
+              ? amount * (96 / 25.4)
+              : amount;
     const rounded = Math.round(px);
-    return Number.isFinite(rounded) && rounded > 0 ? rounded : void 0;
+    return Number.isFinite(rounded) && rounded > 0 ? rounded : undefined;
   }
-  readOneNoteBackgroundColor(styles) {
+
+  private readOneNoteBackgroundColor(styles: Record<string, string>) {
     const value = styles["background-color"] ?? styles.background;
     if (!value) return "";
     const normalized = value.trim();
@@ -4643,58 +5823,74 @@ ${text2}
     if (/^[a-z]+$/i.test(normalized)) return normalized.toLowerCase();
     return "";
   }
-  readOneNoteTextAlign(styles) {
+
+  private readOneNoteTextAlign(styles: Record<string, string>) {
     const value = (styles["text-align"] ?? "").trim().toLowerCase();
-    return value === "center" || value === "right" || value === "left" ? value : void 0;
+    return value === "center" || value === "right" || value === "left" ? value : undefined;
   }
-  getDirectOneNoteTableRows(table) {
-    const rows = [];
+
+  private getDirectOneNoteTableRows(table: HTMLTableElement) {
+    const rows: HTMLTableRowElement[] = [];
     for (const child of Array.from(table.children)) {
       const tag = child.tagName.toLowerCase();
       if (tag === "tr") {
-        rows.push(child);
+        rows.push(child as HTMLTableRowElement);
         continue;
       }
       if (tag === "thead" || tag === "tbody" || tag === "tfoot") {
         rows.push(
-          ...Array.from(child.children).filter((row) => row.tagName.toLowerCase() === "tr")
+          ...Array.from(child.children).filter((row) => row.tagName.toLowerCase() === "tr") as HTMLTableRowElement[]
         );
       }
     }
     return rows;
   }
-  extractOneNoteCellMarkdownValue(file, cell) {
+
+  private extractOneNoteCellMarkdownValue(file: TFile, cell: HTMLElement) {
     const value = this.serializeOneNoteInlineContent(file, Array.from(cell.childNodes), true);
     if (value.trim()) return value;
+
     const fallback = this.normalizeOneNotePlainTextFallback(
-      cell.innerText ?? cell.textContent ?? ""
+      (cell as HTMLElement & { innerText?: string }).innerText ?? cell.textContent ?? ""
     );
     return fallback.replace(/\n/g, "<br>");
   }
-  normalizeOneNotePlainTextFallback(value) {
-    return value.replace(/\u00a0/g, " ").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  private normalizeOneNotePlainTextFallback(value: string) {
+    return value
+      .replace(/\u00a0/g, " ")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
-  readPositiveIntegerAttribute(element, attribute) {
+
+  private readPositiveIntegerAttribute(element: HTMLElement, attribute: string) {
     const value = Number.parseInt(element.getAttribute(attribute) ?? "", 10);
     return Number.isFinite(value) && value > 0 ? value : 1;
   }
-  extractPreferredImageWidthFromCell(cell) {
+
+  private extractPreferredImageWidthFromCell(cell: HTMLElement) {
     const image = cell.querySelector("img");
-    if (!image || typeof image.getAttribute !== "function") return void 0;
+    if (!image || typeof image.getAttribute !== "function") return undefined;
+
     const widthAttr = Number.parseInt(image.getAttribute("width") ?? "", 10);
-    if (Number.isFinite(widthAttr) && widthAttr >= 40 && widthAttr <= 2e3) {
+    if (Number.isFinite(widthAttr) && widthAttr >= 40 && widthAttr <= 2000) {
       return widthAttr;
     }
+
     const styleWidthMatch = (image.getAttribute("style") ?? "").match(/width:\s*(\d{2,4})px/i);
     if (styleWidthMatch) {
       const width = Number.parseInt(styleWidthMatch[1] ?? "", 10);
-      if (Number.isFinite(width) && width >= 40 && width <= 2e3) {
+      if (Number.isFinite(width) && width >= 40 && width <= 2000) {
         return width;
       }
     }
-    return void 0;
+
+    return undefined;
   }
-  async buildSanitizedOneNoteContainer(file, html, clipboardImages = []) {
+
+  private async buildSanitizedOneNoteContainer(file: TFile, html: string, clipboardImages: File[] = []) {
     if (typeof DOMParser === "undefined") return null;
     const doc = new DOMParser().parseFromString(html, "text/html");
     const container = document.createElement("div");
@@ -4702,22 +5898,26 @@ ${text2}
       const clean = this.sanitizeOneNoteNode(child);
       if (clean) container.appendChild(clean);
     }
+
     this.markOneNoteRichTables(container);
     await this.localizeOneNoteRichImages(file, container, clipboardImages);
     this.removeEmptyOneNoteArtifacts(container);
     return container.textContent?.trim() || container.querySelector("table, img, a") ? container : null;
   }
-  sanitizeOneNoteNode(node) {
+
+  private sanitizeOneNoteNode(node: Node): Node | null {
     if (node.nodeType === Node.TEXT_NODE) {
       const value = node.textContent ?? "";
       return value.trim() ? document.createTextNode(value) : null;
     }
+
     if (node.nodeType !== Node.ELEMENT_NODE) return null;
-    const element = node;
+    const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
-    const blockedTags = /* @__PURE__ */ new Set(["script", "style", "meta", "link", "iframe", "object", "embed", "svg", "canvas"]);
+    const blockedTags = new Set(["script", "style", "meta", "link", "iframe", "object", "embed", "svg", "canvas"]);
     if (blockedTags.has(tag)) return null;
-    const allowedTags = /* @__PURE__ */ new Set([
+
+    const allowedTags = new Set([
       "a",
       "b",
       "blockquote",
@@ -4753,37 +5953,45 @@ ${text2}
       "thead",
       "tr",
       "u",
-      "ul"
+      "ul",
     ]);
+
     if (!allowedTags.has(tag)) {
       const fragment = document.createDocumentFragment();
       for (const child of Array.from(element.childNodes)) {
-        const clean2 = this.sanitizeOneNoteNode(child);
-        if (clean2) fragment.appendChild(clean2);
+        const clean = this.sanitizeOneNoteNode(child);
+        if (clean) fragment.appendChild(clean);
       }
       return fragment.childNodes.length > 0 ? fragment : null;
     }
+
     const clean = document.createElement(tag);
     this.copyAllowedOneNoteAttributes(element, clean, tag);
+
     if (tag === "br" || tag === "img" || tag === "col") {
       return clean;
     }
+
     for (const child of Array.from(element.childNodes)) {
       const cleanChild = this.sanitizeOneNoteNode(child);
       if (cleanChild) clean.appendChild(cleanChild);
     }
     return clean.childNodes.length > 0 || tag === "table" ? clean : null;
   }
-  copyAllowedOneNoteAttributes(source, target, tag) {
+
+  private copyAllowedOneNoteAttributes(source: HTMLElement, target: HTMLElement, tag: string) {
     const style = this.sanitizeOneNoteStyleAttribute(source.getAttribute("style") ?? "");
     if (style) target.setAttribute("style", style);
+
     const title = source.getAttribute("title")?.trim();
     if (title) target.setAttribute("title", title);
+
     if (tag === "a") {
       const href = this.sanitizeOneNoteUrl(source.getAttribute("href") ?? "", false);
       if (href) target.setAttribute("href", href);
       return;
     }
+
     if (tag === "img") {
       const src = this.sanitizeOneNoteUrl(source.getAttribute("src") ?? "", true);
       if (src) target.setAttribute("src", src);
@@ -4800,18 +6008,21 @@ ${text2}
       target.setAttribute("loading", "lazy");
       return;
     }
+
     if (tag === "td" || tag === "th") {
       for (const attr of ["colspan", "rowspan"]) {
         const value = source.getAttribute(attr)?.trim();
         if (value && /^\d{1,3}$/.test(value)) target.setAttribute(attr, value);
       }
     }
+
     if (tag === "ol") {
       const start = source.getAttribute("start")?.trim();
       if (start && /^\d{1,4}$/.test(start)) target.setAttribute("start", start);
     }
   }
-  sanitizeOneNoteUrl(value, allowImageData) {
+
+  private sanitizeOneNoteUrl(value: string, allowImageData: boolean) {
     const trimmed = value.trim();
     if (!trimmed) return "";
     if (allowImageData && /^data:image\//i.test(trimmed)) return trimmed;
@@ -4821,9 +6032,10 @@ ${text2}
     if (/^[./#]|^[^:]+$/i.test(trimmed)) return trimmed;
     return "";
   }
-  sanitizeOneNoteStyleAttribute(value) {
+
+  private sanitizeOneNoteStyleAttribute(value: string) {
     if (!value.trim()) return "";
-    const allowed = /* @__PURE__ */ new Set([
+    const allowed = new Set([
       "background-color",
       "border",
       "border-bottom",
@@ -4842,9 +6054,10 @@ ${text2}
       "text-decoration",
       "vertical-align",
       "white-space",
-      "width"
+      "width",
     ]);
-    const declarations = [];
+
+    const declarations: string[] = [];
     for (const part of value.split(";")) {
       const [rawName, ...rawValueParts] = part.split(":");
       const name = rawName?.trim().toLowerCase();
@@ -4855,21 +6068,25 @@ ${text2}
     }
     return declarations.join("; ");
   }
-  markOneNoteRichTables(container) {
+
+  private markOneNoteRichTables(container: HTMLElement) {
     for (const table of Array.from(container.querySelectorAll("table"))) {
       table.classList.add("mdtp-onenote-table");
     }
   }
-  removeEmptyOneNoteArtifacts(container) {
+
+  private removeEmptyOneNoteArtifacts(container: HTMLElement) {
     for (const element of Array.from(container.querySelectorAll("span, div, p"))) {
       if (element.childNodes.length > 0) continue;
       if ((element.textContent ?? "").trim()) continue;
       element.remove();
     }
   }
-  async localizeOneNoteRichImages(file, container, clipboardImages) {
-    const images = Array.from(container.querySelectorAll("img"));
+
+  private async localizeOneNoteRichImages(file: TFile, container: HTMLElement, clipboardImages: File[]) {
+    const images = Array.from(container.querySelectorAll("img")) as HTMLImageElement[];
     let clipboardIndex = 0;
+
     for (const image of images) {
       const src = image.getAttribute("src") ?? "";
       const assetPath = image.getAttribute("data-asset-path")?.trim() ?? "";
@@ -4879,11 +6096,13 @@ ${text2}
         image.setAttribute("loading", "lazy");
         continue;
       }
+
       let imageFile = await this.resolveOneNoteImageSource(src);
       if (!imageFile && this.shouldUseClipboardImageForOneNoteSource(src) && clipboardIndex < clipboardImages.length) {
         imageFile = clipboardImages[clipboardIndex];
         clipboardIndex += 1;
       }
+
       if (imageFile) {
         try {
           const savedPath = await this.saveClipboardImage(file, imageFile);
@@ -4893,15 +6112,18 @@ ${text2}
           console.error("[mdtp] failed to localize OneNote image", error);
         }
       }
+
       image.removeAttribute("srcset");
       image.setAttribute("loading", "lazy");
     }
   }
-  shouldUseClipboardImageForOneNoteSource(src) {
+
+  private shouldUseClipboardImageForOneNoteSource(src: string) {
     const trimmed = src.trim();
     return !trimmed || /^(cid:|blob:|file:|data:image\/)/i.test(trimmed);
   }
-  async resolveOneNoteImageSource(src) {
+
+  private async resolveOneNoteImageSource(src: string) {
     const trimmed = src.trim();
     if (!trimmed) return null;
     if (/^data:image\//i.test(trimmed)) {
@@ -4912,7 +6134,8 @@ ${text2}
     }
     return null;
   }
-  fileFromDataUrl(dataUrl) {
+
+  private fileFromDataUrl(dataUrl: string) {
     const match = dataUrl.match(/^data:([^;,]+);base64,(.+)$/i);
     if (!match) return null;
     const mimeType = match[1] || "image/png";
@@ -4923,12 +6146,14 @@ ${text2}
     }
     return new File([bytes], this.getPastedImageFileName(this.getImageExtension(mimeType)), { type: mimeType });
   }
-  fileFromLocalImagePath(src) {
+
+  private fileFromLocalImagePath(src: string) {
     try {
-      const nodeRequire = typeof window !== "undefined" ? window.require : null;
+      const nodeRequire = typeof window !== "undefined" ? (window as any).require : null;
       const fs = nodeRequire?.("node:fs") ?? nodeRequire?.("fs");
       const pathApi = nodeRequire?.("node:path") ?? nodeRequire?.("path");
       if (!fs || !pathApi) return null;
+
       const filePath = /^file:/i.test(src) ? decodeURIComponent(new URL(src).pathname) : src;
       const buffer = fs.readFileSync(filePath);
       if (!buffer?.length) return null;
@@ -4940,7 +6165,8 @@ ${text2}
       return null;
     }
   }
-  getImageMimeTypeFromPath(filePath) {
+
+  private getImageMimeTypeFromPath(filePath: string) {
     const lower = filePath.toLowerCase();
     if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
     if (lower.endsWith(".gif")) return "image/gif";
@@ -4949,11 +6175,13 @@ ${text2}
     if (lower.endsWith(".svg")) return "image/svg+xml";
     return "image/png";
   }
-  getImageFromClipboard(event) {
+
+  private getImageFromClipboard(event: ClipboardEvent) {
     return this.getImagesFromClipboard(event)[0] ?? null;
   }
-  getImagesFromClipboard(event) {
-    const files = [];
+
+  private getImagesFromClipboard(event: ClipboardEvent) {
+    const files: File[] = [];
     const items = Array.from(event.clipboardData?.items ?? []);
     for (const item of items) {
       if (!item.type.startsWith("image/")) continue;
@@ -4967,16 +6195,21 @@ ${text2}
     }
     return files;
   }
-  async readImageFromAvailableClipboard(event) {
+
+  private async readImageFromAvailableClipboard(event?: ClipboardEvent) {
     const eventImage = event ? this.getImageFromClipboard(event) : null;
     if (eventImage) return eventImage;
+
     const electronImage = this.readImageFromElectronClipboard();
     if (electronImage) return electronImage;
+
     const systemImage = this.readImageFromSystemClipboardViaPython();
     if (systemImage) return systemImage;
+
     return this.readImageFromNavigatorClipboard();
   }
-  insertTextIntoTextarea(textarea, text) {
+
+  private insertTextIntoTextarea(textarea: HTMLTextAreaElement, text: string) {
     if (this.isExperimentalFeatureEnabled() && this.isImageMarkupFragment(text)) {
       this.insertImageMarkupIntoTextarea(textarea, text.trim());
       return;
@@ -4991,14 +6224,17 @@ ${text2}
     textarea.selectionEnd = nextCursor;
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  toggleTextareaBold(textarea) {
+
+  private toggleTextareaBold(textarea: HTMLTextAreaElement) {
     const value = textarea.value;
     const start = textarea.selectionStart ?? value.length;
     const end = textarea.selectionEnd ?? start;
+
     if (start !== end) {
       const selected = value.slice(start, end);
       const before = value.slice(Math.max(0, start - 2), start);
       const after = value.slice(end, end + 2);
+
       if (before === "**" && after === "**") {
         textarea.value = `${value.slice(0, start - 2)}${selected}${value.slice(end + 2)}`;
         textarea.selectionStart = start - 2;
@@ -5016,41 +6252,51 @@ ${text2}
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
       return;
     }
+
     textarea.value = `${value.slice(0, start)}****${value.slice(end)}`;
     const nextCursor = start + 2;
     textarea.selectionStart = nextCursor;
     textarea.selectionEnd = nextCursor;
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  insertImageMarkupIntoTextarea(textarea, imageMarkup) {
+
+  private insertImageMarkupIntoTextarea(textarea: HTMLTextAreaElement, imageMarkup: string) {
     const start = textarea.selectionStart ?? textarea.value.length;
     const end = textarea.selectionEnd ?? textarea.value.length;
     const prefix = textarea.value.slice(0, start);
     const suffix = textarea.value.slice(end);
-    const leading = prefix.trim().length === 0 ? "" : prefix.endsWith("\n\n") ? "" : prefix.endsWith("\n") ? "\n" : "\n\n";
-    const trailing = suffix.trim().length === 0 ? "" : suffix.startsWith("\n\n") ? "" : suffix.startsWith("\n") ? "\n" : "\n\n";
+    const leading =
+      prefix.trim().length === 0 ? "" : prefix.endsWith("\n\n") ? "" : prefix.endsWith("\n") ? "\n" : "\n\n";
+    const trailing =
+      suffix.trim().length === 0 ? "" : suffix.startsWith("\n\n") ? "" : suffix.startsWith("\n") ? "\n" : "\n\n";
     textarea.value = `${prefix}${leading}${imageMarkup}${trailing}${suffix}`;
     const nextCursor = (prefix + leading + imageMarkup).length;
     textarea.selectionStart = nextCursor;
     textarea.selectionEnd = nextCursor;
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
   }
-  appendImageMarkupToActiveEditor(imageMarkup) {
+
+  private appendImageMarkupToActiveEditor(imageMarkup: string) {
     if (!this.activeEditor) return;
     this.activeEditor.imageMarkups.push(imageMarkup.trim());
     this.renderInlineEditorImages(this.activeEditor);
     this.queueInlineEditorLayout(this.activeEditor);
   }
-  renderInlineEditorImages(editor) {
+
+  private renderInlineEditorImages(editor: InlineEditorState) {
     const container = editor.imageContainer;
     container.replaceChildren();
+
     const targets = editor.imageMarkups.flatMap((markup) => this.extractImagePreviewTargets(markup, editor.file));
     if (targets.length === 0) {
       container.classList.remove("is-visible");
       return;
     }
+
     container.classList.add("is-visible");
-    const layoutWidth = editor.tableId ? this.dataStore.tables[editor.tableId]?.layout.cellImageWidths[this.getCellKey(editor.coord)] : void 0;
+    const layoutWidth = editor.tableId
+      ? this.dataStore.tables[editor.tableId]?.layout.cellImageWidths[this.getCellKey(editor.coord)]
+      : undefined;
     for (const target of targets) {
       const image = document.createElement("img");
       image.className = "mdtp-inline-editor-image";
@@ -5064,47 +6310,58 @@ ${text2}
       container.appendChild(image);
     }
   }
-  extractImagePreviewTargets(value, file) {
-    const targets = [];
-    const seen = /* @__PURE__ */ new Set();
-    const addTarget = (rawLink) => {
+
+  private extractImagePreviewTargets(value: string, file: TFile) {
+    const targets: ImagePreviewTarget[] = [];
+    const seen = new Set<string>();
+    const addTarget = (rawLink: string) => {
       const resolvedTarget = this.resolveImagePreviewTarget(rawLink, file);
       if (!resolvedTarget || seen.has(resolvedTarget.displayPath)) return;
+
       seen.add(resolvedTarget.displayPath);
       targets.push(resolvedTarget);
     };
+
     const wikiPattern = /!\[\[([^[\]]+?)\]\]/g;
     for (const match of value.matchAll(wikiPattern)) {
       addTarget(match[1] ?? "");
     }
+
     const markdownPattern = /!\[[^\]]*]\(([^)]+)\)/g;
     for (const match of value.matchAll(markdownPattern)) {
       addTarget(match[1] ?? "");
     }
+
     return targets;
   }
-  splitImageMarkupForCellRender(value, file) {
-    const segments = [];
+
+  private splitImageMarkupForCellRender(value: string, file: TFile) {
+    const segments: Array<
+      | { kind: "text"; value: string }
+      | { kind: "image"; raw: string; alt: string; displayPath: string; resourcePath: string; width?: number }
+    > = [];
     const normalized = this.normalizeClipboardCellForPlainText(value);
     const pattern = /!\[\[([^[\]]+?)\]\]|!\[([^\]]*)]\(([^)]+)\)/g;
     let lastIndex = 0;
+
     for (const match of normalized.matchAll(pattern)) {
       const matchIndex = match.index ?? 0;
       if (matchIndex > lastIndex) {
         segments.push({ kind: "text", value: normalized.slice(lastIndex, matchIndex) });
       }
+
       const raw = match[0] ?? "";
       const wikiTarget = match[1];
       const markdownAlt = match[2] ?? "";
       const markdownTarget = match[3];
       const target = this.resolveImagePreviewTarget(wikiTarget ?? markdownTarget ?? "", file);
       if (target) {
-        const imageSegment = {
+        const imageSegment: Extract<(typeof segments)[number], { kind: "image" }> = {
           kind: "image",
           raw,
           alt: markdownAlt,
           displayPath: target.displayPath,
-          resourcePath: target.resourcePath
+          resourcePath: target.resourcePath,
         };
         if (target.width) {
           imageSegment.width = target.width;
@@ -5113,24 +6370,32 @@ ${text2}
       } else {
         segments.push({ kind: "text", value: raw });
       }
+
       lastIndex = matchIndex + raw.length;
     }
+
     if (lastIndex < normalized.length) {
       segments.push({ kind: "text", value: normalized.slice(lastIndex) });
     }
+
     return segments.filter((segment) => segment.kind === "image" || segment.value.length > 0);
   }
-  resolveImagePreviewTarget(rawLink, file) {
+
+  private resolveImagePreviewTarget(rawLink: string, file: TFile) {
     const cleaned = rawLink.trim();
     if (!cleaned) return null;
     const linkPath = cleaned.split("|")[0]?.trim().replace(/^<|>$/g, "") ?? "";
     if (!linkPath) return null;
-    const resolved = this.app.metadataCache.getFirstLinkpathDest(linkPath, file.path) ?? this.app.vault.getAbstractFileByPath((0, import_obsidian.normalizePath)(linkPath));
-    if (!(resolved instanceof import_obsidian.TFile)) return null;
+
+    const resolved =
+      this.app.metadataCache.getFirstLinkpathDest(linkPath, file.path) ??
+      this.app.vault.getAbstractFileByPath(normalizePath(linkPath));
+    if (!(resolved instanceof TFile)) return null;
     if (!/\.(png|jpe?g|gif|webp|svg|bmp|tiff?|heic)$/i.test(resolved.path)) return null;
-    const target = {
+
+    const target: ImagePreviewTarget = {
       displayPath: resolved.path,
-      resourcePath: this.app.vault.getResourcePath(resolved)
+      resourcePath: this.app.vault.getResourcePath(resolved),
     };
     const width = this.extractImageLinkWidth(cleaned);
     if (width) {
@@ -5138,31 +6403,38 @@ ${text2}
     }
     return target;
   }
-  extractImageLinkWidth(rawLink) {
-    const widthPart = rawLink.split("|").slice(1).map((part) => part.trim()).find((part) => /^\d{2,4}(?:\s*x\s*\d{2,4})?$/i.test(part));
-    if (!widthPart) return void 0;
+
+  private extractImageLinkWidth(rawLink: string) {
+    const widthPart = rawLink
+      .split("|")
+      .slice(1)
+      .map((part) => part.trim())
+      .find((part) => /^\d{2,4}(?:\s*x\s*\d{2,4})?$/i.test(part));
+    if (!widthPart) return undefined;
     const width = Number.parseInt(widthPart, 10);
-    if (!Number.isFinite(width) || width < 40 || width > 2e3) return void 0;
+    if (!Number.isFinite(width) || width < 40 || width > 2000) return undefined;
     return width;
   }
-  async createAttachmentMarkup(file, imageFile) {
+
+  private async createAttachmentMarkup(file: TFile, imageFile: File) {
     try {
       const savedPath = await this.saveClipboardImage(file, imageFile);
-      new import_obsidian.Notice(`\u5DF2\u7C98\u8D34\u56FE\u7247\uFF1A${savedPath.split("/").pop() ?? savedPath}`);
+      new Notice(`已粘贴图片：${savedPath.split("/").pop() ?? savedPath}`);
       return `![[${savedPath}]]`;
     } catch (error) {
       console.error("[mdtp] failed to save pasted image", error);
-      new import_obsidian.Notice("\u56FE\u7247\u7C98\u8D34\u5931\u8D25");
+      new Notice("图片粘贴失败");
       return null;
     }
   }
-  async readImageFromNavigatorClipboard() {
-    const clipboardAny = navigator.clipboard;
+
+  private async readImageFromNavigatorClipboard() {
+    const clipboardAny = navigator.clipboard as any;
     if (typeof clipboardAny?.read !== "function") return null;
     try {
       const items = await clipboardAny.read();
       for (const item of items) {
-        const type = Array.from(item.types ?? []).find((value) => value.startsWith("image/"));
+        const type = Array.from(item.types ?? []).find((value: string) => value.startsWith("image/"));
         if (!type) continue;
         const blob = await item.getType(type);
         return new File([blob], this.getPastedImageFileName(this.getImageExtension(blob.type)), { type: blob.type });
@@ -5172,18 +6444,21 @@ ${text2}
     }
     return null;
   }
-  readImageFromElectronClipboard() {
+
+  private readImageFromElectronClipboard() {
     try {
-      const electron = window.require?.("electron");
+      const electron = (window as any).require?.("electron");
       const clipboard = electron?.clipboard;
       const nativeImageApi = electron?.nativeImage;
       if (!clipboard) return null;
+
       let nativeImage = clipboard.readImage?.();
       if ((!nativeImage || nativeImage.isEmpty?.()) && nativeImageApi?.createFromBuffer) {
         const formats = Array.from(clipboard.availableFormats?.() ?? []);
-        const imageFormat = formats.find(
-          (value) => /^image\//i.test(value) || /tiff|png|jpeg|jpg|gif|webp/i.test(value)
+        const imageFormat = formats.find((value: string) =>
+          /^image\//i.test(value) || /tiff|png|jpeg|jpg|gif|webp/i.test(value)
         );
+
         if (imageFormat && typeof clipboard.readBuffer === "function") {
           const rawBuffer = clipboard.readBuffer(imageFormat);
           if (rawBuffer && rawBuffer.length) {
@@ -5191,6 +6466,7 @@ ${text2}
           }
         }
       }
+
       if (!nativeImage || nativeImage.isEmpty?.()) return null;
       const pngBuffer = nativeImage.toPNG?.();
       if (!pngBuffer || !pngBuffer.length) return null;
@@ -5204,14 +6480,16 @@ ${text2}
       return null;
     }
   }
-  readImageFromSystemClipboardViaPython() {
+
+  private readImageFromSystemClipboardViaPython() {
     try {
-      const nodeRequire = window.require;
+      const nodeRequire = (window as any).require;
       const childProcess = nodeRequire?.("node:child_process");
       const fs = nodeRequire?.("node:fs");
       const os = nodeRequire?.("node:os");
       const path = nodeRequire?.("node:path");
       if (!childProcess || !fs || !os || !path) return null;
+
       const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mdtp-clipboard-"));
       const outputPath = path.join(tempDir, `clipboard-${Date.now()}.png`);
       const script = `
@@ -5238,15 +6516,19 @@ if png is None:
 with open(out_path, "wb") as handle:
     handle.write(bytes(png))
 `;
+
       childProcess.execFileSync("python3", ["-c", script, outputPath], {
-        stdio: "ignore"
+        stdio: "ignore",
       });
+
       if (!fs.existsSync(outputPath)) return null;
       const buffer = fs.readFileSync(outputPath);
       try {
         fs.rmSync(tempDir, { recursive: true, force: true });
       } catch {
+        // ignore cleanup errors for temp clipboard fallback
       }
+
       if (!buffer?.length) return null;
       return new File(
         [new Uint8Array(buffer)],
@@ -5258,34 +6540,38 @@ with open(out_path, "wb") as handle:
       return null;
     }
   }
-  async saveClipboardImage(file, imageFile) {
+
+  private async saveClipboardImage(file: TFile, imageFile: Blob) {
     const extension = this.getImageExtension(imageFile.type);
     const fileName = this.getPastedImageFileName(extension);
-    const fileManager = this.app.fileManager;
+    const fileManager = (this.app as any).fileManager;
     let targetPath = "";
     if (typeof fileManager?.getAvailablePathForAttachment === "function") {
       targetPath = await Promise.resolve(fileManager.getAvailablePathForAttachment(fileName, file.path));
     } else {
       const attachmentFolder = await this.getAttachmentFolderPath(file);
       targetPath = await this.getAvailableVaultPath(
-        (0, import_obsidian.normalizePath)(attachmentFolder ? `${attachmentFolder}/${fileName}` : fileName)
+        normalizePath(attachmentFolder ? `${attachmentFolder}/${fileName}` : fileName)
       );
     }
+
     const parentPath = targetPath.split("/").slice(0, -1).join("/");
     if (parentPath) {
       await this.ensureFolderExists(parentPath);
     }
+
     const data = await imageFile.arrayBuffer();
-    const vaultAny = this.app.vault;
+    const vaultAny = this.app.vault as any;
     if (typeof vaultAny.createBinary === "function") {
       await vaultAny.createBinary(targetPath, data);
     } else {
-      await this.app.vault.adapter.writeBinary(targetPath, data);
+      await (this.app.vault.adapter as any).writeBinary(targetPath, data);
     }
     return targetPath;
   }
-  async getAttachmentFolderPath(file) {
-    const configPath = (0, import_obsidian.normalizePath)(`${this.app.vault.configDir}/app.json`);
+
+  private async getAttachmentFolderPath(file: TFile) {
+    const configPath = normalizePath(`${this.app.vault.configDir}/app.json`);
     try {
       const raw = await this.app.vault.adapter.read(configPath);
       const parsed = JSON.parse(raw);
@@ -5295,46 +6581,52 @@ with open(out_path, "wb") as handle:
       }
       if (configured.startsWith("./")) {
         const parent = file.parent?.path ?? "";
-        return (0, import_obsidian.normalizePath)(parent ? `${parent}/${configured.slice(2)}` : configured.slice(2));
+        return normalizePath(parent ? `${parent}/${configured.slice(2)}` : configured.slice(2));
       }
-      return (0, import_obsidian.normalizePath)(configured);
+      return normalizePath(configured);
     } catch {
       return file.parent?.path ?? "";
     }
   }
-  async getAvailableVaultPath(basePath) {
+
+  private async getAvailableVaultPath(basePath: string) {
     const adapter = this.app.vault.adapter;
-    const normalized = (0, import_obsidian.normalizePath)(basePath);
-    if (!await adapter.exists(normalized)) return normalized;
+    const normalized = normalizePath(basePath);
+    if (!(await adapter.exists(normalized))) return normalized;
     const dotIndex = normalized.lastIndexOf(".");
     const stem = dotIndex > 0 ? normalized.slice(0, dotIndex) : normalized;
     const ext = dotIndex > 0 ? normalized.slice(dotIndex) : "";
-    for (let index = 1; index < 5e3; index += 1) {
+    for (let index = 1; index < 5000; index += 1) {
       const candidate = `${stem} ${index}${ext}`;
-      if (!await adapter.exists(candidate)) return candidate;
+      if (!(await adapter.exists(candidate))) return candidate;
     }
     throw new Error("No available attachment path");
   }
-  getImageExtension(mimeType) {
+
+  private getImageExtension(mimeType: string) {
     if (mimeType === "image/jpeg") return "jpg";
     if (mimeType === "image/gif") return "gif";
     if (mimeType === "image/webp") return "webp";
     return "png";
   }
-  getPastedImageFileName(extension) {
-    const now = /* @__PURE__ */ new Date();
-    const pad = (value) => String(value).padStart(2, "0");
+
+  private getPastedImageFileName(extension: string) {
+    const now = new Date();
+    const pad = (value: number) => String(value).padStart(2, "0");
     const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}.${pad(now.getMinutes())}.${pad(now.getSeconds())}`;
     return `Pasted image ${stamp}.${extension}`;
   }
-  handleTablePointerDown(event, tableEl) {
-    const resizeHandle = event.target?.closest(".mdtp-resize-handle");
+
+  private handleTablePointerDown(event: PointerEvent, tableEl: HTMLTableElement) {
+    const resizeHandle = (event.target as HTMLElement | null)?.closest(".mdtp-resize-handle") as HTMLElement | null;
     if (resizeHandle) {
       const state = this.runtimeState.get(tableEl);
       const tableId = tableEl.dataset.mdtpTableId || state?.parsedTable?.tableId || "";
       if (!state || !tableId) return;
+
       event.preventDefault();
       event.stopPropagation();
+
       const index = Number.parseInt(resizeHandle.dataset.mdtpIndex ?? "-1", 10);
       const kind = resizeHandle.dataset.mdtpResizeKind;
       const structure = this.collectTableStructure(tableEl);
@@ -5347,7 +6639,7 @@ with open(out_path, "wb") as handle:
           file: state.file,
           index,
           startClient: event.clientX,
-          startSize: width
+          startSize: width,
         };
       } else if (kind === "row") {
         const height = this.getRowHeight(structure, index);
@@ -5358,62 +6650,75 @@ with open(out_path, "wb") as handle:
           file: state.file,
           index,
           startClient: event.clientY,
-          startSize: height
+          startSize: height,
         };
       }
       return;
     }
+
     if (!this.isInitializedEnhancedTable(tableEl)) return;
+
     if (event.button !== 0) return;
-    const cell = event.target?.closest("th, td");
+
+    const cell = (event.target as HTMLElement | null)?.closest("th, td") as HTMLTableCellElement | null;
     if (!cell || !tableEl.contains(cell)) return;
+
     const coord = this.getCellCoord(cell);
     if (!coord) return;
+
     event.preventDefault();
     this.clearAllEnhancedSelections(tableEl);
     const runtime = this.runtimeState.get(tableEl);
     if (!runtime) return;
+
     runtime.anchor = coord;
     runtime.selection = this.normalizeSelection(coord, coord);
     this.activeSelectionDrag = {
       tableEl,
-      anchor: coord
+      anchor: coord,
     };
+
     cell.tabIndex = -1;
     cell.focus({ preventScroll: true });
     this.renderSelection(tableEl, runtime.selection, runtime.anchor);
   }
-  handleTableContextMenu(event, tableEl) {
+
+  private handleTableContextMenu(event: MouseEvent, tableEl: HTMLTableElement) {
     const runtime = this.runtimeState.get(tableEl);
     if (!runtime) return;
-    const target = event.target;
-    const cell = target?.closest("th, td");
+
+    const target = event.target as HTMLElement | null;
+    const cell = target?.closest("th, td") as HTMLTableCellElement | null;
     const coord = cell ? this.getCellCoord(cell) : null;
     if (coord) {
       runtime.anchor = coord;
-      runtime.selection = this.selectionContains(runtime.selection, coord) ? runtime.selection : this.normalizeSelection(coord, coord);
+      runtime.selection = this.selectionContains(runtime.selection, coord)
+        ? runtime.selection
+        : this.normalizeSelection(coord, coord);
       this.renderSelection(tableEl, runtime.selection, runtime.anchor);
     }
-    const menu = new import_obsidian.Menu();
+
+    const menu = new Menu();
     const tableId = tableEl.dataset.mdtpTableId || runtime.parsedTable?.tableId || "";
     if (!tableId) {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable);
-      menu.addSeparator?.();
+      (menu as any).addSeparator?.();
       this.addTemplateMenuItems(menu, {
         plainTableContext: runtime.parsedTable && coord ? {
           file: runtime.file,
           parsedTable: runtime.parsedTable,
           coord,
-          tableEl
-        } : null
+          tableEl,
+        } : null,
       });
-      const view2 = this.getContainingMarkdownView(target);
-      this.showTableContextMenu(menu, event, view2, {
+      const view = this.getContainingMarkdownView(target);
+      this.showTableContextMenu(menu, event, view, {
         parsedTable: runtime.parsedTable,
-        coord
+        coord,
       });
       return;
     }
+
     const record = this.dataStore.tables[tableId];
     if (record?.mode === "nativeLayout") {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable, tableId);
@@ -5427,44 +6732,55 @@ with open(out_path, "wb") as handle:
           coord,
           { x: event.clientX, y: event.clientY }
         );
-        menu.addSeparator?.();
+        (menu as any).addSeparator?.();
       }
       this.addTemplateMenuItems(menu, {
         file: runtime.file,
-        tableId
+        tableId,
       });
-      const view2 = this.getContainingMarkdownView(target);
-      this.showTableContextMenu(menu, event, view2, {
+      const view = this.getContainingMarkdownView(target);
+      this.showTableContextMenu(menu, event, view, {
         parsedTable: runtime.parsedTable,
-        coord
+        coord,
       });
       return;
     }
+
     if (this.canConvertEnhancedRecordToNativeLayout(record)) {
       this.addNativeLayoutMenuItem(menu, runtime.file, runtime.parsedTable, tableId);
-      menu.addSeparator?.();
+      (menu as any).addSeparator?.();
     }
+
     if (coord) {
       this.addTemplateMenuItems(menu, {
         file: runtime.file,
         tableId,
-        tableSelection: runtime.selection ?? this.normalizeSelection(coord, coord)
+        tableSelection: runtime.selection ?? this.normalizeSelection(coord, coord),
       });
     }
+
     const view = this.getContainingMarkdownView(target);
     this.showTableContextMenu(menu, event, view, {
       parsedTable: runtime.parsedTable,
-      coord
+      coord,
     });
   }
-  addNativeLayoutMenuItem(menu, file, parsedTable, tableId) {
+
+  private addNativeLayoutMenuItem(
+    menu: Menu,
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    tableId?: string | null
+  ) {
     menu.addItem((item) => {
       item.setTitle(NATIVE_LAYOUT_SECTION_LABEL);
       item.setIcon("table");
       item.setDisabled(true);
     });
+
     const effectiveTableId = tableId ?? parsedTable?.tableId ?? null;
     const currentTableBeautified = this.isTableNativeLayoutBeautified(effectiveTableId);
+
     menu.addItem((item) => {
       item.setTitle(NATIVE_LAYOUT_CURRENT_TABLE_LABEL);
       item.setIcon("rows-3");
@@ -5473,13 +6789,23 @@ with open(out_path, "wb") as handle:
         item.onClick(() => void this.initializeSpecificTableNativeLayout(file, parsedTable));
       }
     });
+
     menu.addItem((item) => {
       item.setTitle(NATIVE_LAYOUT_PAGE_TABLES_LABEL);
       item.setIcon("table-2");
       item.onClick(() => void this.initializeVisiblePageTablesNativeLayout(file));
     });
   }
-  addNativeLayoutRowColorMenuItems(menu, file, tableId, tableEl, selection, coord, origin) {
+
+  private addNativeLayoutRowColorMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
     menu.addItem((item) => {
       item.setTitle(NATIVE_LAYOUT_ROW_COLOR_LABEL);
       item.setIcon("paint-bucket");
@@ -5491,7 +6817,7 @@ with open(out_path, "wb") as handle:
       item.onClick(() => new NativeRowBandColorModal(this, file, tableId, tableEl).open());
     });
     menu.addItem((item) => {
-      item.setTitle("\u6062\u590D\u9009\u4E2D\u884C\u9ED8\u8BA4\u8272");
+      item.setTitle("恢复选中行默认色");
       item.setIcon("eraser");
       item.onClick(() => {
         const range = this.getSelectedRowRange(selection, coord);
@@ -5499,54 +6825,73 @@ with open(out_path, "wb") as handle:
       });
     });
   }
-  addStableEnhancedTableMenuItems(menu, file, tableId, tableEl, selection, coord, origin) {
+
+  private addStableEnhancedTableMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
     this.addHistoryMenuItems(menu, file, tableId);
-    menu.addSeparator?.();
+    (menu as any).addSeparator?.();
     this.addStructureMenuItems(menu, file, tableId, tableEl, selection, coord);
-    menu.addSeparator?.();
+    (menu as any).addSeparator?.();
     this.addColorMenuItems(menu, file, tableId, tableEl, coord, origin);
-    menu.addSeparator?.();
+    (menu as any).addSeparator?.();
     this.addMergeMenuItems(menu, file, tableId, tableEl, selection, coord);
   }
-  addHistoryMenuItems(menu, file, tableId) {
+
+  private addHistoryMenuItems(menu: Menu, file: TFile, tableId: string) {
     menu.addItem((item) => {
-      item.setTitle("\u64A4\u56DE");
+      item.setTitle("撤回");
       item.setIcon("undo");
       item.setDisabled(!this.canUndoHistoryForFile(file.path, tableId));
       item.onClick(() => void this.undoLastAction(file.path, tableId));
     });
     menu.addItem((item) => {
-      item.setTitle("\u91CD\u505A");
+      item.setTitle("重做");
       item.setIcon("redo");
       item.setDisabled(!this.canRedoHistoryForFile(file.path, tableId));
       item.onClick(() => void this.redoLastAction(file.path, tableId));
     });
   }
-  addStructureMenuItems(menu, file, tableId, tableEl, selection, coord) {
+
+  private addStructureMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord
+  ) {
     menu.addItem((item) => {
-      item.setTitle("\u590D\u5236\u9009\u4E2D\u5185\u5BB9");
+      item.setTitle("复制选中内容");
       item.setIcon("copy");
-      item.onClick(
-        () => void this.copySelectionToClipboard(file, tableId, selection ?? this.normalizeSelection(coord, coord))
+      item.onClick(() =>
+        void this.copySelectionToClipboard(file, tableId, selection ?? this.normalizeSelection(coord, coord))
       );
     });
     menu.addItem((item) => {
-      item.setTitle("\u9AD8\u4FDD\u771F\u590D\u5236");
+      item.setTitle("高保真复制");
       item.setIcon("copy-plus");
-      item.onClick(
-        () => void this.copySelectionToClipboardHighFidelity(file, tableId, selection ?? this.normalizeSelection(coord, coord))
+      item.onClick(() =>
+        void this.copySelectionToClipboardHighFidelity(file, tableId, selection ?? this.normalizeSelection(coord, coord))
       );
     });
     menu.addItem((item) => {
-      item.setTitle("\u7C98\u8D34\u5230\u5F53\u524D\u5355\u5143\u683C");
+      item.setTitle("粘贴到当前单元格");
       item.setIcon("clipboard-paste");
       item.onClick(() => void this.handleClipboardContentPasteForSelectedCell(file, tableId, coord));
     });
     menu.addItem((item) => {
-      item.setTitle("\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247");
+      item.setTitle("粘贴剪贴板图片");
       item.setIcon("image");
       item.onClick(() => void this.handleClipboardPasteForSelectedCell(file, tableId, coord));
     });
+
     const insertAboveRow = Math.max(1, selection?.startRow ?? coord.row);
     const insertBelowRow = Math.max(1, (selection?.endRow ?? coord.row) + 1);
     const rowDeleteRange = this.getBodyRowDeleteRange(selection, coord);
@@ -5554,18 +6899,19 @@ with open(out_path, "wb") as handle:
     const insertRightCol = (selection?.endCol ?? coord.col) + 1;
     const colDeleteRange = this.getColumnDeleteRange(selection, coord);
     const structure = this.collectTableStructure(tableEl);
+
     menu.addItem((item) => {
-      item.setTitle("\u4E0A\u65B9\u63D2\u5165\u884C");
+      item.setTitle("上方插入行");
       item.setIcon("between-horizontal-start");
       item.onClick(() => void this.insertRows(file, tableId, insertAboveRow, 1));
     });
     menu.addItem((item) => {
-      item.setTitle("\u4E0B\u65B9\u63D2\u5165\u884C");
+      item.setTitle("下方插入行");
       item.setIcon("between-horizontal-end");
       item.onClick(() => void this.insertRows(file, tableId, insertBelowRow, 1));
     });
     menu.addItem((item) => {
-      item.setTitle(rowDeleteRange ? rowDeleteRange.count > 1 ? "\u5220\u9664\u9009\u4E2D\u884C" : "\u5220\u9664\u5F53\u524D\u884C" : "\u5F53\u524D\u884C\u4E0D\u53EF\u5220\u9664");
+      item.setTitle(rowDeleteRange ? (rowDeleteRange.count > 1 ? "删除选中行" : "删除当前行") : "当前行不可删除");
       item.setIcon("trash-2");
       item.setDisabled(!rowDeleteRange);
       item.onClick(() => {
@@ -5574,17 +6920,17 @@ with open(out_path, "wb") as handle:
       });
     });
     menu.addItem((item) => {
-      item.setTitle("\u5DE6\u4FA7\u63D2\u5165\u5217");
+      item.setTitle("左侧插入列");
       item.setIcon("between-vertical-start");
       item.onClick(() => void this.insertColumns(file, tableId, insertLeftCol, 1));
     });
     menu.addItem((item) => {
-      item.setTitle("\u53F3\u4FA7\u63D2\u5165\u5217");
+      item.setTitle("右侧插入列");
       item.setIcon("between-vertical-end");
       item.onClick(() => void this.insertColumns(file, tableId, insertRightCol, 1));
     });
     menu.addItem((item) => {
-      item.setTitle(colDeleteRange.count > 1 ? "\u5220\u9664\u9009\u4E2D\u5217" : "\u5220\u9664\u5F53\u524D\u5217");
+      item.setTitle(colDeleteRange.count > 1 ? "删除选中列" : "删除当前列");
       item.setIcon("trash-2");
       item.setDisabled(colDeleteRange.count >= structure.matrix[0]?.length);
       item.onClick(() => {
@@ -5593,12 +6939,20 @@ with open(out_path, "wb") as handle:
       });
     });
   }
-  addColorMenuItems(menu, file, tableId, tableEl, coord, origin) {
+
+  private addColorMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
     menu.addItem((item) => {
-      item.setTitle("\u8BBE\u7F6E\u5355\u5143\u683C\u989C\u8272");
+      item.setTitle("设置单元格颜色");
       item.setIcon("paint-bucket");
-      item.onClick(
-        () => this.showPaletteMenu(
+      item.onClick(() =>
+        this.showPaletteMenu(
           tableEl,
           coord,
           origin,
@@ -5607,10 +6961,10 @@ with open(out_path, "wb") as handle:
       );
     });
     menu.addItem((item) => {
-      item.setTitle("\u8BBE\u7F6E\u5F53\u524D\u884C\u989C\u8272");
+      item.setTitle("设置当前行颜色");
       item.setIcon("paint-bucket");
-      item.onClick(
-        () => this.showPaletteMenu(
+      item.onClick(() =>
+        this.showPaletteMenu(
           tableEl,
           coord,
           origin,
@@ -5619,10 +6973,10 @@ with open(out_path, "wb") as handle:
       );
     });
     menu.addItem((item) => {
-      item.setTitle("\u8BBE\u7F6E\u5F53\u524D\u5217\u989C\u8272");
+      item.setTitle("设置当前列颜色");
       item.setIcon("paint-bucket");
-      item.onClick(
-        () => this.showPaletteMenu(
+      item.onClick(() =>
+        this.showPaletteMenu(
           tableEl,
           coord,
           origin,
@@ -5631,97 +6985,129 @@ with open(out_path, "wb") as handle:
       );
     });
     menu.addItem((item) => {
-      item.setTitle("\u6E05\u9664\u989C\u8272");
+      item.setTitle("清除颜色");
       item.setIcon("eraser");
       item.onClick(() => this.showClearColorMenu(file, tableId, tableEl, coord, origin));
     });
   }
-  addMergeMenuItems(menu, file, tableId, tableEl, selection, coord) {
+
+  private addMergeMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
+
     const mergeAtCell = record.layout.merges.find((merge) => merge.row === coord.row && merge.col === coord.col);
     if (mergeAtCell) {
       menu.addItem((item) => {
-        item.setTitle("\u62C6\u5206\u5355\u5143\u683C");
+        item.setTitle("拆分单元格");
         item.setIcon("ungroup");
         item.onClick(() => void this.splitMerge(file, tableId, tableEl, mergeAtCell));
       });
     }
+
     if (!selection) return;
     if (selection.startRow === selection.endRow && selection.startCol === selection.endCol) return;
+
     if (this.canMergeSelection(tableEl, record.layout, selection)) {
       menu.addItem((item) => {
-        item.setTitle("\u5408\u5E76\u9009\u4E2D\u5355\u5143\u683C");
+        item.setTitle("合并选中单元格");
         item.setIcon("group");
         item.onClick(() => void this.mergeSelection(file, tableId, tableEl, selection));
       });
     } else {
       menu.addItem((item) => {
-        item.setTitle("\u5F53\u524D\u9009\u533A\u4E0D\u53EF\u5408\u5E76");
+        item.setTitle("当前选区不可合并");
         item.setDisabled(true);
       });
     }
   }
-  getBodyRowDeleteRange(selection, coord) {
+
+  private getBodyRowDeleteRange(selection: SelectionRect | null, coord: CellCoord) {
     const startRow = Math.max(1, selection?.startRow ?? coord.row);
     const endRow = Math.max(1, selection?.endRow ?? coord.row);
     if (endRow < startRow) return null;
     return {
       startRow,
-      count: endRow - startRow + 1
+      count: endRow - startRow + 1,
     };
   }
-  getColumnDeleteRange(selection, coord) {
+
+  private getColumnDeleteRange(selection: SelectionRect | null, coord: CellCoord) {
     const startCol = selection?.startCol ?? coord.col;
     const endCol = selection?.endCol ?? coord.col;
     return {
       startCol,
-      count: endCol - startCol + 1
+      count: endCol - startCol + 1,
     };
   }
-  getSelectedRowRange(selection, coord) {
+
+  private getSelectedRowRange(selection: SelectionRect | null, coord: CellCoord) {
     return {
       startRow: Math.max(0, selection?.startRow ?? coord.row),
-      endRow: Math.max(0, selection?.endRow ?? coord.row)
+      endRow: Math.max(0, selection?.endRow ?? coord.row),
     };
   }
-  getNativeRowColorChoicesForTable(tableId) {
+
+  getNativeRowColorChoicesForTable(tableId: string) {
     const record = this.dataStore.tables[tableId];
     const palette = this.getLayoutNativeColorPalette(record?.layout ?? this.createEmptyLayout()) ?? this.getCurrentNativeColorPalette();
     return [
-      { label: "\u6B63\u6587\u767D", value: palette.baseRow },
-      { label: "\u6D45\u8272\u5757", value: palette.altRow },
-      { label: "\u8868\u5934\u8272", value: palette.header },
-      ...PALETTE
+      { label: "正文白", value: palette.baseRow },
+      { label: "浅色块", value: palette.altRow },
+      { label: "表头色", value: palette.header },
+      ...PALETTE,
     ].map((item) => ({ label: item.label, value: this.normalizeHexColor(item.value, palette.baseRow) }));
   }
-  getNativeLayoutResolvedRowColor(tableId, rowIndex) {
+
+  getNativeLayoutResolvedRowColor(tableId: string, rowIndex: number) {
     const record = this.dataStore.tables[tableId];
     if (!record) return NATIVE_COLOR_TABLE_BASE_ROW;
     return this.resolveCellBackgroundColor(record.layout, rowIndex, 0, this.getCellKey({ row: rowIndex, col: 0 })) || NATIVE_COLOR_TABLE_BASE_ROW;
   }
-  showNativeLayoutRowColorPalette(file, tableEl, tableId, selection, coord, origin) {
+
+  private showNativeLayoutRowColorPalette(
+    file: TFile,
+    tableEl: HTMLTableElement,
+    tableId: string,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
     const range = this.getSelectedRowRange(selection, coord);
-    const menu = new import_obsidian.Menu();
+    const menu = new Menu();
     for (const palette of this.getNativeRowColorChoicesForTable(tableId)) {
       menu.addItem((item) => {
         item.setTitle(palette.label);
         item.setIcon("paint-bucket");
-        item.onClick(
-          () => void this.setNativeLayoutRowRangeColor(tableId, file, tableEl, range.startRow, range.endRow, palette.value)
+        item.onClick(() =>
+          void this.setNativeLayoutRowRangeColor(tableId, file, tableEl, range.startRow, range.endRow, palette.value)
         );
       });
     }
-    menu.addSeparator?.();
+    (menu as any).addSeparator?.();
     menu.addItem((item) => {
-      item.setTitle("\u66F4\u591A\u884C\u6BB5\u8BBE\u7F6E");
+      item.setTitle("更多行段设置");
       item.setIcon("palette");
       item.onClick(() => new NativeRowBandColorModal(this, file, tableId, tableEl).open());
     });
     const rect = tableEl.getBoundingClientRect();
     menu.showAtPosition(origin ?? { x: rect.left + 24, y: rect.top + 24 });
   }
-  async setNativeLayoutRowRangeColor(tableId, file, tableEl, startRow, endRow, color) {
+
+  async setNativeLayoutRowRangeColor(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    startRow: number,
+    endRow: number,
+    color: string | null
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record || record.mode !== "nativeLayout") return;
     const structure = this.collectTableStructure(tableEl);
@@ -5730,6 +7116,7 @@ with open(out_path, "wb") as handle:
     const safeEnd = Math.max(0, Math.min(maxRow, Math.max(startRow, endRow)));
     const before = await this.captureHistoryState(file, [tableId]);
     const normalizedColor = color ? this.normalizeHexColor(color, this.getNativeLayoutResolvedRowColor(tableId, safeStart)) : null;
+
     for (let rowIndex = safeStart; rowIndex <= safeEnd; rowIndex += 1) {
       const key = String(rowIndex);
       if (normalizedColor) {
@@ -5738,23 +7125,33 @@ with open(out_path, "wb") as handle:
         delete record.layout.rowColors[key];
       }
     }
+
     record.updatedAt = Date.now();
     await this.savePluginData();
     this.refreshEnhancedTable(tableEl, tableId);
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: normalizedColor ? "\u8BBE\u7F6E\u884C\u989C\u8272" : "\u6062\u590D\u884C\u989C\u8272",
+      label: normalizedColor ? "设置行颜色" : "恢复行颜色",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
-    new import_obsidian.Notice(normalizedColor ? "\u5DF2\u8BBE\u7F6E\u9009\u4E2D\u884C\u989C\u8272" : "\u5DF2\u6062\u590D\u9009\u4E2D\u884C\u9ED8\u8BA4\u8272");
+    new Notice(normalizedColor ? "已设置选中行颜色" : "已恢复选中行默认色");
   }
-  async setColor(tableId, file, tableEl, target, key, color) {
+
+  private async setColor(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    target: "cell" | "row" | "column",
+    key: string,
+    color: string
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
     const before = await this.captureHistoryState(file, [tableId]);
+
     if (target === "cell") {
       record.layout.cellColors[key] = color;
     } else if (target === "row") {
@@ -5762,22 +7159,31 @@ with open(out_path, "wb") as handle:
     } else {
       record.layout.colColors[key] = color;
     }
+
     record.updatedAt = Date.now();
     await this.savePluginData();
     this.refreshEnhancedTable(tableEl, tableId);
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: "\u8BBE\u7F6E\u989C\u8272",
+      label: "设置颜色",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
   }
-  async clearColor(tableId, file, tableEl, target, key) {
+
+  private async clearColor(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    target: "cell" | "row" | "column",
+    key: string
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
     const before = await this.captureHistoryState(file, [tableId]);
+
     if (target === "cell") {
       delete record.layout.cellColors[key];
     } else if (target === "row") {
@@ -5785,19 +7191,27 @@ with open(out_path, "wb") as handle:
     } else {
       delete record.layout.colColors[key];
     }
+
     record.updatedAt = Date.now();
     await this.savePluginData();
     this.refreshEnhancedTable(tableEl, tableId);
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: "\u6E05\u9664\u989C\u8272",
+      label: "清除颜色",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
   }
-  async setCellImageWidth(tableId, file, tableEl, coord, width) {
+
+  private async setCellImageWidth(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    width: number
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
     const before = await this.captureHistoryState(file, [tableId]);
@@ -5810,14 +7224,15 @@ with open(out_path, "wb") as handle:
     }
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: "\u8C03\u6574\u56FE\u7247\u5BBD\u5EA6",
+      label: "调整图片宽度",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
   }
-  async clearCellImageWidth(tableId, file, tableEl, coord) {
+
+  private async clearCellImageWidth(tableId: string, file: TFile, tableEl: HTMLTableElement, coord: CellCoord) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
     const before = await this.captureHistoryState(file, [tableId]);
@@ -5830,25 +7245,43 @@ with open(out_path, "wb") as handle:
     }
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: "\u6062\u590D\u56FE\u7247\u5BBD\u5EA6",
+      label: "恢复图片宽度",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
   }
-  hideImageToolbar() {
+
+  private hideImageToolbar() {
     if (!this.activeImageToolbar) return;
     this.activeImageToolbar.root.remove();
     this.activeImageToolbar = null;
   }
-  showImageManipulator(tableEl, file, tableId, coord, cell, imageEl) {
+
+  private showImageManipulator(
+    tableEl: HTMLTableElement,
+    file: TFile,
+    tableId: string,
+    coord: CellCoord,
+    cell: HTMLTableCellElement,
+    imageEl: HTMLImageElement
+  ) {
     const existing = this.activeImageManipulator;
-    if (existing && existing.tableEl === tableEl && existing.coord.row === coord.row && existing.coord.col === coord.col && existing.imageEl === imageEl && document.body.contains(existing.root)) {
+    if (
+      existing &&
+      existing.tableEl === tableEl &&
+      existing.coord.row === coord.row &&
+      existing.coord.col === coord.col &&
+      existing.imageEl === imageEl &&
+      document.body.contains(existing.root)
+    ) {
       this.positionImageManipulator(existing.root, imageEl);
       return;
     }
+
     this.hideImageManipulator();
+
     const root = document.createElement("div");
     root.className = "mdtp-image-manipulator";
     root.addEventListener("pointerdown", (pointerEvent) => {
@@ -5859,24 +7292,27 @@ with open(out_path, "wb") as handle:
     root.addEventListener("click", (clickEvent) => {
       clickEvent.preventDefault();
       clickEvent.stopPropagation();
-      const target = clickEvent.target;
+      const target = clickEvent.target as HTMLElement | null;
       if (target?.closest(".mdtp-image-manipulator-delete")) {
         void this.removeActiveImageFromCell(manipulator);
       }
     });
+
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.className = "mdtp-image-manipulator-delete";
-    deleteButton.setAttribute("aria-label", "\u5220\u9664\u56FE\u7247");
-    deleteButton.textContent = "\xD7";
+    deleteButton.setAttribute("aria-label", "删除图片");
+    deleteButton.textContent = "×";
     root.appendChild(deleteButton);
+
     const resizeHandle = document.createElement("button");
     resizeHandle.type = "button";
     resizeHandle.className = "mdtp-image-manipulator-handle";
-    resizeHandle.setAttribute("aria-label", "\u62D6\u62FD\u8C03\u6574\u56FE\u7247\u5927\u5C0F");
+    resizeHandle.setAttribute("aria-label", "拖拽调整图片大小");
     root.appendChild(resizeHandle);
+
     document.body.appendChild(root);
-    const manipulator = {
+    const manipulator: ImageManipulatorState = {
       tableEl,
       file,
       tableId,
@@ -5885,27 +7321,33 @@ with open(out_path, "wb") as handle:
       imageEl,
       root,
       resizeHandle,
-      deleteButton
+      deleteButton,
     };
     this.positionImageManipulator(root, imageEl);
     this.activeImageManipulator = manipulator;
   }
-  handleImageManipulatorPointerDown(event, manipulator) {
-    const target = event.target;
+
+  private handleImageManipulatorPointerDown(
+    event: PointerEvent,
+    manipulator: ImageManipulatorState
+  ): "resize" | "align" | "noop" {
+    const target = event.target as HTMLElement | null;
     if (target?.closest(".mdtp-image-manipulator-handle")) {
       this.startImageResizeDrag(event, manipulator);
       return "resize";
     }
     return "noop";
   }
-  positionImageManipulator(root, imageEl) {
+
+  private positionImageManipulator(root: HTMLDivElement, imageEl: HTMLImageElement) {
     const rect = imageEl.getBoundingClientRect();
     root.style.left = `${Math.max(0, Math.round(rect.left))}px`;
     root.style.top = `${Math.max(0, Math.round(rect.top))}px`;
     root.style.width = `${Math.max(24, Math.round(rect.width))}px`;
     root.style.height = `${Math.max(24, Math.round(rect.height))}px`;
   }
-  hideImageManipulator() {
+
+  private hideImageManipulator() {
     if (this.activeImageManipulator) {
       this.activeImageManipulator.root.classList.remove("is-resizing");
       this.activeImageManipulator.root.remove();
@@ -5913,88 +7355,114 @@ with open(out_path, "wb") as handle:
     }
     this.activeImageDrag = null;
   }
-  openCellImageOriginal(cell) {
-    const linkEl = cell.querySelector("a[href]");
-    const imageEl = cell.querySelector("img");
+
+  private openCellImageOriginal(cell: HTMLTableCellElement) {
+    const linkEl = cell.querySelector("a[href]") as HTMLAnchorElement | null;
+    const imageEl = cell.querySelector("img") as HTMLImageElement | null;
     const href = linkEl?.href || imageEl?.src || "";
     if (!href) {
-      new import_obsidian.Notice("\u5F53\u524D\u5355\u5143\u683C\u6CA1\u6709\u53EF\u6253\u5F00\u7684\u539F\u56FE");
+      new Notice("当前单元格没有可打开的原图");
       return;
     }
     window.open(href, "_blank", "noopener,noreferrer");
   }
-  isImageMarkupFragment(value) {
+
+  private isImageMarkupFragment(value: string) {
     const trimmed = value.trim();
     if (!trimmed) return false;
     return /^!\[\[[^[\]]+?\]\]$/.test(trimmed) || /^!\[[^\]]*\]\([^)]+\)$/.test(trimmed);
   }
-  containsImageMarkup(value) {
+
+  private containsImageMarkup(value: string) {
     return /!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/.test(value);
   }
-  replaceFirstImageMarkup(value, imageMarkup) {
+
+  private replaceFirstImageMarkup(value: string, imageMarkup: string) {
     return value.replace(/!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/, imageMarkup.trim());
   }
-  stripImageMarkup(value) {
-    return value.replace(/!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/g, "").replace(/[ \t]+\n/g, "\n").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+
+  private stripImageMarkup(value: string) {
+    return value
+      .replace(/!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
-  extractImageMarkupFragments(value) {
+
+  private extractImageMarkupFragments(value: string) {
     return Array.from(value.matchAll(/!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/g), (match) => match[0].trim()).filter(
       Boolean
     );
   }
-  resolveImageElement(target) {
+
+  private resolveImageElement(target: HTMLElement | null) {
     if (!target) return null;
     if (target instanceof HTMLImageElement) {
       return target;
     }
     return target.querySelector("img");
   }
-  getRenderedImageWidth(imageEl) {
+
+  private getRenderedImageWidth(imageEl: HTMLImageElement) {
     const explicitWidth = Number.parseInt(imageEl.style.width || "", 10);
     if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
     return Math.max(80, Math.round(imageEl.getBoundingClientRect().width));
   }
-  startImageResizeDrag(event, manipulator) {
+
+  private startImageResizeDrag(event: PointerEvent, manipulator: ImageManipulatorState) {
     const startWidth = this.getRenderedImageWidth(manipulator.imageEl);
     this.activeImageDrag = {
       manipulator,
       startClientX: event.clientX,
       startWidth,
-      previewWidth: startWidth
+      previewWidth: startWidth,
     };
     manipulator.root.classList.add("is-resizing");
   }
-  isSameImageTarget(manipulator, tableId, coord) {
-    return manipulator.tableId === tableId && manipulator.coord.row === coord.row && manipulator.coord.col === coord.col;
+
+  private isSameImageTarget(manipulator: ImageManipulatorState, tableId: string, coord: CellCoord) {
+    return (
+      manipulator.tableId === tableId &&
+      manipulator.coord.row === coord.row &&
+      manipulator.coord.col === coord.col
+    );
   }
-  async replaceCellImageFromClipboard(file, tableId, coord) {
+
+  private async replaceCellImageFromClipboard(file: TFile, tableId: string, coord: CellCoord) {
     const imageFile = await this.readImageFromAvailableClipboard();
     if (!imageFile) {
-      new import_obsidian.Notice("\u5F53\u524D\u526A\u8D34\u677F\u91CC\u6CA1\u6709\u53EF\u7528\u56FE\u7247");
+      new Notice("当前剪贴板里没有可用图片");
       return false;
     }
     const imageMarkup = await this.createAttachmentMarkup(file, imageFile);
     if (!imageMarkup) return false;
     const currentValue = await this.readCellSourceValue(file, tableId, null, coord);
-    const nextValue = currentValue && this.containsImageMarkup(currentValue) ? this.replaceFirstImageMarkup(currentValue, imageMarkup) : this.composeNextCellValueWithImage(currentValue, imageMarkup);
+    const nextValue =
+      currentValue && this.containsImageMarkup(currentValue)
+        ? this.replaceFirstImageMarkup(currentValue, imageMarkup)
+        : this.composeNextCellValueWithImage(currentValue, imageMarkup);
     return this.updateCellSourceValue(file, tableId, null, coord, nextValue);
   }
-  async removeImagesFromCell(file, tableId, coord) {
+
+  private async removeImagesFromCell(file: TFile, tableId: string, coord: CellCoord) {
     const currentValue = await this.readCellSourceValue(file, tableId, null, coord);
     if (!currentValue || !this.containsImageMarkup(currentValue)) {
-      new import_obsidian.Notice("\u5F53\u524D\u5355\u5143\u683C\u6CA1\u6709\u53EF\u79FB\u9664\u7684\u56FE\u7247");
+      new Notice("当前单元格没有可移除的图片");
       return false;
     }
     const nextValue = this.stripImageMarkup(currentValue);
     return this.updateCellSourceValue(file, tableId, null, coord, nextValue);
   }
-  async removeActiveImageFromCell(manipulator) {
+
+  private async removeActiveImageFromCell(manipulator: ImageManipulatorState) {
     const currentValue = await this.readCellSourceValue(manipulator.file, manipulator.tableId, null, manipulator.coord);
     if (!currentValue || !this.containsImageMarkup(currentValue)) {
-      new import_obsidian.Notice("\u5F53\u524D\u5355\u5143\u683C\u6CA1\u6709\u53EF\u5220\u9664\u7684\u56FE\u7247");
+      new Notice("当前单元格没有可删除的图片");
       this.hideImageManipulator();
       return false;
     }
+
     const selectedSource = this.getSelectedImageSource(manipulator);
     const selectedResourcePath = manipulator.imageEl.src || "";
     const nextValue = this.removeSelectedImageMarkupFromValue(
@@ -6004,15 +7472,16 @@ with open(out_path, "wb") as handle:
       selectedResourcePath
     );
     if (nextValue === currentValue) {
-      new import_obsidian.Notice("\u672A\u80FD\u5B9A\u4F4D\u5230\u8981\u5220\u9664\u7684\u56FE\u7247");
+      new Notice("未能定位到要删除的图片");
       return false;
     }
+
     const cellKey = this.getCellKey(manipulator.coord);
     const handled = await this.mutateTableSource(
       manipulator.file,
       manipulator.tableId,
       "before-delete-cell-image",
-      "\u5220\u9664\u5355\u5143\u683C\u56FE\u7247",
+      "删除单元格图片",
       (rawTable, layout) => {
         const normalizedNextValue = this.normalizeValueAfterImageDeletion(this.normalizeEditedCellValue(nextValue));
         const didSet = this.setCellValue(rawTable, manipulator.coord, normalizedNextValue);
@@ -6023,52 +7492,76 @@ with open(out_path, "wb") as handle:
         return true;
       }
     );
+
     if (handled) {
       this.hideImageManipulator();
-      new import_obsidian.Notice("\u5DF2\u5220\u9664\u56FE\u7247");
+      new Notice("已删除图片");
     }
     return handled;
   }
-  getSelectedImageSource(manipulator) {
-    const wrapper = manipulator.imageEl.closest(".mdtp-rendered-image-embed");
+
+  private getSelectedImageSource(manipulator: ImageManipulatorState) {
+    const wrapper = manipulator.imageEl.closest(".mdtp-rendered-image-embed") as HTMLElement | null;
     return wrapper?.dataset.mdtpImageSource?.trim() || manipulator.imageEl.alt?.trim() || "";
   }
-  removeSelectedImageMarkupFromValue(value, file, selectedDisplayPath, selectedResourcePath) {
+
+  private removeSelectedImageMarkupFromValue(
+    value: string,
+    file: TFile,
+    selectedDisplayPath: string,
+    selectedResourcePath: string
+  ) {
     const imagePattern = /!\[\[[^[\]]+?\]\]|!\[[^\]]*]\([^)]+\)/g;
     const matches = Array.from(value.matchAll(imagePattern));
     if (matches.length === 0) return value;
+
     const selectedDisplay = selectedDisplayPath.trim();
     const selectedResource = selectedResourcePath.trim();
-    const targetMatch = matches.find((match) => {
-      const raw2 = match[0] ?? "";
-      const target = this.extractImageMarkupTarget(raw2);
-      if (!target) return false;
-      const resolved = this.resolveImagePreviewTarget(target, file);
-      if (!resolved) return false;
-      return !!selectedDisplay && resolved.displayPath === selectedDisplay || !!selectedResource && resolved.resourcePath === selectedResource;
-    }) ?? matches[0];
+    const targetMatch =
+      matches.find((match) => {
+        const raw = match[0] ?? "";
+        const target = this.extractImageMarkupTarget(raw);
+        if (!target) return false;
+        const resolved = this.resolveImagePreviewTarget(target, file);
+        if (!resolved) return false;
+        return (
+          (!!selectedDisplay && resolved.displayPath === selectedDisplay) ||
+          (!!selectedResource && resolved.resourcePath === selectedResource)
+        );
+      }) ?? matches[0];
+
     const start = targetMatch.index ?? -1;
     const raw = targetMatch[0] ?? "";
     if (start < 0 || !raw) return value;
     return this.normalizeValueAfterImageDeletion(`${value.slice(0, start)}${value.slice(start + raw.length)}`);
   }
-  extractImageMarkupTarget(markup) {
+
+  private extractImageMarkupTarget(markup: string) {
     const wikiMatch = markup.match(/^!\[\[([^[\]]+?)\]\]$/);
     if (wikiMatch?.[1]) return wikiMatch[1];
     const markdownMatch = markup.match(/^!\[[^\]]*]\(([^)]+)\)$/);
     return markdownMatch?.[1] ?? "";
   }
-  normalizeValueAfterImageDeletion(value) {
-    return value.replace(/(?:\s*<br\s*\/?>\s*){2,}/gi, "<br>").replace(/^(?:\s*<br\s*\/?>\s*)+/gi, "").replace(/(?:\s*<br\s*\/?>\s*)+$/gi, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  private normalizeValueAfterImageDeletion(value: string) {
+    return value
+      .replace(/(?:\s*<br\s*\/?>\s*){2,}/gi, "<br>")
+      .replace(/^(?:\s*<br\s*\/?>\s*)+/gi, "")
+      .replace(/(?:\s*<br\s*\/?>\s*)+$/gi, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
-  async mergeSelection(file, tableId, tableEl, selection) {
+
+  private async mergeSelection(file: TFile, tableId: string, tableEl: HTMLTableElement, selection: SelectionRect) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
+
     const didMerge = await this.mutateTableSource(
       file,
       tableId,
       "before-merge",
-      "\u5408\u5E76\u5355\u5143\u683C",
+      "合并单元格",
       (rawTable, layout) => {
         const anchor = { row: selection.startRow, col: selection.startCol };
         const anchorValue = this.getCellValue(rawTable, anchor) ?? "";
@@ -6080,112 +7573,147 @@ with open(out_path, "wb") as handle:
             if (!didMoveToAnchor || !didClearSource) return false;
           }
         }
+
         layout.merges.push({
           row: selection.startRow,
           col: selection.startCol,
           rowspan: selection.endRow - selection.startRow + 1,
-          colspan: selection.endCol - selection.startCol + 1
+          colspan: selection.endCol - selection.startCol + 1,
         });
         return true;
       }
     );
     if (!didMerge) return;
-    new import_obsidian.Notice("\u5DF2\u5408\u5E76\u9009\u4E2D\u5355\u5143\u683C");
+    new Notice("已合并选中单元格");
   }
-  async splitMerge(file, tableId, tableEl, merge) {
+
+  private async splitMerge(file: TFile, tableId: string, tableEl: HTMLTableElement, merge: TableMergeMetadata) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
+
     const before = await this.captureHistoryState(file, [tableId]);
     await this.createSnapshot(file, "before-split", [tableId]);
     record.layout.merges = record.layout.merges.filter(
-      (item) => !(item.row === merge.row && item.col === merge.col && item.rowspan === merge.rowspan && item.colspan === merge.colspan)
+      (item) =>
+        !(
+          item.row === merge.row &&
+          item.col === merge.col &&
+          item.rowspan === merge.rowspan &&
+          item.colspan === merge.colspan
+        )
     );
     record.updatedAt = Date.now();
     await this.savePluginData();
     this.refreshEnhancedTable(tableEl, tableId);
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: "\u62C6\u5206\u5355\u5143\u683C",
+      label: "拆分单元格",
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
-    new import_obsidian.Notice("\u5DF2\u62C6\u5206\u5355\u5143\u683C");
+    new Notice("已拆分单元格");
   }
-  canMergeSelection(tableEl, layout, selection) {
+
+  private canMergeSelection(tableEl: HTMLTableElement, layout: TableLayoutMetadata, selection: SelectionRect) {
     const structure = this.collectTableStructure(tableEl);
-    const mergeCandidate = {
+    const mergeCandidate: TableMergeMetadata = {
       row: selection.startRow,
       col: selection.startCol,
       rowspan: selection.endRow - selection.startRow + 1,
-      colspan: selection.endCol - selection.startCol + 1
+      colspan: selection.endCol - selection.startCol + 1,
     };
+
     if (!this.isMergeShapeValid(structure, mergeCandidate)) return false;
     if (!this.isMergeWithinSameSection(structure, mergeCandidate)) return false;
+
     for (const merge of layout.merges) {
       if (this.rectanglesOverlap(selection, this.mergeToRect(merge))) {
         return false;
       }
     }
+
     return true;
   }
-  mergeToRect(merge) {
+
+  private mergeToRect(merge: TableMergeMetadata): SelectionRect {
     return {
       startRow: merge.row,
       endRow: merge.row + merge.rowspan - 1,
       startCol: merge.col,
-      endCol: merge.col + merge.colspan - 1
+      endCol: merge.col + merge.colspan - 1,
     };
   }
-  rectanglesOverlap(left, right) {
-    return !(left.endRow < right.startRow || right.endRow < left.startRow || left.endCol < right.startCol || right.endCol < left.startCol);
+
+  private rectanglesOverlap(left: SelectionRect, right: SelectionRect) {
+    return !(
+      left.endRow < right.startRow ||
+      right.endRow < left.startRow ||
+      left.endCol < right.startCol ||
+      right.endCol < left.startCol
+    );
   }
-  selectionContains(selection, coord) {
+
+  private selectionContains(selection: SelectionRect | null, coord: CellCoord) {
     if (!selection) return false;
-    return coord.row >= selection.startRow && coord.row <= selection.endRow && coord.col >= selection.startCol && coord.col <= selection.endCol;
+    return (
+      coord.row >= selection.startRow &&
+      coord.row <= selection.endRow &&
+      coord.col >= selection.startCol &&
+      coord.col <= selection.endCol
+    );
   }
-  getCellCoord(cell) {
+
+  private getCellCoord(cell: HTMLTableCellElement): CellCoord | null {
     const row = Number.parseInt(cell.dataset.mdtpRow ?? "-1", 10);
     const col = Number.parseInt(cell.dataset.mdtpCol ?? "-1", 10);
     if (!Number.isFinite(row) || !Number.isFinite(col) || row < 0 || col < 0) return null;
     return { row, col };
   }
-  cellContainsImage(cell) {
+
+  private cellContainsImage(cell: HTMLTableCellElement) {
     return !!cell.querySelector("img, .image-embed, .internal-embed, .media-embed");
   }
-  isInitializedTable(tableEl) {
+
+  private isInitializedTable(tableEl: HTMLTableElement) {
     const tableId = tableEl.dataset.mdtpTableId || "";
     return !!tableId && !!this.dataStore.tables[tableId];
   }
-  isInitializedEnhancedTable(tableEl) {
+
+  private isInitializedEnhancedTable(tableEl: HTMLTableElement) {
     const tableId = tableEl.dataset.mdtpTableId || "";
     return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced";
   }
-  isNativeLayoutTable(tableEl) {
+
+  private isNativeLayoutTable(tableEl: HTMLTableElement) {
     const tableId = tableEl.dataset.mdtpTableId || "";
     return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "nativeLayout";
   }
-  getManagedTableId(tableEl) {
+
+  private getManagedTableId(tableEl: HTMLTableElement) {
     const tableId = tableEl.dataset.mdtpTableId || "";
     return tableId && this.dataStore.tables[tableId] ? tableId : null;
   }
-  getInitializedTableId(tableEl) {
+
+  private getInitializedTableId(tableEl: HTMLTableElement) {
     const tableId = tableEl.dataset.mdtpTableId || "";
     return tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced" ? tableId : null;
   }
-  normalizeSelection(anchor, current) {
+
+  private normalizeSelection(anchor: CellCoord, current: CellCoord): SelectionRect {
     return {
       startRow: Math.min(anchor.row, current.row),
       endRow: Math.max(anchor.row, current.row),
       startCol: Math.min(anchor.col, current.col),
-      endCol: Math.max(anchor.col, current.col)
+      endCol: Math.max(anchor.col, current.col),
     };
   }
-  renderSelection(tableEl, selection, anchor) {
+
+  private renderSelection(tableEl: HTMLTableElement, selection: SelectionRect | null, anchor: CellCoord | null) {
     for (const cell of Array.from(tableEl.querySelectorAll("th, td"))) {
       cell.classList.remove("mdtp-cell-selected", "mdtp-cell-anchor");
-      const htmlCell = cell;
+      const htmlCell = cell as HTMLTableCellElement;
       htmlCell.style.boxShadow = "";
       const coord = this.getCellCoord(htmlCell);
       if (!coord || !selection) continue;
@@ -6199,7 +7727,8 @@ with open(out_path, "wb") as handle:
       }
     }
   }
-  handleGlobalPointerMove(event) {
+
+  private handleGlobalPointerMove(event: PointerEvent) {
     if (this.activeImageDrag) {
       event.preventDefault();
       const delta = event.clientX - this.activeImageDrag.startClientX;
@@ -6212,6 +7741,7 @@ with open(out_path, "wb") as handle:
       );
       return;
     }
+
     if (this.activeResize) {
       event.preventDefault();
       const delta = (this.activeResize.kind === "column" ? event.clientX : event.clientY) - this.activeResize.startClient;
@@ -6227,9 +7757,10 @@ with open(out_path, "wb") as handle:
       }
       return;
     }
+
     if (!this.activeSelectionDrag || !(event.buttons & 1)) return;
     const hovered = document.elementFromPoint(event.clientX, event.clientY);
-    const cell = hovered?.closest?.("th, td");
+    const cell = hovered?.closest?.("th, td") as HTMLTableCellElement | null;
     if (!cell || !this.activeSelectionDrag.tableEl.contains(cell)) return;
     const coord = this.getCellCoord(cell);
     if (!coord) return;
@@ -6239,7 +7770,8 @@ with open(out_path, "wb") as handle:
     runtime.anchor = this.activeSelectionDrag.anchor;
     this.renderSelection(this.activeSelectionDrag.tableEl, runtime.selection, runtime.anchor);
   }
-  async handleGlobalPointerUp() {
+
+  private async handleGlobalPointerUp() {
     if (this.activeImageDrag) {
       const imageDrag = this.activeImageDrag;
       this.activeImageDrag = null;
@@ -6256,6 +7788,7 @@ with open(out_path, "wb") as handle:
       this.positionImageManipulator(manipulator.root, manipulator.imageEl);
       return;
     }
+
     if (this.activeResize) {
       const resize = this.activeResize;
       this.activeResize = null;
@@ -6273,33 +7806,38 @@ with open(out_path, "wb") as handle:
         this.refreshEnhancedTable(resize.tableEl, resize.tableId);
         const after = await this.captureHistoryState(resize.file, [resize.tableId]);
         this.pushHistoryEntry({
-          label: resize.kind === "column" ? "\u8C03\u6574\u5217\u5BBD" : "\u8C03\u6574\u884C\u9AD8",
+          label: resize.kind === "column" ? "调整列宽" : "调整行高",
           filePath: resize.file.path,
           tableIds: [resize.tableId],
           before,
-          after
+          after,
         });
       }
     }
+
     this.activeSelectionDrag = null;
   }
-  getColumnWidth(structure, colIndex) {
+
+  private getColumnWidth(structure: TableStructure, colIndex: number) {
     const cell = structure.matrix[0]?.[colIndex] ?? structure.matrix.find((row) => !!row[colIndex])?.[colIndex];
     if (!cell) return 160;
     const styledWidth = Number.parseInt(cell.style.getPropertyValue("--mdtp-col-width"), 10);
     if (Number.isFinite(styledWidth) && styledWidth > 0) return styledWidth;
     return Math.max(MIN_COLUMN_WIDTH, Math.round(cell.getBoundingClientRect().width));
   }
-  getRowHeight(structure, rowIndex) {
+
+  private getRowHeight(structure: TableStructure, rowIndex: number) {
     const row = structure.rows[rowIndex];
     if (!row) return 40;
     const styledHeight = Number.parseInt(row.style.getPropertyValue("--mdtp-row-height"), 10);
     if (Number.isFinite(styledHeight) && styledHeight > 0) return styledHeight;
     return Math.max(MIN_ROW_HEIGHT, Math.round(row.getBoundingClientRect().height));
   }
-  refreshEnhancedTable(tableEl, tableId) {
+
+  private refreshEnhancedTable(tableEl: HTMLTableElement, tableId: string) {
     const record = this.dataStore.tables[tableId];
     if (!record) return;
+
     this.clearInjectedTableArtifacts(tableEl);
     this.indexTableCells(tableEl);
     if (record.mode === "nativeLayout") {
@@ -6310,9 +7848,9 @@ with open(out_path, "wb") as handle:
       tableEl.classList.remove("mdtp-table-native-layout");
       tableEl.classList.add("mdtp-table-enhanced");
       this.applyLayout(tableEl, record.layout);
-      const runtime2 = this.runtimeState.get(tableEl);
-      if (runtime2?.file && runtime2.parsedTable) {
-        this.renderImageMarkupInEnhancedCells(tableEl, runtime2.file, runtime2.parsedTable, record.layout);
+      const runtime = this.runtimeState.get(tableEl);
+      if (runtime?.file && runtime.parsedTable) {
+        this.renderImageMarkupInEnhancedCells(tableEl, runtime.file, runtime.parsedTable, record.layout);
       }
     }
     this.injectResizeHandles(tableEl, record.layout);
@@ -6325,7 +7863,8 @@ with open(out_path, "wb") as handle:
       this.renderSelection(tableEl, null, null);
     }
   }
-  clearAllEnhancedSelections(exceptTableEl) {
+
+  private clearAllEnhancedSelections(exceptTableEl?: HTMLTableElement | null) {
     const except = exceptTableEl ?? null;
     for (const [tableEl, runtime] of this.runtimeState.entries()) {
       if (!document.body.contains(tableEl)) continue;
@@ -6338,24 +7877,38 @@ with open(out_path, "wb") as handle:
       this.lastTableContext = null;
     }
   }
-  async openInlineEditor(tableEl, file, tableId, parsedTable, cell, coord) {
+
+  private async openInlineEditor(
+    tableEl: HTMLTableElement,
+    file: TFile,
+    tableId: string | null,
+    parsedTable: ParsedTableBlock | null,
+    cell: HTMLTableCellElement,
+    coord: CellCoord
+  ) {
     if (this.activeEditor) {
-      const isSameCell = this.activeEditor.tableId === tableId && this.activeEditor.coord.row === coord.row && this.activeEditor.coord.col === coord.col;
+      const isSameCell =
+        this.activeEditor.tableId === tableId &&
+        this.activeEditor.coord.row === coord.row &&
+        this.activeEditor.coord.col === coord.col;
       if (isSameCell) {
         this.activeEditor.textarea.focus();
         return;
       }
       await this.closeActiveEditor("commit");
     }
+
     const sourceValue = await this.readCellSourceValue(file, tableId, parsedTable, coord);
     if (sourceValue === null) {
-      new import_obsidian.Notice("\u5F53\u524D\u5355\u5143\u683C\u6682\u65F6\u65E0\u6CD5\u8FDB\u5165\u7F16\u8F91");
+      new Notice("当前单元格暂时无法进入编辑");
       return;
     }
+
     const imageMarkups = this.extractImageMarkupFragments(sourceValue);
     const editorTextValue = imageMarkups.length > 0 ? this.getInlineEditorTextValue(sourceValue) : sourceValue;
     const wrapper = document.createElement("div");
     wrapper.className = "mdtp-inline-editor";
+
     const textarea = document.createElement("textarea");
     textarea.className = "mdtp-inline-editor-input";
     textarea.value = editorTextValue;
@@ -6369,7 +7922,7 @@ with open(out_path, "wb") as handle:
     if (!(row instanceof HTMLTableRowElement)) {
       cell.classList.remove("mdtp-cell-editing");
       cell.textContent = sourceValue;
-      new import_obsidian.Notice("\u5F53\u524D\u8868\u683C\u884C\u6682\u65F6\u65E0\u6CD5\u8FDB\u5165\u7F16\u8F91");
+      new Notice("当前表格行暂时无法进入编辑");
       return;
     }
     const originalRowHeight = row.style.height;
@@ -6383,7 +7936,8 @@ with open(out_path, "wb") as handle:
     this.hideTableSidebarPopover();
     this.hideImageToolbar();
     this.hideImageManipulator();
-    const editorState = {
+
+    const editorState: InlineEditorState = {
       tableEl,
       file,
       tableId,
@@ -6401,20 +7955,22 @@ with open(out_path, "wb") as handle:
       originalCellHeight,
       originalCellMinHeight,
       layoutFrame: null,
-      closing: false
+      closing: false,
     };
     this.activeEditor = editorState;
+
     let pointerInsideEditor = false;
-    const markPointerInsideEditor = (event) => {
+    const markPointerInsideEditor = (event: Event) => {
       event.stopPropagation();
       pointerInsideEditor = true;
       window.setTimeout(() => {
         pointerInsideEditor = false;
       }, 160);
     };
-    const stop = (event) => {
+    const stop = (event: Event) => {
       event.stopPropagation();
     };
+
     wrapper.addEventListener("pointerdown", markPointerInsideEditor);
     wrapper.addEventListener("dblclick", stop);
     wrapper.addEventListener("contextmenu", stop);
@@ -6444,13 +8000,17 @@ with open(out_path, "wb") as handle:
       window.setTimeout(() => {
         if (this.activeEditor !== editorState || editorState.closing) return;
         const activeElement = document.activeElement;
-        if (pointerInsideEditor || activeElement instanceof Node && wrapper.contains(activeElement)) {
+        if (
+          pointerInsideEditor ||
+          (activeElement instanceof Node && wrapper.contains(activeElement))
+        ) {
           textarea.focus();
           return;
         }
         void this.closeActiveEditor("commit");
       }, 0);
     });
+
     this.renderInlineEditorImages(editorState);
     this.syncInlineEditorLayout(editorState);
     textarea.focus();
@@ -6459,13 +8019,20 @@ with open(out_path, "wb") as handle:
     textarea.scrollTop = 0;
     updateLayout();
   }
-  getInlineEditorTextValue(sourceValue) {
+
+  private getInlineEditorTextValue(sourceValue: string) {
     return this.stripImageMarkup(sourceValue).replace(/\n{3,}/g, "\n\n");
   }
-  extractInlineEditorTextContent(value) {
-    return this.normalizeClipboardCellForPlainText(value).replace(/!\[\[[^[\]]+?\]\]/g, "").replace(/!\[[^\]]*\]\([^)]+\)/g, "").replace(/\n{3,}/g, "\n\n").trim();
+
+  private extractInlineEditorTextContent(value: string) {
+    return this.normalizeClipboardCellForPlainText(value)
+      .replace(/!\[\[[^[\]]+?\]\]/g, "")
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
-  getPreferredInlineEditorCursorPosition(value) {
+
+  private getPreferredInlineEditorCursorPosition(value: string) {
     const normalized = this.normalizeClipboardCellForPlainText(value);
     const lines = normalized.split("\n");
     let offset = 0;
@@ -6479,7 +8046,8 @@ with open(out_path, "wb") as handle:
     }
     return normalized.length;
   }
-  async closeActiveEditor(mode) {
+
+  private async closeActiveEditor(mode: "commit" | "cancel") {
     const editor = this.activeEditor;
     if (!editor || editor.closing) return;
     editor.closing = true;
@@ -6488,6 +8056,7 @@ with open(out_path, "wb") as handle:
       editor.layoutFrame = null;
     }
     this.activeEditor = null;
+
     const nextValue = this.composeInlineEditorSourceValue(editor, editor.textarea.value);
     const displayValue = mode === "cancel" ? editor.initialValue : nextValue;
     editor.wrapper.remove();
@@ -6498,6 +8067,7 @@ with open(out_path, "wb") as handle:
     editor.row.style.height = editor.originalRowHeight;
     editor.row.style.minHeight = editor.originalRowMinHeight;
     this.queueRefreshBurst();
+
     if (mode === "commit" && nextValue !== editor.initialValue) {
       const didUpdate = await this.updateCellSourceValue(
         editor.file,
@@ -6508,36 +8078,46 @@ with open(out_path, "wb") as handle:
       );
       if (!didUpdate) {
         this.restoreInlineEditorCellDisplay(editor, editor.initialValue);
-        new import_obsidian.Notice("\u5355\u5143\u683C\u5185\u5BB9\u5199\u56DE\u5931\u8D25\uFF0C\u5DF2\u4FDD\u7559\u539F\u8868\u683C\u5185\u5BB9");
+        new Notice("单元格内容写回失败，已保留原表格内容");
       }
     }
   }
-  composeInlineEditorSourceValue(editor, textValue) {
+
+  private composeInlineEditorSourceValue(editor: InlineEditorState, textValue: string) {
     const typedImageMarkups = this.extractImageMarkupFragments(textValue);
-    const imageMarkups = [...editor.imageMarkups, ...typedImageMarkups].map((markup) => markup.trim()).filter(Boolean);
+    const imageMarkups = [...editor.imageMarkups, ...typedImageMarkups]
+      .map((markup) => markup.trim())
+      .filter(Boolean);
     if (imageMarkups.length === 0) return textValue;
+
     const textPart = this.stripImageMarkup(textValue);
-    const parts = [];
+    const parts: string[] = [];
     if (textPart) {
       parts.push(textPart);
     }
     parts.push(...imageMarkups);
     return parts.join("\n\n");
   }
-  restoreInlineEditorCellDisplay(editor, value) {
+
+  private restoreInlineEditorCellDisplay(editor: InlineEditorState, value: string) {
     if (this.containsImageMarkup(value)) {
       this.renderCellImageMarkup(editor.cell, editor.file, value);
-      const width = editor.tableId ? this.dataStore.tables[editor.tableId]?.layout.cellImageWidths[this.getCellKey(editor.coord)] : void 0;
+      const width = editor.tableId ? this.dataStore.tables[editor.tableId]?.layout.cellImageWidths[this.getCellKey(editor.coord)] : undefined;
       this.applyImagePresentationToCell(editor.cell, width);
       return;
     }
+
     editor.cell.replaceChildren();
     this.appendRenderedCellText(editor.cell, value);
   }
-  syncInlineEditorLayout(editor) {
+
+  private syncInlineEditorLayout(editor: InlineEditorState) {
     if (editor.closing) return;
     editor.textarea.style.height = "auto";
-    const computedStyle = typeof window !== "undefined" && typeof window.getComputedStyle === "function" ? window.getComputedStyle(editor.textarea) : null;
+    const computedStyle =
+      typeof window !== "undefined" && typeof window.getComputedStyle === "function"
+        ? window.getComputedStyle(editor.textarea)
+        : null;
     const lineHeight = Number.parseFloat(computedStyle?.lineHeight || "") || 20;
     const paddingTop = Number.parseFloat(computedStyle?.paddingTop || "") || 0;
     const paddingBottom = Number.parseFloat(computedStyle?.paddingBottom || "") || 0;
@@ -6551,7 +8131,10 @@ with open(out_path, "wb") as handle:
     if (editor.textarea.style.minHeight !== textHeightPx) {
       editor.textarea.style.minHeight = textHeightPx;
     }
-    const imageHeight = editor.imageContainer?.classList?.contains("is-visible") ? Math.ceil(editor.imageContainer.scrollHeight || 0) : 0;
+
+    const imageHeight = editor.imageContainer?.classList?.contains("is-visible")
+      ? Math.ceil(editor.imageContainer.scrollHeight || 0)
+      : 0;
     const gapHeight = imageHeight > 0 ? 4 : 0;
     const wrapperHeight = Math.ceil(Math.max(editor.wrapper.scrollHeight || 0, textHeight + imageHeight + gapHeight, textHeight));
     const wrapperHeightPx = `${wrapperHeight}px`;
@@ -6571,7 +8154,8 @@ with open(out_path, "wb") as handle:
       editor.row.style.minHeight = wrapperHeightPx;
     }
   }
-  queueInlineEditorLayout(editor) {
+
+  private queueInlineEditorLayout(editor: InlineEditorState) {
     if (editor.closing) return;
     if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
       this.syncInlineEditorLayout(editor);
@@ -6583,46 +8167,74 @@ with open(out_path, "wb") as handle:
       this.syncInlineEditorLayout(editor);
     });
   }
-  async readCellSourceValue(file, tableId, parsedTable, coord) {
-    const sourceTable = tableId ? this.parseMarkdownTables(await this.app.vault.cachedRead(file)).find((table) => table.tableId === tableId) ?? null : parsedTable;
+
+  private async readCellSourceValue(
+    file: TFile,
+    tableId: string | null,
+    parsedTable: ParsedTableBlock | null,
+    coord: CellCoord
+  ) {
+    const sourceTable = tableId
+      ? this.parseMarkdownTables(await this.app.vault.cachedRead(file)).find((table) => table.tableId === tableId) ?? null
+      : parsedTable;
     if (!sourceTable) return null;
     const rawTable = this.parseRawTable(sourceTable.raw);
     if (!rawTable) return null;
+
     const value = this.getCellValue(rawTable, coord);
     if (value === null) return null;
     return value.replace(/<br\s*\/?>/gi, "\n");
   }
-  async updateCellSourceValue(file, tableId, parsedTable, coord, nextValue) {
+
+  private async updateCellSourceValue(
+    file: TFile,
+    tableId: string | null,
+    parsedTable: ParsedTableBlock | null,
+    coord: CellCoord,
+    nextValue: string
+  ) {
     const normalizedValue = this.normalizeEditedCellValue(nextValue);
     if (tableId) {
       return this.mutateTableSource(
         file,
         tableId,
         "before-cell-edit",
-        "\u7F16\u8F91\u5355\u5143\u683C",
+        "编辑单元格",
         (rawTable) => this.setCellValue(rawTable, coord, normalizedValue)
       );
     }
-    return this.mutateParsedTableSource(
-      file,
-      parsedTable,
-      "before-untracked-cell-edit",
-      (rawTable) => this.setCellValue(rawTable, coord, normalizedValue)
+
+    return this.mutateParsedTableSource(file, parsedTable, "before-untracked-cell-edit", (rawTable) =>
+      this.setCellValue(rawTable, coord, normalizedValue)
     );
   }
-  async mutateParsedTableSource(file, parsedTable, snapshotReason, mutator) {
+
+  private async mutateParsedTableSource(
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    snapshotReason: string,
+    mutator: (rawTable: ParsedRawTable) => boolean
+  ) {
     if (!parsedTable) return false;
+
     const content = await this.app.vault.cachedRead(file);
     const currentTables = this.parseMarkdownTables(content);
-    const targetTable = currentTables.find(
-      (table) => table.startLine === parsedTable.startLine && table.endLine === parsedTable.endLine && table.raw === parsedTable.raw
-    ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
+    const targetTable =
+      currentTables.find(
+        (table) =>
+          table.startLine === parsedTable.startLine &&
+          table.endLine === parsedTable.endLine &&
+          table.raw === parsedTable.raw
+      ) ?? currentTables.find((table) => table.startLine === parsedTable.startLine);
     if (!targetTable) return false;
+
     const rawTable = this.parseRawTable(targetTable.raw);
     if (!rawTable) return false;
     const didMutate = mutator(rawTable);
     if (!didMutate) return false;
+
     await this.createSnapshot(file, snapshotReason, []);
+
     const lines = content.split(/\r?\n/);
     const originalEndsWithNewline = /\r?\n$/.test(content);
     const updatedTableLines = this.buildRawTable(rawTable);
@@ -6632,12 +8244,13 @@ with open(out_path, "wb") as handle:
     this.queueRefreshBurst();
     return true;
   }
-  async insertRows(file, tableId, startRow, count) {
+
+  private async insertRows(file: TFile, tableId: string, startRow: number, count: number) {
     return this.mutateTableSource(
       file,
       tableId,
       "before-row-insert",
-      count > 1 ? "\u63D2\u5165\u591A\u884C" : "\u63D2\u5165\u884C",
+      count > 1 ? "插入多行" : "插入行",
       (rawTable, layout) => {
         const bodyIndex = Math.max(0, startRow - 1);
         for (let index = 0; index < count; index += 1) {
@@ -6648,12 +8261,13 @@ with open(out_path, "wb") as handle:
       }
     );
   }
-  async deleteRows(file, tableId, startRow, count) {
+
+  private async deleteRows(file: TFile, tableId: string, startRow: number, count: number) {
     return this.mutateTableSource(
       file,
       tableId,
       "before-row-delete",
-      count > 1 ? "\u5220\u9664\u591A\u884C" : "\u5220\u9664\u884C",
+      count > 1 ? "删除多行" : "删除行",
       (rawTable, layout) => {
         const bodyStart = Math.max(0, startRow - 1);
         if (bodyStart >= rawTable.body.length) return false;
@@ -6665,12 +8279,13 @@ with open(out_path, "wb") as handle:
       }
     );
   }
-  async insertColumns(file, tableId, startCol, count) {
+
+  private async insertColumns(file: TFile, tableId: string, startCol: number, count: number) {
     return this.mutateTableSource(
       file,
       tableId,
       "before-column-insert",
-      count > 1 ? "\u63D2\u5165\u591A\u5217" : "\u63D2\u5165\u5217",
+      count > 1 ? "插入多列" : "插入列",
       (rawTable, layout) => {
         const insertAt = Math.max(0, Math.min(startCol, rawTable.header.length));
         for (let index = 0; index < count; index += 1) {
@@ -6685,12 +8300,13 @@ with open(out_path, "wb") as handle:
       }
     );
   }
-  async deleteColumns(file, tableId, startCol, count) {
+
+  private async deleteColumns(file: TFile, tableId: string, startCol: number, count: number) {
     return this.mutateTableSource(
       file,
       tableId,
       "before-column-delete",
-      count > 1 ? "\u5220\u9664\u591A\u5217" : "\u5220\u9664\u5217",
+      count > 1 ? "删除多列" : "删除列",
       (rawTable, layout) => {
         if (rawTable.header.length <= count) return false;
         const deleteAt = Math.max(0, Math.min(startCol, rawTable.header.length - 1));
@@ -6706,43 +8322,50 @@ with open(out_path, "wb") as handle:
       }
     );
   }
-  async appendImageToCell(file, tableId, coord, imageMarkup) {
+
+  private async appendImageToCell(file: TFile, tableId: string, coord: CellCoord, imageMarkup: string) {
     const currentValue = await this.readCellSourceValue(file, tableId, null, coord);
     const nextValue = this.composeNextCellValueWithImage(currentValue, imageMarkup);
     return this.updateCellSourceValue(file, tableId, null, coord, nextValue);
   }
-  async appendImageToUninitializedCell(file, parsedTable, coord, imageMarkup) {
+
+  private async appendImageToUninitializedCell(
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    coord: CellCoord,
+    imageMarkup: string
+  ) {
     const currentValue = await this.readCellSourceValue(file, null, parsedTable, coord);
     const nextValue = this.composeNextCellValueWithImage(currentValue, imageMarkup);
     return this.updateCellSourceValue(file, null, parsedTable, coord, nextValue);
   }
-  composeNextCellValueWithImage(currentValue, imageMarkup) {
+
+  private composeNextCellValueWithImage(currentValue: string | null, imageMarkup: string) {
     const normalizedImage = imageMarkup.trim();
     const current = (currentValue ?? "").trim();
     if (!current) return normalizedImage;
     if (!this.isExperimentalFeatureEnabled()) {
-      return `${current}
-${normalizedImage}`;
+      return `${current}\n${normalizedImage}`;
     }
     if (this.containsImageMarkup(current)) {
-      return `${current}
-${normalizedImage}`;
+      return `${current}\n${normalizedImage}`;
     }
-    return `${current}
-
-${normalizedImage}`;
+    return `${current}\n\n${normalizedImage}`;
   }
-  getTextFromClipboardEvent(event) {
+
+  private getTextFromClipboardEvent(event: ClipboardEvent) {
     const plainText = event.clipboardData?.getData("text/plain") ?? "";
     if (plainText) return plainText;
     return "";
   }
-  getHtmlFromClipboardEvent(event) {
+
+  private getHtmlFromClipboardEvent(event: ClipboardEvent) {
     return event.clipboardData?.getData("text/html") ?? "";
   }
-  async readHtmlFromAvailableClipboard() {
+
+  private async readHtmlFromAvailableClipboard() {
     try {
-      const electron = window.require?.("electron");
+      const electron = (window as any).require?.("electron");
       if (typeof electron?.clipboard?.readHTML === "function") {
         const html = electron.clipboard.readHTML();
         if (html) return html;
@@ -6750,8 +8373,9 @@ ${normalizedImage}`;
     } catch (error) {
       console.error("[mdtp] electron clipboard readHTML failed", error);
     }
+
     try {
-      const clipboardAny = navigator.clipboard;
+      const clipboardAny = navigator.clipboard as any;
       if (typeof clipboardAny?.read === "function") {
         const items = await clipboardAny.read();
         for (const item of items) {
@@ -6764,9 +8388,11 @@ ${normalizedImage}`;
     } catch (error) {
       console.error("[mdtp] navigator clipboard readHTML failed", error);
     }
+
     return "";
   }
-  async readTextFromAvailableClipboard() {
+
+  private async readTextFromAvailableClipboard() {
     try {
       if (typeof navigator.clipboard?.readText === "function") {
         const text = await navigator.clipboard.readText();
@@ -6775,8 +8401,9 @@ ${normalizedImage}`;
     } catch (error) {
       console.error("[mdtp] navigator clipboard readText failed", error);
     }
+
     try {
-      const electron = window.require?.("electron");
+      const electron = (window as any).require?.("electron");
       if (typeof electron?.clipboard?.readText === "function") {
         const text = electron.clipboard.readText();
         if (text) return text;
@@ -6784,45 +8411,59 @@ ${normalizedImage}`;
     } catch (error) {
       console.error("[mdtp] electron clipboard readText failed", error);
     }
+
     return "";
   }
-  parseClipboardMatrix(text) {
-    const normalized = text.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").replace(/^\n+/, "").replace(/\n+$/, "");
+
+  private parseClipboardMatrix(text: string) {
+    const normalized = text
+      .replace(/\r\n?/g, "\n")
+      .replace(/\u00a0/g, " ")
+      .replace(/^\n+/, "")
+      .replace(/\n+$/, "");
     if (!normalized.trim()) return null;
+
     const lines = normalized.split("\n");
     if (lines.length >= 2 && this.isLikelyTableHeader(lines[0] ?? "", lines[1] ?? "")) {
       const rawTable = this.parseRawTable(normalized);
       if (rawTable) {
-        return [rawTable.header, ...rawTable.body].map(
-          (row) => row.map((value) => value.replace(/<br\s*\/?>/gi, "\n"))
+        return [rawTable.header, ...rawTable.body].map((row) =>
+          row.map((value) => value.replace(/<br\s*\/?>/gi, "\n"))
         );
       }
     }
-    return lines.map((line) => line.split("	"));
+
+    return lines.map((line) => line.split("\t"));
   }
-  parseClipboardHtmlMatrix(html) {
+
+  private parseClipboardHtmlMatrix(html: string) {
     if (!html || !/<table[\s>]/i.test(html)) return null;
+
     if (typeof DOMParser !== "undefined") {
       const doc = new DOMParser().parseFromString(html, "text/html");
       const table = doc.querySelector("table");
       if (table) {
         const rows = Array.from(table.querySelectorAll("tr"));
-        const matrix = rows.map(
-          (row) => Array.from(row.querySelectorAll("th, td")).map((cell) => this.extractHtmlCellText(cell))
-        ).filter((row) => row.length > 0);
+        const matrix = rows
+          .map((row) =>
+            Array.from(row.querySelectorAll("th, td")).map((cell) => this.extractHtmlCellText(cell as HTMLElement))
+          )
+          .filter((row) => row.length > 0);
         if (matrix.length > 0) return matrix;
       }
     }
+
     return this.parseClipboardHtmlTableWithRegex(html);
   }
-  parseClipboardHtmlTableWithRegex(html) {
+
+  private parseClipboardHtmlTableWithRegex(html: string) {
     const tableMatch = html.match(/<table[\s\S]*?<\/table>/i);
     if (!tableMatch) return null;
-    const rows = [];
+    const rows: string[][] = [];
     const rowPattern = /<tr[\s\S]*?<\/tr>/gi;
     for (const rowMatch of tableMatch[0].matchAll(rowPattern)) {
       const rowHtml = rowMatch[0] ?? "";
-      const cells = [];
+      const cells: string[] = [];
       const cellPattern = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi;
       for (const cellMatch of rowHtml.matchAll(cellPattern)) {
         cells.push(this.normalizeHtmlCellText(cellMatch[1] ?? ""));
@@ -6831,8 +8472,9 @@ ${normalizedImage}`;
     }
     return rows.length > 0 ? rows : null;
   }
-  extractHtmlCellText(cell) {
-    const clone = cell.cloneNode(true);
+
+  private extractHtmlCellText(cell: HTMLElement) {
+    const clone = cell.cloneNode(true) as HTMLElement;
     for (const br of Array.from(clone.querySelectorAll("br"))) {
       br.replaceWith("\n");
     }
@@ -6841,20 +8483,35 @@ ${normalizedImage}`;
     }
     for (const image of Array.from(clone.querySelectorAll("img"))) {
       const alt = image.getAttribute("alt")?.trim();
-      image.replaceWith(alt ? `[\u56FE\u7247:${alt}]` : "[\u56FE\u7247]");
+      image.replaceWith(alt ? `[图片:${alt}]` : "[图片]");
     }
     return this.normalizeHtmlCellText(clone.textContent ?? "");
   }
-  normalizeHtmlCellText(value) {
-    return value.replace(/<br\s*\/?>/gi, "\n").replace(/<\/(p|div|li|tr)>/gi, "\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'").replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  private normalizeHtmlCellText(value: string) {
+    return value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr)>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\r\n?/g, "\n")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
-  async pasteMatrixIntoTable(file, tableId, anchor, matrix) {
+
+  private async pasteMatrixIntoTable(file: TFile, tableId: string, anchor: CellCoord, matrix: string[][]) {
     if (matrix.length === 0) return false;
     return this.mutateTableSource(
       file,
       tableId,
       "before-table-paste",
-      "\u7C98\u8D34\u8868\u683C\u5185\u5BB9",
+      "粘贴表格内容",
       (rawTable) => {
         const nextColCount = Math.max(
           rawTable.header.length,
@@ -6864,6 +8521,7 @@ ${normalizedImage}`;
             return startCol + row.length;
           })
         );
+
         while (rawTable.header.length < nextColCount) {
           rawTable.header.push("");
           rawTable.divider.push("---");
@@ -6871,10 +8529,12 @@ ${normalizedImage}`;
             row.push("");
           }
         }
+
         const requiredBodyRows = Math.max(0, anchor.row + matrix.length - 1);
         while (rawTable.body.length < requiredBodyRows) {
           rawTable.body.push(Array(rawTable.header.length).fill(""));
         }
+
         for (let matrixRowIndex = 0; matrixRowIndex < matrix.length; matrixRowIndex += 1) {
           const values = matrix[matrixRowIndex] ?? [];
           const targetRow = anchor.row + matrixRowIndex;
@@ -6888,10 +8548,17 @@ ${normalizedImage}`;
       }
     );
   }
-  async pasteMatrixIntoUninitializedTable(file, parsedTable, anchor, matrix) {
+
+  private async pasteMatrixIntoUninitializedTable(
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    anchor: CellCoord,
+    matrix: string[][]
+  ) {
     if (matrix.length === 0) return false;
     return this.mutateParsedTableSource(file, parsedTable, "before-untracked-table-paste", (rawTable) => {
       const nextColCount = Math.max(rawTable.header.length, ...matrix.map((row) => anchor.col + row.length));
+
       while (rawTable.header.length < nextColCount) {
         rawTable.header.push("");
         rawTable.divider.push("---");
@@ -6899,10 +8566,12 @@ ${normalizedImage}`;
           row.push("");
         }
       }
+
       const requiredBodyRows = Math.max(0, anchor.row + matrix.length - 1);
       while (rawTable.body.length < requiredBodyRows) {
         rawTable.body.push(Array(rawTable.header.length).fill(""));
       }
+
       for (let matrixRowIndex = 0; matrixRowIndex < matrix.length; matrixRowIndex += 1) {
         const values = matrix[matrixRowIndex] ?? [];
         const targetRow = anchor.row + matrixRowIndex;
@@ -6915,24 +8584,27 @@ ${normalizedImage}`;
       return true;
     });
   }
-  async copySelectionToClipboard(file, tableId, selection) {
+
+  private async copySelectionToClipboard(file: TFile, tableId: string, selection: SelectionRect) {
     const matrix = await this.readSelectionSourceMatrix(file, tableId, selection, { preserveRaw: true });
     if (!matrix) return false;
     const text = this.buildClipboardTextFromMatrix(matrix);
     return this.writeTextToClipboard(text);
   }
-  async copySelectionToClipboardHighFidelity(file, tableId, selection) {
+
+  private async copySelectionToClipboardHighFidelity(file: TFile, tableId: string, selection: SelectionRect) {
     const matrix = await this.readSelectionSourceMatrix(file, tableId, selection, { preserveRaw: true });
     if (!matrix) return false;
     const text = this.buildHighFidelityClipboardTextFromMatrix(matrix);
     return this.writeTextToClipboard(text);
   }
-  async clearSelectionContents(file, tableId, selection) {
+
+  private async clearSelectionContents(file: TFile, tableId: string, selection: SelectionRect) {
     return this.mutateTableSource(
       file,
       tableId,
       "before-clear-selection",
-      "\u6E05\u7A7A\u5355\u5143\u683C\u5185\u5BB9",
+      "清空单元格内容",
       (rawTable) => {
         let didMutate = false;
         for (let row = selection.startRow; row <= selection.endRow; row += 1) {
@@ -6948,39 +8620,48 @@ ${normalizedImage}`;
       }
     );
   }
-  async copyWholeTableToClipboard(file, tableId) {
+
+  private async copyWholeTableToClipboard(file: TFile, tableId: string) {
     if (!tableId) return false;
     const content = await this.app.vault.cachedRead(file);
     const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId);
     if (!parsedTable) return false;
-    return this.writeTextToClipboard(`
-${parsedTable.raw}
-`);
+    return this.writeTextToClipboard(`\n${parsedTable.raw}\n`);
   }
-  async copySelectionToClipboardFromParsedTable(parsedTable, selection) {
+
+  private async copySelectionToClipboardFromParsedTable(parsedTable: ParsedTableBlock | null, selection: SelectionRect) {
     if (!parsedTable) return false;
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) return false;
-    const matrix = [];
+
+    const matrix: string[][] = [];
     for (let row = selection.startRow; row <= selection.endRow; row += 1) {
-      const values = [];
+      const values: string[] = [];
       for (let col = selection.startCol; col <= selection.endCol; col += 1) {
         const value = this.getCellValue(rawTable, { row, col }) ?? "";
         values.push(value);
       }
       matrix.push(values);
     }
+
     return this.writeTextToClipboard(this.buildClipboardTextFromMatrix(matrix));
   }
-  async readSelectionSourceMatrix(file, tableId, selection, options) {
+
+  private async readSelectionSourceMatrix(
+    file: TFile,
+    tableId: string,
+    selection: SelectionRect,
+    options?: { preserveRaw?: boolean }
+  ) {
     const content = await this.app.vault.cachedRead(file);
     const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId);
     if (!parsedTable) return null;
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) return null;
-    const matrix = [];
+
+    const matrix: string[][] = [];
     for (let row = selection.startRow; row <= selection.endRow; row += 1) {
-      const values = [];
+      const values: string[] = [];
       for (let col = selection.startCol; col <= selection.endCol; col += 1) {
         const value = this.getCellValue(rawTable, { row, col }) ?? "";
         values.push(options?.preserveRaw ? value : value.replace(/<br\s*\/?>/gi, "\n"));
@@ -6989,28 +8670,32 @@ ${parsedTable.raw}
     }
     return matrix;
   }
-  buildClipboardTextFromMatrix(matrix) {
+
+  private buildClipboardTextFromMatrix(matrix: string[][]) {
     if (matrix.length === 0) return "";
     const normalized = matrix.map((row) => row.map((value) => value ?? ""));
     const rowCount = normalized.length;
     const colCount = Math.max(...normalized.map((row) => row.length), 0);
+
     if (rowCount <= 1 && colCount <= 1) {
       return this.normalizeClipboardCellForPlainText(normalized[0]?.[0] ?? "");
     }
-    const rawTable = {
+
+    const rawTable: ParsedRawTable = {
       header: this.normalizeRowCells(normalized[0] ?? [], colCount),
       divider: Array(colCount).fill("---"),
-      body: normalized.slice(1).map((row) => this.normalizeRowCells(row, colCount))
+      body: normalized.slice(1).map((row) => this.normalizeRowCells(row, colCount)),
     };
-    return `
-${this.buildRawTable(rawTable).join("\n")}
-`;
+
+    return `\n${this.buildRawTable(rawTable).join("\n")}\n`;
   }
-  buildHighFidelityClipboardTextFromMatrix(matrix) {
+
+  private buildHighFidelityClipboardTextFromMatrix(matrix: string[][]) {
     if (matrix.length === 0) return "";
     const normalized = matrix.map((row) => row.map((value) => value ?? ""));
     const rowCount = normalized.length;
     const colCount = Math.max(...normalized.map((row) => row.length), 0);
+
     if (rowCount <= 1 && colCount <= 1) {
       const value = normalized[0]?.[0] ?? "";
       if (this.isHighFidelityBodyCandidate(value)) {
@@ -7018,38 +8703,51 @@ ${this.buildRawTable(rawTable).join("\n")}
       }
       return this.normalizeClipboardCellForPlainText(value);
     }
+
     return this.buildClipboardTextFromMatrix(matrix);
   }
-  normalizeClipboardCellForPlainText(value) {
+
+  private normalizeClipboardCellForPlainText(value: string) {
     return value.replace(/<br\s*\/?>/gi, "\n");
   }
-  isMeaningfullyEmptyCellValue(value) {
+
+  private isMeaningfullyEmptyCellValue(value: string | null | undefined) {
     if (value == null) return true;
-    const normalized = this.normalizeClipboardCellForPlainText(value).replace(/!\[\[[^[\]]+?\]\]/g, "__image__").replace(/!\[[^\]]*\]\([^)]+\)/g, "__image__").replace(/&nbsp;/gi, " ").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+    const normalized = this.normalizeClipboardCellForPlainText(value)
+      .replace(/!\[\[[^[\]]+?\]\]/g, "__image__")
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, "__image__")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/[\u200B-\u200D\uFEFF]/g, "")
+      .trim();
     return normalized.length === 0;
   }
-  isHighFidelityBodyCandidate(value) {
+
+  private isHighFidelityBodyCandidate(value: string) {
     const normalized = this.normalizeClipboardCellForPlainText(value).trim();
     if (!normalized) return false;
     if (/!\[\[[^\]]+\]\]/.test(normalized)) return true;
     return /!\[[^\]]*\]\([^)]+\)/.test(normalized);
   }
-  isStandaloneImageLine(value) {
+
+  private isStandaloneImageLine(value: string) {
     if (!value) return false;
     return /^!\[\[[^[\]]+?\]\]$/.test(value) || /^!\[[^\]]*\]\([^)]+\)$/.test(value);
   }
-  buildRichClipboardMarkdownBody(value) {
+
+  private buildRichClipboardMarkdownBody(value: string) {
     const normalized = this.normalizeClipboardCellForPlainText(value).trim();
     if (!normalized) return "";
+
     const lines = normalized.split("\n");
-    const blocks = [];
-    let paragraph = [];
+    const blocks: string[] = [];
+    let paragraph: string[] = [];
     const flushParagraph = () => {
       if (paragraph.length === 0) return;
       const content = paragraph.join("\n").trim();
       if (content) blocks.push(content);
       paragraph = [];
     };
+
     for (const rawLine of lines) {
       const line = rawLine.trimEnd();
       const trimmed = line.trim();
@@ -7057,12 +8755,14 @@ ${this.buildRawTable(rawTable).join("\n")}
         flushParagraph();
         continue;
       }
+
       const segments = this.splitHighFidelityLineSegments(line);
       let lineHadImage = false;
       if (segments.length === 0) {
         flushParagraph();
         continue;
       }
+
       for (const segment of segments) {
         if (segment.kind === "image") {
           lineHadImage = true;
@@ -7072,20 +8772,22 @@ ${this.buildRawTable(rawTable).join("\n")}
         }
         paragraph.push(segment.value.replace(/\s{2,}/g, " ").trim());
       }
+
       if (lineHadImage) {
         flushParagraph();
       }
     }
+
     flushParagraph();
     if (blocks.length === 0) return "";
-    return `
-${blocks.join("\n\n")}
-`;
+    return `\n${blocks.join("\n\n")}\n`;
   }
-  splitHighFidelityLineSegments(line) {
-    const segments = [];
+
+  private splitHighFidelityLineSegments(line: string) {
+    const segments: Array<{ kind: "text" | "image"; value: string }> = [];
     const pattern = /!\[\[[^[\]]+?\]\]|!\[[^\]]*\]\([^)]+\)/g;
     let lastIndex = 0;
+
     for (const match of line.matchAll(pattern)) {
       const matchedText = match[0] ?? "";
       const matchIndex = match.index ?? 0;
@@ -7100,21 +8802,25 @@ ${blocks.join("\n\n")}
       }
       lastIndex = matchIndex + matchedText.length;
     }
+
     if (lastIndex < line.length) {
       const tail = line.slice(lastIndex).trim();
       if (tail) {
         segments.push({ kind: "text", value: tail });
       }
     }
+
     if (segments.length === 0) {
       const trimmed = line.trim();
       if (trimmed) {
         segments.push({ kind: "text", value: trimmed });
       }
     }
+
     return segments;
   }
-  async writeTextToClipboard(text) {
+
+  private async writeTextToClipboard(text: string) {
     try {
       if (typeof navigator.clipboard?.writeText === "function") {
         await navigator.clipboard.writeText(text);
@@ -7123,8 +8829,9 @@ ${blocks.join("\n\n")}
     } catch (error) {
       console.error("[mdtp] navigator clipboard write failed", error);
     }
+
     try {
-      const electron = window.require?.("electron");
+      const electron = (window as any).require?.("electron");
       if (typeof electron?.clipboard?.writeText === "function") {
         electron.clipboard.writeText(text);
         return true;
@@ -7132,12 +8839,13 @@ ${blocks.join("\n\n")}
     } catch (error) {
       console.error("[mdtp] electron clipboard write failed", error);
     }
+
     try {
       if (navigator.userAgent.toLowerCase().includes("mac")) {
-        const execFile = window?.require?.("child_process")?.execFile;
+        const execFile = (window as any)?.require?.("child_process")?.execFile;
         if (typeof execFile === "function") {
-          await new Promise((resolve, reject) => {
-            const child = execFile("/usr/bin/pbcopy", (error) => {
+          await new Promise<void>((resolve, reject) => {
+            const child = execFile("/usr/bin/pbcopy", (error: Error | null) => {
               if (error) {
                 reject(error);
                 return;
@@ -7153,6 +8861,7 @@ ${blocks.join("\n\n")}
     } catch (error) {
       console.error("[mdtp] pbcopy write failed", error);
     }
+
     try {
       const textarea = document.createElement("textarea");
       textarea.value = text;
@@ -7170,12 +8879,15 @@ ${blocks.join("\n\n")}
     } catch (error) {
       console.error("[mdtp] execCommand copy failed", error);
     }
+
     return false;
   }
-  async copyTableAsImage(tableEl) {
-    const execFile = window?.require?.("child_process")?.execFile;
+
+  private async copyTableAsImage(tableEl: HTMLTableElement) {
+    const execFile = (window as any)?.require?.("child_process")?.execFile;
     if (typeof execFile !== "function") return false;
     if (!navigator.userAgent.toLowerCase().includes("mac")) return false;
+
     const hiddenElements = this.hideExportOnlyChrome();
     const rect = tableEl.getBoundingClientRect();
     const captureLeft = Math.max(0, rect.left);
@@ -7184,16 +8896,19 @@ ${blocks.join("\n\n")}
     const captureBottom = Math.min(window.innerHeight, rect.bottom);
     const width = Math.max(1, Math.ceil(captureRight - captureLeft));
     const height = Math.max(1, Math.ceil(captureBottom - captureTop));
+
     const outerDeltaX = Math.max(0, window.outerWidth - window.innerWidth);
     const outerDeltaY = Math.max(0, window.outerHeight - window.innerHeight);
     const borderX = Math.round(outerDeltaX / 2);
     const titleBarY = Math.max(0, outerDeltaY - borderX);
+
     const screenX = Math.round(window.screenX + captureLeft + borderX);
     const screenY = Math.round(window.screenY + captureTop + titleBarY);
     const region = `-R${screenX},${screenY},${width},${height}`;
+
     try {
-      await new Promise((resolve, reject) => {
-        execFile("/usr/sbin/screencapture", ["-x", "-c", region], (error) => {
+      await new Promise<void>((resolve, reject) => {
+        execFile("/usr/sbin/screencapture", ["-x", "-c", region], (error: Error | null) => {
           if (error) {
             reject(error);
             return;
@@ -7211,7 +8926,8 @@ ${blocks.join("\n\n")}
       });
     }
   }
-  hideExportOnlyChrome() {
+
+  private hideExportOnlyChrome() {
     const selectors = [
       ".mdtp-sidebar-handle",
       ".mdtp-copy-image-handle",
@@ -7219,10 +8935,10 @@ ${blocks.join("\n\n")}
       ".mdtp-image-manipulator",
       ".mdtp-inline-editor",
       ".menu",
-      ".popover"
+      ".popover",
     ];
-    const elements = selectors.flatMap(
-      (selector) => Array.from(document.querySelectorAll(selector))
+    const elements = selectors.flatMap((selector) =>
+      Array.from(document.querySelectorAll<HTMLElement>(selector))
     );
     const unique = Array.from(new Set(elements));
     return unique.map((element) => {
@@ -7231,23 +8947,36 @@ ${blocks.join("\n\n")}
       return { element, visibility };
     });
   }
-  async mutateTableSource(file, tableId, snapshotReason, historyLabel, mutator) {
+
+  private async mutateTableSource(
+    file: TFile,
+    tableId: string,
+    snapshotReason: string,
+    historyLabel: string,
+    mutator: (rawTable: ParsedRawTable, layout: TableLayoutMetadata) => boolean
+  ) {
     const record = this.dataStore.tables[tableId];
     if (!record) return false;
+
     const content = await this.app.vault.cachedRead(file);
     const parsedTables = this.parseMarkdownTables(content);
     const targetTable = parsedTables.find((table) => table.tableId === tableId);
     if (!targetTable) return false;
+
     const rawTable = this.parseRawTable(targetTable.raw);
     if (!rawTable) return false;
+
     const before = this.captureHistoryStateFromContent(file.path, content, [tableId]);
     const didMutate = mutator(rawTable, record.layout);
     if (!didMutate) return false;
+
     await this.createSnapshot(file, snapshotReason, [tableId]);
+
     const lines = content.split(/\r?\n/);
     const originalEndsWithNewline = /\r?\n$/.test(content);
     const updatedTableLines = this.buildRawTable(rawTable);
     lines.splice(targetTable.startLine, targetTable.endLine - targetTable.startLine + 1, ...updatedTableLines);
+
     const updatedContent = this.joinLines(lines, originalEndsWithNewline);
     record.updatedAt = Date.now();
     await this.app.vault.modify(file, updatedContent);
@@ -7260,12 +8989,17 @@ ${blocks.join("\n\n")}
       filePath: file.path,
       tableIds: [tableId],
       before,
-      after
+      after,
     });
     this.queueRefreshBurst();
     return true;
   }
-  findFirstNonEmptyCellInSelection(table, selection, anchor) {
+
+  private findFirstNonEmptyCellInSelection(
+    table: ParsedRawTable,
+    selection: SelectionRect,
+    anchor: CellCoord
+  ) {
     for (let row = selection.startRow; row <= selection.endRow; row += 1) {
       for (let col = selection.startCol; col <= selection.endCol; col += 1) {
         if (row === anchor.row && col === anchor.col) continue;
@@ -7273,14 +9007,15 @@ ${blocks.join("\n\n")}
         if (!this.isMeaningfullyEmptyCellValue(value)) {
           return {
             coord: { row, col },
-            value
+            value,
           };
         }
       }
     }
     return null;
   }
-  parseRawTable(raw) {
+
+  private parseRawTable(raw: string): ParsedRawTable | null {
     const lines = raw.split(/\r?\n/);
     if (lines.length < 2) return null;
     const header = this.parseTableRowLine(lines[0]);
@@ -7290,20 +9025,25 @@ ${blocks.join("\n\n")}
     return {
       header: this.normalizeRowCells(header, header.length),
       divider,
-      body
+      body,
     };
   }
-  parseDividerRowLine(line, expectedLength) {
+
+  private parseDividerRowLine(line: string, expectedLength: number) {
     const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
-    const segments = trimmed.split("|").map((segment) => segment.trim()).filter((segment) => segment.length > 0);
+    const segments = trimmed
+      .split("|")
+      .map((segment) => segment.trim())
+      .filter((segment) => segment.length > 0);
     while (segments.length < expectedLength) {
       segments.push("---");
     }
     return segments.slice(0, expectedLength);
   }
-  parseTableRowLine(line) {
+
+  private parseTableRowLine(line: string) {
     const trimmed = line.trim().replace(/^\|/, "").replace(/\|$/, "");
-    const cells = [];
+    const cells: string[] = [];
     let current = "";
     let wikiLinkDepth = 0;
     for (let index = 0; index < trimmed.length; index += 1) {
@@ -7314,36 +9054,43 @@ ${blocks.join("\n\n")}
         index += 1;
         continue;
       }
+
       if (char === "[" && nextChar === "[") {
         wikiLinkDepth += 1;
         current += "[[";
         index += 1;
         continue;
       }
+
       if (char === "]" && nextChar === "]" && wikiLinkDepth > 0) {
         wikiLinkDepth -= 1;
         current += "]]";
         index += 1;
         continue;
       }
+
       if (char === "|" && wikiLinkDepth === 0) {
         cells.push(current.trim());
         current = "";
         continue;
       }
+
       current += char;
     }
+
     cells.push(current.trim());
     return cells;
   }
-  normalizeRowCells(cells, length) {
+
+  private normalizeRowCells(cells: string[], length: number) {
     const next = [...cells];
     while (next.length < length) {
       next.push("");
     }
     return next.slice(0, length);
   }
-  getCellValue(table, coord) {
+
+  private getCellValue(table: ParsedRawTable, coord: CellCoord) {
     if (coord.col < 0) return null;
     if (coord.row === 0) {
       return table.header[coord.col] ?? null;
@@ -7352,64 +9099,80 @@ ${blocks.join("\n\n")}
     if (!bodyRow) return null;
     return bodyRow[coord.col] ?? null;
   }
-  setCellValue(table, coord, value) {
+
+  private setCellValue(table: ParsedRawTable, coord: CellCoord, value: string) {
     if (coord.col < 0) return false;
     if (coord.row === 0) {
       if (coord.col >= table.header.length) return false;
       table.header[coord.col] = value;
       return true;
     }
+
     const bodyRow = table.body[coord.row - 1];
     if (!bodyRow || coord.col >= bodyRow.length) return false;
     bodyRow[coord.col] = value;
     return true;
   }
-  normalizeEditedCellValue(value) {
+
+  private normalizeEditedCellValue(value: string) {
     return value.replace(/\r\n?/g, "\n").replace(/\n/g, "<br>");
   }
-  buildRawTable(table) {
+
+  private buildRawTable(table: ParsedRawTable) {
     const columnCount = table.header.length;
     const rows = [table.header, ...table.body];
-    const widths = Array.from(
-      { length: columnCount },
-      (_, index) => Math.max(
+    const widths = Array.from({ length: columnCount }, (_, index) =>
+      Math.max(
         3,
         ...rows.map((row) => this.escapeMarkdownTableCell(row[index] ?? "").length)
       )
     );
+
     return [
       this.buildTableLine(table.header, widths),
       this.buildDividerLine(table.divider, widths),
-      ...table.body.map((row) => this.buildTableLine(row, widths))
+      ...table.body.map((row) => this.buildTableLine(row, widths)),
     ];
   }
-  buildOneNoteRawTable(table) {
+
+  private buildOneNoteRawTable(table: ParsedRawTable) {
     return [
       this.buildOneNoteTableLine(table.header),
       this.buildOneNoteDividerLine(table.header.length),
-      ...table.body.map((row) => this.buildOneNoteTableLine(this.normalizeRowCells(row, table.header.length)))
+      ...table.body.map((row) => this.buildOneNoteTableLine(this.normalizeRowCells(row, table.header.length))),
     ];
   }
-  buildOneNoteTableLine(cells) {
-    const parts = cells.map(
-      (cell) => this.escapeMarkdownTableCell(
+
+  private buildOneNoteTableLine(cells: string[]) {
+    const parts = cells.map((cell) =>
+      this.escapeMarkdownTableCell(
         this.stripImageWidthFromTableCell(this.normalizeOneNoteMarkdownTableCell(cell))
       )
     );
     return `| ${parts.join(" | ")} |`;
   }
-  buildOneNoteDividerLine(columnCount) {
+
+  private buildOneNoteDividerLine(columnCount: number) {
     return `| ${Array.from({ length: columnCount }, () => "---").join(" | ")} |`;
   }
-  normalizeOneNoteMarkdownTableCell(value) {
-    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, "<br>").replace(/(?:\s*<br>\s*)+$/gi, "").replace(/^(?:\s*<br>\s*)+/gi, "").replace(/\s+/g, " ").trim();
+
+  private normalizeOneNoteMarkdownTableCell(value: string) {
+    return value
+      .replace(/\r\n?/g, "\n")
+      .replace(/\n+/g, "<br>")
+      .replace(/(?:\s*<br>\s*)+$/gi, "")
+      .replace(/^(?:\s*<br>\s*)+/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
   }
-  buildDividerLine(segments, widths) {
+
+  private buildDividerLine(segments: string[], widths: number[]) {
     const normalized = this.normalizeRowCells(segments, widths.length);
     const parts = widths.map((width, index) => (normalized[index] ?? "---").padEnd(width, "-"));
     return `| ${parts.join(" | ")} |`;
   }
-  buildTableLine(cells, widths) {
+
+  private buildTableLine(cells: string[], widths: number[]) {
     const parts = widths.map((width, index) => {
       const value = this.escapeMarkdownTableCell(
         this.stripImageWidthFromTableCell(cells[index] ?? "")
@@ -7418,14 +9181,16 @@ ${blocks.join("\n\n")}
     });
     return `| ${parts.join(" | ")} |`;
   }
+
   /** Obsidian pipe tables cannot contain raw `|width` inside wikilinks — width lives in layout metadata. */
-  stripImageWidthFromTableCell(value) {
+  private stripImageWidthFromTableCell(value: string) {
     return value.replace(
       /!\[\[([^\]|]+?\.(?:png|jpe?g|gif|webp|avif|svg|bmp|tiff?))(?:\\\|(\d+)|\|(\d+))?\]\]/gi,
-      (_match, path) => `![[${path}]]`
+      (_match, path: string) => `![[${path}]]`
     );
   }
-  escapeMarkdownTableCell(value) {
+
+  private escapeMarkdownTableCell(value: string) {
     const wikiEmbedRe = /!\[\[[^\]]+?\]\]/g;
     let result = "";
     let lastIndex = 0;
@@ -7437,10 +9202,12 @@ ${blocks.join("\n\n")}
     }
     return result + this.escapeMarkdownTableCellPlain(value.slice(lastIndex));
   }
-  escapeMarkdownTableCellPlain(value) {
+
+  private escapeMarkdownTableCellPlain(value: string) {
     return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
   }
-  shiftLayoutForInsertedRow(layout, rowIndex) {
+
+  private shiftLayoutForInsertedRow(layout: TableLayoutMetadata, rowIndex: number) {
     layout.rowHeights = this.shiftIndexedMapForInsert(layout.rowHeights, rowIndex);
     layout.rowColors = this.shiftIndexedMapForInsert(layout.rowColors, rowIndex);
     layout.cellColors = this.shiftCellColorMapForRowInsert(layout.cellColors, rowIndex);
@@ -7448,7 +9215,8 @@ ${blocks.join("\n\n")}
     layout.cellImageWidths = this.shiftCellWidthMapForRowInsert(layout.cellImageWidths, rowIndex);
     layout.merges = this.shiftMergesForInsertedRow(layout.merges, rowIndex);
   }
-  shiftLayoutForDeletedRow(layout, rowIndex) {
+
+  private shiftLayoutForDeletedRow(layout: TableLayoutMetadata, rowIndex: number) {
     layout.rowHeights = this.shiftIndexedMapForDelete(layout.rowHeights, rowIndex);
     layout.rowColors = this.shiftIndexedMapForDelete(layout.rowColors, rowIndex);
     layout.cellColors = this.shiftCellColorMapForRowDelete(layout.cellColors, rowIndex);
@@ -7456,7 +9224,8 @@ ${blocks.join("\n\n")}
     layout.cellImageWidths = this.shiftCellWidthMapForRowDelete(layout.cellImageWidths, rowIndex);
     layout.merges = this.shiftMergesForDeletedRow(layout.merges, rowIndex);
   }
-  shiftLayoutForInsertedColumn(layout, colIndex) {
+
+  private shiftLayoutForInsertedColumn(layout: TableLayoutMetadata, colIndex: number) {
     layout.colWidths = this.shiftIndexedMapForInsert(layout.colWidths, colIndex);
     layout.colColors = this.shiftIndexedMapForInsert(layout.colColors, colIndex);
     layout.cellColors = this.shiftCellColorMapForColumnInsert(layout.cellColors, colIndex);
@@ -7464,7 +9233,8 @@ ${blocks.join("\n\n")}
     layout.cellImageWidths = this.shiftCellWidthMapForColumnInsert(layout.cellImageWidths, colIndex);
     layout.merges = this.shiftMergesForInsertedColumn(layout.merges, colIndex);
   }
-  shiftLayoutForDeletedColumn(layout, colIndex) {
+
+  private shiftLayoutForDeletedColumn(layout: TableLayoutMetadata, colIndex: number) {
     layout.colWidths = this.shiftIndexedMapForDelete(layout.colWidths, colIndex);
     layout.colColors = this.shiftIndexedMapForDelete(layout.colColors, colIndex);
     layout.cellColors = this.shiftCellColorMapForColumnDelete(layout.cellColors, colIndex);
@@ -7472,8 +9242,9 @@ ${blocks.join("\n\n")}
     layout.cellImageWidths = this.shiftCellWidthMapForColumnDelete(layout.cellImageWidths, colIndex);
     layout.merges = this.shiftMergesForDeletedColumn(layout.merges, colIndex);
   }
-  shiftIndexedMapForInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftIndexedMapForInsert<T extends string | number>(input: Record<string, T>, insertIndex: number) {
+    const next: Record<string, T> = {};
     for (const [key, value] of Object.entries(input)) {
       const index = Number.parseInt(key, 10);
       if (!Number.isFinite(index)) continue;
@@ -7481,8 +9252,9 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftIndexedMapForDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftIndexedMapForDelete<T extends string | number>(input: Record<string, T>, deleteIndex: number) {
+    const next: Record<string, T> = {};
     for (const [key, value] of Object.entries(input)) {
       const index = Number.parseInt(key, 10);
       if (!Number.isFinite(index) || index === deleteIndex) continue;
@@ -7490,56 +9262,64 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellColorMapForRowInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellColorMapForRowInsert(input: Record<string, string>, insertIndex: number) {
+    const next: Record<string, string> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
       next[this.getCellKey({
         row: coord.row >= insertIndex ? coord.row + 1 : coord.row,
-        col: coord.col
+        col: coord.col,
       })] = value;
     }
     return next;
   }
-  shiftCellColorMapForRowDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellColorMapForRowDelete(input: Record<string, string>, deleteIndex: number) {
+    const next: Record<string, string> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.row === deleteIndex) continue;
       next[this.getCellKey({
         row: coord.row > deleteIndex ? coord.row - 1 : coord.row,
-        col: coord.col
+        col: coord.col,
       })] = value;
     }
     return next;
   }
-  shiftCellColorMapForColumnInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellColorMapForColumnInsert(input: Record<string, string>, insertIndex: number) {
+    const next: Record<string, string> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
       next[this.getCellKey({
         row: coord.row,
-        col: coord.col >= insertIndex ? coord.col + 1 : coord.col
+        col: coord.col >= insertIndex ? coord.col + 1 : coord.col,
       })] = value;
     }
     return next;
   }
-  shiftCellColorMapForColumnDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellColorMapForColumnDelete(input: Record<string, string>, deleteIndex: number) {
+    const next: Record<string, string> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.col === deleteIndex) continue;
       next[this.getCellKey({
         row: coord.row,
-        col: coord.col > deleteIndex ? coord.col - 1 : coord.col
+        col: coord.col > deleteIndex ? coord.col - 1 : coord.col,
       })] = value;
     }
     return next;
   }
-  shiftCellAlignmentMapForRowInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellAlignmentMapForRowInsert(
+    input: Record<string, "left" | "center" | "right">,
+    insertIndex: number
+  ) {
+    const next: Record<string, "left" | "center" | "right"> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
@@ -7547,8 +9327,12 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellAlignmentMapForRowDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellAlignmentMapForRowDelete(
+    input: Record<string, "left" | "center" | "right">,
+    deleteIndex: number
+  ) {
+    const next: Record<string, "left" | "center" | "right"> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.row === deleteIndex) continue;
@@ -7556,8 +9340,12 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellAlignmentMapForColumnInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellAlignmentMapForColumnInsert(
+    input: Record<string, "left" | "center" | "right">,
+    insertIndex: number
+  ) {
+    const next: Record<string, "left" | "center" | "right"> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
@@ -7565,8 +9353,12 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellAlignmentMapForColumnDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellAlignmentMapForColumnDelete(
+    input: Record<string, "left" | "center" | "right">,
+    deleteIndex: number
+  ) {
+    const next: Record<string, "left" | "center" | "right"> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.col === deleteIndex) continue;
@@ -7574,8 +9366,9 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellWidthMapForRowInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellWidthMapForRowInsert(input: Record<string, number>, insertIndex: number) {
+    const next: Record<string, number> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
@@ -7583,8 +9376,9 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellWidthMapForRowDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellWidthMapForRowDelete(input: Record<string, number>, deleteIndex: number) {
+    const next: Record<string, number> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.row === deleteIndex) continue;
@@ -7592,8 +9386,9 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellWidthMapForColumnInsert(input, insertIndex) {
-    const next = {};
+
+  private shiftCellWidthMapForColumnInsert(input: Record<string, number>, insertIndex: number) {
+    const next: Record<string, number> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord) continue;
@@ -7601,8 +9396,9 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftCellWidthMapForColumnDelete(input, deleteIndex) {
-    const next = {};
+
+  private shiftCellWidthMapForColumnDelete(input: Record<string, number>, deleteIndex: number) {
+    const next: Record<string, number> = {};
     for (const [key, value] of Object.entries(input)) {
       const coord = this.parseCellKey(key);
       if (!coord || coord.col === deleteIndex) continue;
@@ -7610,7 +9406,8 @@ ${blocks.join("\n\n")}
     }
     return next;
   }
-  shiftMergesForInsertedRow(merges, insertIndex) {
+
+  private shiftMergesForInsertedRow(merges: TableMergeMetadata[], insertIndex: number) {
     return merges.map((merge) => {
       const next = { ...merge };
       if (insertIndex <= next.row) {
@@ -7621,25 +9418,29 @@ ${blocks.join("\n\n")}
       return next;
     });
   }
-  shiftMergesForDeletedRow(merges, deleteIndex) {
-    return merges.map((merge) => {
-      const next = { ...merge };
-      const endRow = next.row + next.rowspan - 1;
-      if (deleteIndex < next.row) {
-        next.row -= 1;
-        return next;
-      }
-      if (deleteIndex > endRow) {
-        return next;
-      }
-      if (next.rowspan === 1) {
-        return null;
-      }
-      next.rowspan -= 1;
-      return next.rowspan > 0 ? next : null;
-    }).filter((merge) => !!merge && (merge.rowspan > 1 || merge.colspan > 1));
+
+  private shiftMergesForDeletedRow(merges: TableMergeMetadata[], deleteIndex: number) {
+    return merges
+      .map((merge) => {
+        const next = { ...merge };
+        const endRow = next.row + next.rowspan - 1;
+        if (deleteIndex < next.row) {
+          next.row -= 1;
+          return next;
+        }
+        if (deleteIndex > endRow) {
+          return next;
+        }
+        if (next.rowspan === 1) {
+          return null;
+        }
+        next.rowspan -= 1;
+        return next.rowspan > 0 ? next : null;
+      })
+      .filter((merge): merge is TableMergeMetadata => !!merge && (merge.rowspan > 1 || merge.colspan > 1));
   }
-  shiftMergesForInsertedColumn(merges, insertIndex) {
+
+  private shiftMergesForInsertedColumn(merges: TableMergeMetadata[], insertIndex: number) {
     return merges.map((merge) => {
       const next = { ...merge };
       if (insertIndex <= next.col) {
@@ -7650,33 +9451,38 @@ ${blocks.join("\n\n")}
       return next;
     });
   }
-  shiftMergesForDeletedColumn(merges, deleteIndex) {
-    return merges.map((merge) => {
-      const next = { ...merge };
-      const endCol = next.col + next.colspan - 1;
-      if (deleteIndex < next.col) {
-        next.col -= 1;
-        return next;
-      }
-      if (deleteIndex > endCol) {
-        return next;
-      }
-      if (next.colspan === 1) {
-        return null;
-      }
-      next.colspan -= 1;
-      return next.colspan > 0 ? next : null;
-    }).filter((merge) => !!merge && (merge.rowspan > 1 || merge.colspan > 1));
+
+  private shiftMergesForDeletedColumn(merges: TableMergeMetadata[], deleteIndex: number) {
+    return merges
+      .map((merge) => {
+        const next = { ...merge };
+        const endCol = next.col + next.colspan - 1;
+        if (deleteIndex < next.col) {
+          next.col -= 1;
+          return next;
+        }
+        if (deleteIndex > endCol) {
+          return next;
+        }
+        if (next.colspan === 1) {
+          return null;
+        }
+        next.colspan -= 1;
+        return next.colspan > 0 ? next : null;
+      })
+      .filter((merge): merge is TableMergeMetadata => !!merge && (merge.rowspan > 1 || merge.colspan > 1));
   }
-  parseCellKey(key) {
+
+  private parseCellKey(key: string) {
     const [rowText, colText] = key.split(",");
     const row = Number.parseInt(rowText ?? "", 10);
     const col = Number.parseInt(colText ?? "", 10);
     if (!Number.isFinite(row) || !Number.isFinite(col)) return null;
     return { row, col };
   }
-  captureHistoryStateFromContent(filePath, content, tableIds) {
-    const tableRecords = {};
+
+  private captureHistoryStateFromContent(filePath: string, content: string, tableIds: string[]): HistoryState {
+    const tableRecords: Record<string, TableRecord> = {};
     for (const tableId of tableIds) {
       const record = this.dataStore.tables[tableId];
       if (record) {
@@ -7685,11 +9491,13 @@ ${blocks.join("\n\n")}
     }
     return { filePath, content, tableRecords };
   }
-  async captureHistoryState(file, tableIds) {
+
+  private async captureHistoryState(file: TFile, tableIds: string[]) {
     const content = await this.app.vault.cachedRead(file);
     return this.captureHistoryStateFromContent(file.path, content, tableIds);
   }
-  pushHistoryEntry(entry) {
+
+  private pushHistoryEntry(entry: HistoryEntry) {
     if (JSON.stringify(entry.before) === JSON.stringify(entry.after)) return;
     this.undoStack.push(entry);
     if (this.undoStack.length > HISTORY_LIMIT) {
@@ -7697,13 +9505,16 @@ ${blocks.join("\n\n")}
     }
     this.redoStack = [];
   }
-  canUndoHistoryForFile(filePath, tableId) {
+
+  private canUndoHistoryForFile(filePath: string, tableId: string) {
     return this.undoStack.some((entry) => entry.filePath === filePath && entry.tableIds.includes(tableId));
   }
-  canRedoHistoryForFile(filePath, tableId) {
+
+  private canRedoHistoryForFile(filePath: string, tableId: string) {
     return this.redoStack.some((entry) => entry.filePath === filePath && entry.tableIds.includes(tableId));
   }
-  async undoLastAction(filePath, tableId) {
+
+  private async undoLastAction(filePath: string, tableId: string) {
     const entryIndex = this.findLatestHistoryIndex(this.undoStack, filePath, tableId);
     if (entryIndex < 0 || this.historyApplying) return false;
     const [entry] = this.undoStack.splice(entryIndex, 1);
@@ -7714,13 +9525,14 @@ ${blocks.join("\n\n")}
       if (this.redoStack.length > HISTORY_LIMIT) {
         this.redoStack = this.redoStack.slice(-HISTORY_LIMIT);
       }
-      new import_obsidian.Notice(`\u5DF2\u64A4\u56DE\uFF1A${entry.label}`);
+      new Notice(`已撤回：${entry.label}`);
       return true;
     } finally {
       this.historyApplying = false;
     }
   }
-  async redoLastAction(filePath, tableId) {
+
+  private async redoLastAction(filePath: string, tableId: string) {
     const entryIndex = this.findLatestHistoryIndex(this.redoStack, filePath, tableId);
     if (entryIndex < 0 || this.historyApplying) return false;
     const [entry] = this.redoStack.splice(entryIndex, 1);
@@ -7731,13 +9543,14 @@ ${blocks.join("\n\n")}
       if (this.undoStack.length > HISTORY_LIMIT) {
         this.undoStack = this.undoStack.slice(-HISTORY_LIMIT);
       }
-      new import_obsidian.Notice(`\u5DF2\u91CD\u505A\uFF1A${entry.label}`);
+      new Notice(`已重做：${entry.label}`);
       return true;
     } finally {
       this.historyApplying = false;
     }
   }
-  findLatestHistoryIndex(stack, filePath, tableId) {
+
+  private findLatestHistoryIndex(stack: HistoryEntry[], filePath: string, tableId: string) {
     for (let index = stack.length - 1; index >= 0; index -= 1) {
       const entry = stack[index];
       if (entry.filePath === filePath && entry.tableIds.includes(tableId)) {
@@ -7746,13 +9559,16 @@ ${blocks.join("\n\n")}
     }
     return -1;
   }
-  async applyHistoryState(state, tableIds) {
+
+  private async applyHistoryState(state: HistoryState, tableIds: string[]) {
     const abstractFile = this.app.vault.getAbstractFileByPath(state.filePath);
-    if (!(abstractFile instanceof import_obsidian.TFile)) return;
+    if (!(abstractFile instanceof TFile)) return;
+
     const currentContent = await this.app.vault.cachedRead(abstractFile);
     if (currentContent !== state.content) {
       await this.app.vault.modify(abstractFile, state.content);
     }
+
     for (const tableId of tableIds) {
       const record = state.tableRecords[tableId];
       if (record) {
@@ -7761,13 +9577,20 @@ ${blocks.join("\n\n")}
         delete this.dataStore.tables[tableId];
       }
     }
+
     const parsedTables = this.parseMarkdownTables(state.content);
     await this.syncTableRecords(abstractFile, parsedTables);
     await this.savePluginData();
     this.queueRefreshBurst();
   }
-  showPaletteMenu(tableEl, coord, origin, onPick) {
-    const menu = new import_obsidian.Menu();
+
+  private showPaletteMenu(
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    origin: { x: number; y: number } | undefined,
+    onPick: (palette: (typeof PALETTE)[number]) => void
+  ) {
+    const menu = new Menu();
     for (const palette of PALETTE) {
       menu.addItem((item) => {
         item.setTitle(palette.label);
@@ -7775,50 +9598,65 @@ ${blocks.join("\n\n")}
         item.onClick(() => onPick(palette));
       });
     }
+
     const position = this.resolveMenuPosition(tableEl, coord, origin);
     menu.showAtPosition(position);
   }
-  showClearColorMenu(file, tableId, tableEl, coord, origin) {
-    const menu = new import_obsidian.Menu();
+
+  private showClearColorMenu(
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
+    const menu = new Menu();
     menu.addItem((item) => {
-      item.setTitle("\u6E05\u9664\u5355\u5143\u683C\u989C\u8272");
+      item.setTitle("清除单元格颜色");
       item.setIcon("eraser");
       item.onClick(() => void this.clearColor(tableId, file, tableEl, "cell", this.getCellKey(coord)));
     });
     menu.addItem((item) => {
-      item.setTitle("\u6E05\u9664\u5F53\u524D\u884C\u989C\u8272");
+      item.setTitle("清除当前行颜色");
       item.setIcon("eraser");
       item.onClick(() => void this.clearColor(tableId, file, tableEl, "row", String(coord.row)));
     });
     menu.addItem((item) => {
-      item.setTitle("\u6E05\u9664\u5F53\u524D\u5217\u989C\u8272");
+      item.setTitle("清除当前列颜色");
       item.setIcon("eraser");
       item.onClick(() => void this.clearColor(tableId, file, tableEl, "column", String(coord.col)));
     });
     menu.showAtPosition(this.resolveMenuPosition(tableEl, coord, origin));
   }
-  resolveMenuPosition(tableEl, coord, origin) {
+
+  private resolveMenuPosition(
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
     if (origin) {
       return { x: origin.x + 12, y: origin.y + 8 };
     }
     const cell = tableEl.querySelector(
       `[data-mdtp-row='${coord.row}'][data-mdtp-col='${coord.col}']`
-    );
+    ) as HTMLTableCellElement | null;
     if (!cell) {
-      const rect2 = tableEl.getBoundingClientRect();
-      return { x: rect2.left + 12, y: rect2.top + 12 };
+      const rect = tableEl.getBoundingClientRect();
+      return { x: rect.left + 12, y: rect.top + 12 };
     }
     const rect = cell.getBoundingClientRect();
     return { x: rect.right - 8, y: rect.top + 8 };
   }
-  async syncTableRecords(file, parsedTables, options = {}) {
+
+  private async syncTableRecords(file: TFile, parsedTables: ParsedTableBlock[], options: SyncTableRecordsOptions = {}) {
     const now = Date.now();
     let mutated = false;
+
     for (const table of parsedTables) {
       if (!table.tableId) continue;
       const existing = this.dataStore.tables[table.tableId];
       const mode = options.forceMode ?? options.modeOverrides?.[table.tableId] ?? this.getTableRecordMode(existing);
-      const nextRecord = {
+      const nextRecord: TableRecord = {
         tableId: table.tableId,
         mode,
         filePath: file.path,
@@ -7827,36 +9665,42 @@ ${blocks.join("\n\n")}
         lastKnownHash: this.hashString(table.raw),
         lastKnownRange: {
           startLine: table.startLine,
-          endLine: table.endLine
+          endLine: table.endLine,
         },
-        layout: existing?.layout ? this.cloneLayout(existing.layout) : this.createEmptyLayout()
+        layout: existing?.layout ? this.cloneLayout(existing.layout) : this.createEmptyLayout(),
       };
+
       if (!existing || JSON.stringify(existing) !== JSON.stringify(nextRecord)) {
         this.dataStore.tables[table.tableId] = nextRecord;
         mutated = true;
       }
     }
+
     if (mutated) {
       await this.savePluginData();
     }
   }
-  async createSnapshot(file, reason, tableIds) {
+
+  private async createSnapshot(file: TFile, reason: string, tableIds: string[]) {
     const content = await this.app.vault.cachedRead(file);
     const createdAt = Date.now();
     const snapshotId = `${createdAt}-${Math.random().toString(36).slice(2, 8)}`;
-    const backupPath = (0, import_obsidian.normalizePath)(
+    const backupPath = normalizePath(
       `${this.app.vault.configDir}/plugins/${PLUGIN_ID}/backups/${this.getBackupFileName(file, createdAt)}`
     );
-    await this.ensureFolderExists((0, import_obsidian.normalizePath)(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}`));
-    await this.ensureFolderExists((0, import_obsidian.normalizePath)(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}/backups`));
+
+    await this.ensureFolderExists(normalizePath(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}`));
+    await this.ensureFolderExists(normalizePath(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}/backups`));
     await this.app.vault.adapter.write(backupPath, content);
-    const tableRecordSnapshot = {};
+
+    const tableRecordSnapshot: Record<string, TableRecord> = {};
     for (const tableId of tableIds) {
       const record = this.dataStore.tables[tableId];
       if (record) {
         tableRecordSnapshot[tableId] = this.cloneTableRecord(record);
       }
     }
+
     this.dataStore.snapshots.unshift({
       snapshotId,
       filePath: file.path,
@@ -7864,44 +9708,51 @@ ${blocks.join("\n\n")}
       reason,
       tableIds,
       backupPath,
-      tableRecords: tableRecordSnapshot
+      tableRecords: tableRecordSnapshot,
     });
+
     if (this.dataStore.snapshots.length > SNAPSHOT_LIMIT) {
       this.dataStore.snapshots = this.dataStore.snapshots.slice(0, SNAPSHOT_LIMIT);
     }
+
     await this.savePluginData();
   }
-  cloneTableRecord(record) {
+
+  private cloneTableRecord(record: TableRecord): TableRecord {
     return {
       ...record,
       lastKnownRange: { ...record.lastKnownRange },
-      layout: this.cloneLayout(record.layout)
+      layout: this.cloneLayout(record.layout),
     };
   }
-  cloneLayout(layout) {
+
+  private cloneLayout(layout: TableLayoutMetadata): TableLayoutMetadata {
     return this.normalizeLayout(layout);
   }
-  normalizeLoadedTableRecord(record) {
+
+  private normalizeLoadedTableRecord(record: TableRecord): TableRecord {
     return {
       ...record,
       mode: this.getTableRecordMode(record),
       lastKnownRange: { ...record.lastKnownRange },
-      layout: this.normalizeLayout(record.layout)
+      layout: this.normalizeLayout(record.layout),
     };
   }
-  getTableRecordMode(record) {
+
+  private getTableRecordMode(record: Partial<TableRecord> | null | undefined): TableRecordMode {
     return record?.mode === "nativeLayout" ? "nativeLayout" : "enhanced";
   }
-  normalizeLayout(layout) {
-    const normalized = {
-      colWidths: { ...layout?.colWidths ?? {} },
-      rowHeights: { ...layout?.rowHeights ?? {} },
-      cellColors: { ...layout?.cellColors ?? {} },
-      rowColors: { ...layout?.rowColors ?? {} },
-      colColors: { ...layout?.colColors ?? {} },
-      cellAlignments: { ...layout?.cellAlignments ?? {} },
-      cellImageWidths: { ...layout?.cellImageWidths ?? {} },
-      merges: Array.isArray(layout?.merges) ? layout.merges.map((merge) => ({ ...merge })) : []
+
+  private normalizeLayout(layout: Partial<TableLayoutMetadata> | undefined): TableLayoutMetadata {
+    const normalized: TableLayoutMetadata = {
+      colWidths: { ...(layout?.colWidths ?? {}) },
+      rowHeights: { ...(layout?.rowHeights ?? {}) },
+      cellColors: { ...(layout?.cellColors ?? {}) },
+      rowColors: { ...(layout?.rowColors ?? {}) },
+      colColors: { ...(layout?.colColors ?? {}) },
+      cellAlignments: { ...(layout?.cellAlignments ?? {}) },
+      cellImageWidths: { ...(layout?.cellImageWidths ?? {}) },
+      merges: Array.isArray(layout?.merges) ? layout.merges.map((merge) => ({ ...merge })) : [],
     };
     if (layout?.nativeColorPreset === NATIVE_COLOR_PRESET_BLUE_ZEBRA) {
       normalized.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
@@ -7910,30 +9761,36 @@ ${blocks.join("\n\n")}
     }
     return normalized;
   }
-  async savePluginData() {
+
+  private async savePluginData() {
     await this.saveData(this.dataStore);
   }
-  getBackupFileName(file, createdAt) {
+
+  private getBackupFileName(file: TFile, createdAt: number) {
     const timestamp = new Date(createdAt).toISOString().replace(/[:.]/g, "-");
     const safePath = file.path.replace(/[\\/]/g, "__");
     return `${timestamp}__${safePath}.md.bak`;
   }
-  async ensureFolderExists(folderPath) {
+
+  private async ensureFolderExists(folderPath: string) {
     const adapter = this.app.vault.adapter;
     if (await adapter.exists(folderPath)) return;
+
     const segments = folderPath.split("/").filter(Boolean);
     let current = "";
     for (const segment of segments) {
       current = current ? `${current}/${segment}` : segment;
-      if (!await adapter.exists(current)) {
+      if (!(await adapter.exists(current))) {
         await adapter.mkdir(current);
       }
     }
   }
-  parseMarkdownTables(content) {
+
+  parseMarkdownTables(content: string) {
     const lines = content.split(/\r?\n/);
-    const tables = [];
+    const tables: ParsedTableBlock[] = [];
     let inFence = false;
+
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const line = lines[lineIndex].trim();
       if (/^```/.test(line)) {
@@ -7941,56 +9798,75 @@ ${blocks.join("\n\n")}
         continue;
       }
       if (inFence) continue;
+
       if (!this.isLikelyTableHeader(lines[lineIndex], lines[lineIndex + 1] ?? "")) {
         continue;
       }
+
       const markerLine = this.findMarkerLineAbove(lines, lineIndex);
       const markerId = markerLine !== null ? this.extractTableMarkerId(lines[markerLine]) : null;
       let endLine = lineIndex + 1;
       while (endLine + 1 < lines.length && this.isLikelyTableRow(lines[endLine + 1])) {
         endLine += 1;
       }
+
       tables.push({
         startLine: lineIndex,
         endLine,
         markerLine,
         tableId: markerId,
-        raw: lines.slice(lineIndex, endLine + 1).join("\n")
+        raw: lines.slice(lineIndex, endLine + 1).join("\n"),
       });
+
       lineIndex = endLine;
     }
+
     return tables;
   }
-  isLikelyTableHeader(headerLine, dividerLine) {
+
+  private isLikelyTableHeader(headerLine: string, dividerLine: string) {
     if (!this.hasPipe(headerLine) || !this.isDividerRow(dividerLine)) {
       return false;
     }
+
     const trimmed = headerLine.trim();
     if (!trimmed || trimmed.startsWith("<!--")) {
       return false;
     }
+
     return true;
   }
-  isLikelyTableRow(line) {
+
+  private isLikelyTableRow(line: string) {
     const trimmed = line.trim();
     if (!trimmed) return false;
     if (this.extractTableMarkerId(trimmed)) return false;
     return this.hasPipe(trimmed);
   }
-  isDividerRow(line) {
+
+  private isDividerRow(line: string) {
     const trimmed = line.trim();
     if (!trimmed || !this.hasPipe(trimmed)) return false;
-    const segments = trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").map((segment) => segment.trim());
+
+    const segments = trimmed
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((segment) => segment.trim());
+
     return segments.length > 0 && segments.every((segment) => /^:?-{3,}:?$/.test(segment));
   }
-  hasPipe(line) {
+
+  private hasPipe(line: string) {
     const pipeCount = [...line].filter((char) => char === "|").length;
     return pipeCount >= 2;
   }
-  generateTableId() {
+
+  private generateTableId() {
     return `${TABLE_ID_PREFIX}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   }
-  findMarkerLineAbove(lines, tableStartLine) {
+
+  private findMarkerLineAbove(lines: string[], tableStartLine: number) {
     for (let index = tableStartLine - 1; index >= 0; index -= 1) {
       const line = lines[index].trim();
       if (!line) continue;
@@ -7998,26 +9874,33 @@ ${blocks.join("\n\n")}
     }
     return null;
   }
-  normalizeMarkerSpacing(lines, tableStartLine) {
+
+  private normalizeMarkerSpacing(lines: string[], tableStartLine: number) {
     const markerLine = this.findMarkerLineAbove(lines, tableStartLine);
     if (markerLine === null) return false;
+
     let changed = false;
     let startLine = tableStartLine;
+
     while (startLine - 1 > markerLine && lines[startLine - 1].trim() === "") {
       lines.splice(startLine - 1, 1);
       startLine -= 1;
       changed = true;
     }
+
     if (startLine === markerLine + 1) {
       lines.splice(startLine, 0, "");
       changed = true;
     }
+
     return changed;
   }
-  formatTableMarker(tableId) {
+
+  private formatTableMarker(tableId: string) {
     return `%% mdtp:${tableId} %%`;
   }
-  ensureBlankLineAfterTableMarkers(lines) {
+
+  private ensureBlankLineAfterTableMarkers(lines: string[]) {
     for (let index = 0; index < lines.length; index += 1) {
       if (!this.extractTableMarkerId(lines[index])) continue;
       const next = lines[index + 1] ?? null;
@@ -8029,12 +9912,13 @@ ${blocks.join("\n\n")}
     }
     return lines;
   }
-  joinLines(lines, originalEndsWithNewline) {
+
+  private joinLines(lines: string[], originalEndsWithNewline: boolean) {
     const joined = lines.join("\n");
-    return originalEndsWithNewline ? `${joined}
-` : joined;
+    return originalEndsWithNewline ? `${joined}\n` : joined;
   }
-  createEmptyLayout() {
+
+  private createEmptyLayout(): TableLayoutMetadata {
     return {
       colWidths: {},
       rowHeights: {},
@@ -8043,13 +9927,15 @@ ${blocks.join("\n\n")}
       colColors: {},
       cellAlignments: {},
       cellImageWidths: {},
-      merges: []
+      merges: [],
     };
   }
-  getCellKey(coord) {
+
+  private getCellKey(coord: CellCoord) {
     return `${coord.row},${coord.col}`;
   }
-  hashString(input) {
+
+  private hashString(input: string) {
     let hash = 2166136261;
     for (let index = 0; index < input.length; index += 1) {
       hash ^= input.charCodeAt(index);
@@ -8057,7 +9943,8 @@ ${blocks.join("\n\n")}
     }
     return `h${(hash >>> 0).toString(16)}`;
   }
-  extractTableMarkerId(line) {
+
+  private extractTableMarkerId(line: string) {
     const htmlMatch = line.match(HTML_TABLE_MARKER_RE);
     if (htmlMatch?.[1]) return htmlMatch[1];
     const obsidianMatch = line.match(OBSIDIAN_TABLE_MARKER_RE);
@@ -8068,16 +9955,20 @@ ${blocks.join("\n\n")}
     if (visibleReferenceMatch?.[1]) return visibleReferenceMatch[1];
     return null;
   }
-  isHiddenMarkerText(line) {
+
+  private isHiddenMarkerText(line: string) {
     return !!this.extractTableMarkerId(line) || TEMPLATE_TABLE_METADATA_RE.test(line);
   }
-  async installRuntimeStyles() {
+
+  private async installRuntimeStyles() {
     this.injectedStyleEl?.remove();
     this.injectedStyleEl = null;
-    const stylePath = (0, import_obsidian.normalizePath)(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}/styles.css`);
-    if (!await this.app.vault.adapter.exists(stylePath)) {
+
+    const stylePath = normalizePath(`${this.app.vault.configDir}/plugins/${PLUGIN_ID}/styles.css`);
+    if (!(await this.app.vault.adapter.exists(stylePath))) {
       return;
     }
+
     const css = await this.app.vault.adapter.read(stylePath);
     const styleEl = document.createElement("style");
     styleEl.id = `${PLUGIN_ID}-runtime-style`;
@@ -8085,4 +9976,4 @@ ${blocks.join("\n\n")}
     document.head.appendChild(styleEl);
     this.injectedStyleEl = styleEl;
   }
-};
+}

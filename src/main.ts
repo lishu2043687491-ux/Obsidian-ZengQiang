@@ -1,5 +1,6 @@
 import {
   App,
+  MarkdownRenderer,
   MarkdownView,
   Menu,
   Notice,
@@ -14,6 +15,10 @@ import * as HtmlToImage from "html-to-image";
 
 import { EmbeddedSubModule, SubPluginHost, ModuleHostBackend } from "./modules/sub-plugin-host";
 import { fileAutoLocalizerModule, renderFileAutoLocalizerSettings } from "./modules/file-auto-localizer";
+import {
+  fileVersionHistoryModule,
+  renderFileVersionHistorySettings,
+} from "./modules/file-version-history";
 import { globalWidePageModule } from "./modules/global-wide-page";
 import {
   getRightClickCopyAsImageRunner,
@@ -29,19 +34,29 @@ import {
   getEmbeddedBlockLinkPlusInstance,
 } from "./modules/block-link-plus-embedded";
 import { renderBlockLinkPlusSettings } from "./modules/block-link-plus-bridge";
+import { ensureObsidianRequireBinding } from "./modules/node-bridge";
 
+/** 指向链接优先启动，避免与其它内嵌模块抢 PluginManager / 视图注册 */
 const EMBEDDED_MODULES: EmbeddedSubModule[] = [
+  blockLinkPlusModule,
+  fileVersionHistoryModule,
   fileAutoLocalizerModule,
   globalWidePageModule,
   rightClickCopyAsImageModule,
   claudianChatArchiveModule,
-  blockLinkPlusModule,
 ];
+
+function formatEmbeddedModuleError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
 
 type EmbeddedModuleSettingsRenderer = (containerEl: HTMLElement, onRefresh: () => void) => void;
 
 const EMBEDDED_MODULE_SETTINGS_RENDERERS: Record<string, EmbeddedModuleSettingsRenderer> = {
   "file-auto-localizer": (containerEl) => renderFileAutoLocalizerSettings(containerEl),
+  "file-version-history": (containerEl, onRefresh) =>
+    renderFileVersionHistorySettings(containerEl, onRefresh),
   "claudian-chat-archive": (containerEl, onRefresh) =>
     renderClaudianChatArchiveSettings(containerEl, onRefresh),
 };
@@ -159,8 +174,9 @@ type FeishuDocToolbarData = {
   managedPluginCategoryNames: Record<string, string>;
   managedPluginCategoryOrder: string[];
   managedPluginStatusCheckedAt: number;
-  /** 测试功能总开关：控制增强表格、OneNote 粘贴等实验能力 */
+  /** 测试功能总开关：仅解锁「OneNote 高保真粘贴」实验区 UI，不直接打开增强表格 */
   enableBetaFeatures: boolean;
+  /** 启用 OneNote 高保真粘贴时后台联动 mte 增强表格能力（无增强表格按钮） */
   showOneNoteImport: boolean;
   showTableEnhancerEntrances: boolean;
   showDraggerIntegrationStatus: boolean;
@@ -250,6 +266,13 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     displayName: "文件自动本地化",
     externalPluginId: "image-localizer",
     description: "原 OneNote 本地化插件：自动把笔记中的远程图片、OneDrive/OneNote 链接转换为本地文件与可打开链接",
+    status: "merged",
+  },
+  {
+    moduleId: "file-version-history",
+    displayName: "本地文件版本历史",
+    externalPluginId: "file-version-history",
+    description: "库内自动快照 + 版本历史弹窗；Obsidian Sync/文件恢复失败时仍可查看与恢复",
     status: "merged",
   },
   {
@@ -483,6 +506,10 @@ const ENHANCED_TABLE_COMMANDS = {
   restoreSnapshot: `${MARKDOWN_TABLE_PLUGIN_ID}:restore-last-table-enhancement-snapshot`,
 };
 
+declare const __OSS_RELEASE__: boolean;
+/** 仅 `OSS_RELEASE=1` 构建时为 true；近期工作日常构建始终为 false。 */
+const ENHANCED_TABLE_FEATURE_LOCKED = __OSS_RELEASE__ === true;
+
 const DEFAULT_SETTINGS_TAB_ORDER: ExperienceSettingsTabId[] = [
   "toolbar",
   "nativeTable",
@@ -689,11 +716,15 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       "日常只需用右侧开关启停各功能。点击功能卡片可展开详细设置（交互与「模板库管理」里点分组一致）。模板请用「模板库管理」页签。";
     containerEl.appendChild(intro);
 
+    for (const descriptor of OWN_MODULE_DESCRIPTORS) {
+      this.appendOwnModuleRow(containerEl, descriptor);
+    }
+
+    this.appendSectionTitle(containerEl, "实验 / 测试功能");
+
     new Setting(containerEl)
       .setName("启用测试功能")
-      .setDesc(
-        "开启后允许使用增强表格、OneNote 高保真粘贴等实验能力。增强表格的细项开关在「原生表格增强」页签。"
-      )
+      .setDesc("开启后显示下方「OneNote 高保真粘贴」实验项；增强表格仅在启用 OneNote 粘贴时后台联动，不设单独按钮。")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.isBetaFeaturesEnabled()).onChange(async (value) => {
           await this.plugin.setBetaFeaturesEnabled(value);
@@ -701,9 +732,49 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
         })
       );
 
-    for (const descriptor of OWN_MODULE_DESCRIPTORS) {
-      this.appendOwnModuleRow(containerEl, descriptor);
-    }
+    this.renderOneNotePasteTestSection(containerEl);
+  }
+
+  /** OneNote 粘贴为实验能力，归在「自研功能开关」而非「原生表格增强」。 */
+  private renderOneNotePasteTestSection(containerEl: HTMLElement) {
+    this.appendCollapsibleSection(containerEl, "OneNote 高保真粘贴（测试）", (bodyEl) => {
+      const desc = document.createElement("p");
+      desc.className = "fdtb-settings-page-desc";
+      desc.textContent =
+        "从 OneNote 剪贴板导入图文/表中表。属实验能力；需先开启上方「启用测试功能」，再打开下方开关。";
+      bodyEl.appendChild(desc);
+
+      if (!this.plugin.isBetaFeaturesEnabled()) {
+        const hint = document.createElement("p");
+        hint.className = "setting-item-description";
+        hint.textContent = "请先开启「启用测试功能」后再配置。";
+        bodyEl.appendChild(hint);
+        return;
+      }
+
+      new Setting(bodyEl)
+        .setName("启用 OneNote 高保真粘贴")
+        .setDesc(
+          "开启后后台启用增强表格能力（仅供粘贴管线，不显示增强表格按钮）；关闭后增强表格整体停用。"
+        )
+        .addToggle((toggle) =>
+          toggle.setValue(this.plugin.isOneNoteRichPasteEnabled()).onChange(async (value) => {
+            await this.plugin.setOneNoteRichPasteEnabled(value);
+            this.display();
+          })
+        );
+
+      if (!this.plugin.isOneNoteRichPasteEnabled()) {
+        return;
+      }
+
+      this.appendCommandRow(
+        bodyEl,
+        "执行 OneNote 高保真粘贴",
+        "从 OneNote 剪贴板导入图文/表中表内容",
+        ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable
+      );
+    });
   }
 
   private appendOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
@@ -1229,6 +1300,14 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const titleText = document.createElement("span");
     titleText.className = "fdtb-template-folder-title-text";
     titleText.textContent = this.plugin.getTemplateUngroupedLabel();
+    titleText.title = "双击可改名";
+    this.attachInlineRenameOnDoubleClick(titleText, {
+      initial: () => this.plugin.getTemplateUngroupedLabel(),
+      onCommit: async (value) => {
+        await this.plugin.setTemplateUngroupedLabel(value);
+        this.display();
+      },
+    });
     titleWrap.appendChild(titleText);
 
     const renameBtn = document.createElement("button");
@@ -1312,6 +1391,18 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     input.addEventListener("blur", () => void finish(true));
   }
 
+  private attachInlineRenameOnDoubleClick(
+    anchor: HTMLElement,
+    options: { initial: string | (() => string); onCommit: (value: string) => void | Promise<void> }
+  ) {
+    anchor.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const initial = typeof options.initial === "function" ? options.initial() : options.initial;
+      this.beginInlineRename(anchor, { initial, onCommit: options.onCommit });
+    });
+  }
+
   private renderTemplateFolderSection(
     container: HTMLElement,
     folderName: string,
@@ -1330,6 +1421,14 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const titleText = document.createElement("span");
     titleText.className = "fdtb-template-folder-title-text";
     titleText.textContent = folderName;
+    titleText.title = "双击可改名";
+    this.attachInlineRenameOnDoubleClick(titleText, {
+      initial: () => folderName,
+      onCommit: async (value) => {
+        const ok = await this.plugin.renameTemplateGroup(relativePath, value);
+        if (ok) this.display();
+      },
+    });
     titleWrap.appendChild(titleText);
 
     const renameBtn = document.createElement("button");
@@ -1476,6 +1575,14 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const title = document.createElement("div");
     title.className = "fdtb-template-settings-row-title";
     title.textContent = template.title;
+    title.title = "双击可改名";
+    this.attachInlineRenameOnDoubleClick(title, {
+      initial: template.title,
+      onCommit: async (value) => {
+        const ok = await this.plugin.renameTemplateAtPath(template.path, value);
+        if (ok) this.display();
+      },
+    });
     const meta = document.createElement("div");
     meta.className = "fdtb-template-settings-row-meta";
     meta.textContent = template.path;
@@ -1546,7 +1653,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const body = document.createElement("div");
     body.className = "fdtb-template-settings-item-body";
 
-    const preview = document.createElement("pre");
+    const preview = document.createElement("div");
     preview.className = "fdtb-template-settings-preview";
     preview.textContent = "点击模板名展开后加载预览…";
 
@@ -1565,12 +1672,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     item.addEventListener("toggle", () => {
       if (!item.open || previewLoaded) return;
       previewLoaded = true;
-      preview.textContent = "加载中…";
-      void this.plugin.readTemplatePreviewContent(template.path).then((content) => {
-        preview.textContent = content.trim() ? content : "（模板为空）";
-      }).catch(() => {
-        preview.textContent = "读取模板失败，请稍后重试。";
-      });
+      void this.plugin.renderTemplatePreviewInto(preview, template.path);
     });
 
     item.append(summary, body);
@@ -1583,8 +1685,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
-    intro.textContent =
-      "原生表格颜色、长宽高与模板库。增强表格开关在本页下方；若完全看不到，请先在「自研功能开关」打开「启用测试功能」。";
+    intro.textContent = "原生表格颜色、长宽高与模板库。增强表格不设入口，仅在「自研功能开关 → OneNote 高保真粘贴」启用时后台联动。";
     containerEl.appendChild(intro);
 
     this.appendManagedPluginToggleRow(containerEl, {
@@ -1609,65 +1710,12 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
         containerEl,
         "已安装未启用",
         "—",
-        "打开上方开关后即可配置配色与下方管理命令"
+        "打开上方开关后即可配置配色"
       );
       return;
     }
 
     this.renderNativeTableColorSettings(containerEl);
-    this.renderEnhancedTableControlSettings(containerEl);
-
-    this.appendCollapsibleSection(containerEl, "原生表格管理命令", (bodyEl) => {
-      this.appendCommandRow(bodyEl, "插入彩色原生表格", "按当前默认配色插入空白原生表格", ENHANCED_TABLE_COMMANDS.insertNativeColorTemplate);
-      this.appendCommandRow(bodyEl, "对当前表格美化", "给当前原生表格套默认配色，并保留已有内容", ENHANCED_TABLE_COMMANDS.initializeNativeLayout);
-      this.appendCommandRow(bodyEl, "设置选中行颜色", "给当前原生表格选中行快速套当前色系", ENHANCED_TABLE_COMMANDS.setNativeRowColor);
-      this.appendCommandRow(bodyEl, "行段配色", "按行号设置多行同色或恢复默认", ENHANCED_TABLE_COMMANDS.openNativeRowBands);
-    });
-
-    if (!this.plugin.isBetaFeaturesEnabled()) return;
-
-    this.appendCollapsibleSection(containerEl, "增强表格能力（测试）", (bodyEl) => {
-      if (!this.plugin.isTableEnhancerEntrancesVisible()) {
-        const hint = document.createElement("p");
-        hint.className = "fdtb-settings-page-desc";
-        hint.textContent =
-          "按钮入口已关闭。需要时可打开上方「显示增强表格按钮入口」，或直接用命令面板 / 右键菜单。";
-        bodyEl.appendChild(hint);
-        return;
-      }
-
-      this.appendCommandRow(bodyEl, "查看当前文件表格增强状态", "检查当前文档中表格的增强状态", ENHANCED_TABLE_COMMANDS.showStatus);
-      this.appendCommandRow(bodyEl, "插入增强表格模板", "插入完整增强表格模板", ENHANCED_TABLE_COMMANDS.insertTemplate);
-      this.appendCommandRow(bodyEl, "对当前表启用增强", "把当前原生 Markdown 表格升级为增强表格", ENHANCED_TABLE_COMMANDS.initializeCurrent);
-      this.appendCommandRow(bodyEl, "为当前文件全部表格启用增强（批量）", "批量为当前文件表格建立增强标识", ENHANCED_TABLE_COMMANDS.initializeBatch);
-      this.appendCommandRow(bodyEl, "恢复当前文件最近一次表格增强快照", "恢复当前文件最近一次表格增强前的快照", ENHANCED_TABLE_COMMANDS.restoreSnapshot);
-      this.appendCommandRow(bodyEl, "OneNote 高保真粘贴", "从 OneNote 剪贴板导入图文/表中表内容", ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable);
-    });
-  }
-
-  private renderEnhancedTableControlSettings(containerEl: HTMLElement) {
-    new Setting(containerEl)
-      .setName("启用增强表格功能")
-      .setDesc("开启后笔记里已有的增强表格可继续编辑；关闭后增强表格能力整体停用。与「自研功能开关 → 启用测试功能」联动。")
-      .addToggle((toggle) =>
-        toggle.setValue(this.plugin.isBetaFeaturesEnabled()).onChange(async (value) => {
-          await this.plugin.setBetaFeaturesEnabled(value);
-          this.display();
-        })
-      );
-
-    new Setting(containerEl)
-      .setName("显示增强表格按钮入口")
-      .setDesc("控制设置页「执行」按钮、表格侧栏与右键里的增强表格入口。默认关闭；需要时可手动打开。")
-      .addToggle((toggle) => {
-        const featureEnabled = this.plugin.isBetaFeaturesEnabled();
-        toggle.setValue(this.plugin.dataStore.showTableEnhancerEntrances);
-        toggle.setDisabled(!featureEnabled);
-        toggle.onChange(async (value) => {
-          await this.plugin.updateManagementSetting("showTableEnhancerEntrances", value);
-          this.display();
-        });
-      });
   }
 
   private renderNativeTableColorSettings(containerEl: HTMLElement) {
@@ -2213,12 +2261,14 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   claudianArchiveRunner: ClaudianChatArchiveRunner | null = null;
 
   async onload() {
+    ensureObsidianRequireBinding();
     this.dataStore = this.normalizeData(await this.loadData());
+    this.dataStore.showTableEnhancerEntrances = false;
     this.ensureHandle();
     this.registerCommands();
     this.addSettingTab(new FeishuDocExperienceSettingTab(this.app, this));
     await this.startEnabledEmbeddedModules();
-    await this.syncExperimentalFeatureGateToTableEnhancer(this.isBetaFeaturesEnabled());
+    await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
     this.registerInterval(window.setInterval(() => this.applyManagedPluginAliasesToSettingsSidebar(), 1800));
 
     this.registerDomEvent(document, "pointermove", (event) => this.schedulePointerUpdate(event as PointerEvent), true);
@@ -2324,28 +2374,40 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       if (moduleDef.replacesExternalPluginId) {
         const externalStatus = this.getManagedPluginStatus(moduleDef.replacesExternalPluginId);
         if (externalStatus.installed && externalStatus.enabled) {
-          console.warn(
-            `[feishu-doc-toolbar] 跳过启动内嵌模块「${moduleDef.displayName}」：检测到外部插件 ${moduleDef.replacesExternalPluginId} 仍然启用，避免功能重复触发。请在「第三方插件」里手动关闭它。`
+          const disabled = await this.setManagedPluginEnabled(moduleDef.replacesExternalPluginId, false);
+          if (!disabled) {
+            conflictWarnings.push(`${moduleDef.displayName}（未能自动关闭外部 ${moduleDef.replacesExternalPluginId}）`);
+            continue;
+          }
+          console.info(
+            `[feishu-doc-toolbar] 已自动关闭外部插件 ${moduleDef.replacesExternalPluginId}，改用内嵌「${moduleDef.displayName}」`
           );
-          conflictWarnings.push(`${moduleDef.displayName}（请关闭外部 ${moduleDef.replacesExternalPluginId}）`);
-          continue;
         }
       }
 
+      const host = new SubPluginHost(backend, moduleDef.id);
+      this.embeddedHosts.set(moduleDef.id, host);
       try {
-        const host = new SubPluginHost(backend, moduleDef.id);
-        this.embeddedHosts.set(moduleDef.id, host);
         await moduleDef.load(host);
       } catch (error) {
+        // 红线 23：启动失败必须完全回滚副作用（destroy host + 撤销已挂的编辑器扩展 / DOM 监听），
+        // 绝不能「弹个失败 Notice 就走」，残留会污染全局、连带历史文件打不开。
+        try {
+          host.destroy();
+        } catch (destroyError) {
+          console.error(`[feishu-doc-toolbar] 回滚内嵌模块 ${moduleDef.id} 失败`, destroyError);
+        }
+        this.embeddedHosts.delete(moduleDef.id);
+        const detail = formatEmbeddedModuleError(error);
         console.error(`[feishu-doc-toolbar] 启动内嵌模块 ${moduleDef.id} 失败`, error);
-        new Notice(`内嵌功能「${moduleDef.displayName}」启动失败，请查看控制台`);
+        new Notice(`内嵌功能「${moduleDef.displayName}」启动失败：${detail}`, 10000);
       }
     }
 
     if (conflictWarnings.length > 0) {
       new Notice(
-        `Obsidian增强体验：以下功能已内嵌但暂未启动，因为同名外部插件还启用着：\n${conflictWarnings.join("\n")}\n请到「第三方插件」关闭这些原插件后重启 Obsidian。`,
-        15000
+        `Obsidian增强体验：以下内嵌功能未能启动：\n${conflictWarnings.join("\n")}\n请查看控制台或联系维护。`,
+        12000
       );
     }
   }
@@ -2380,8 +2442,9 @@ export default class FeishuDocToolbarPlugin extends Plugin {
         } catch (error) {
           this.embeddedHosts.delete(moduleId);
           host.destroy();
+          const detail = formatEmbeddedModuleError(error);
           console.error(`[feishu-doc-toolbar] 启动内嵌模块 ${moduleId} 失败`, error);
-          new Notice(`内嵌功能「${moduleDef.displayName}」启动失败`);
+          new Notice(`内嵌功能「${moduleDef.displayName}」启动失败：${detail}`, 10000);
         }
       }
     } else {
@@ -2643,17 +2706,41 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return !!this.dataStore.enableBetaFeatures;
   }
 
+  isOneNoteRichPasteEnabled() {
+    return !!this.dataStore.showOneNoteImport;
+  }
+
+  /** 增强表格后台能力：仅随 OneNote 高保真粘贴开关；永不暴露增强表格按钮。 */
+  isEnhancedTableFeatureEnabled() {
+    if (ENHANCED_TABLE_FEATURE_LOCKED) return false;
+    return this.isOneNoteRichPasteEnabled();
+  }
+
   isTableEnhancerEntrancesVisible() {
-    return this.isBetaFeaturesEnabled() && !!this.dataStore.showTableEnhancerEntrances;
+    return false;
+  }
+
+  async setOneNoteRichPasteEnabled(value: boolean) {
+    this.dataStore = {
+      ...this.dataStore,
+      showOneNoteImport: value,
+      showTableEnhancerEntrances: false,
+    };
+    await this.saveData(this.dataStore);
+    await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
   }
 
   async setBetaFeaturesEnabled(value: boolean) {
     this.dataStore = {
       ...this.dataStore,
       enableBetaFeatures: value,
+      showTableEnhancerEntrances: false,
+      ...(value ? {} : { showOneNoteImport: false }),
     };
     await this.saveData(this.dataStore);
-    await this.syncExperimentalFeatureGateToTableEnhancer(value);
+    if (!value) {
+      await this.syncExperimentalFeatureGateToTableEnhancer(false);
+    }
   }
 
   private async syncExperimentalFeatureGateToTableEnhancer(enabled: boolean) {
@@ -2756,7 +2843,12 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   async updateManagementSetting(key: ManagementSettingKey, value: boolean) {
-    this.dataStore = { ...this.dataStore, [key]: value };
+    const nextValue = key === "showTableEnhancerEntrances" ? false : value;
+    if (key === "showOneNoteImport") {
+      await this.setOneNoteRichPasteEnabled(nextValue);
+      return;
+    }
+    this.dataStore = { ...this.dataStore, [key]: nextValue };
     await this.saveData(this.dataStore);
   }
 
@@ -2869,23 +2961,32 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   getManagedPluginStatus(pluginId: string) {
     const pluginManager = (this.app as any)?.plugins;
-    const enabledPlugins = pluginManager?.plugins ?? {};
+    const pluginsMap = pluginManager?.plugins ?? {};
     const manifests = pluginManager?.manifests ?? {};
-    const enabled = Boolean(enabledPlugins[pluginId]);
-    const installed = enabled || Boolean(manifests[pluginId]);
+    const enabledSet = pluginManager?.enabledPlugins as Set<string> | undefined;
+    const installed = Boolean(manifests[pluginId]) || Boolean(pluginsMap[pluginId]);
+    const enabled =
+      enabledSet && typeof enabledSet.has === "function"
+        ? enabledSet.has(pluginId)
+        : Boolean(pluginsMap[pluginId]);
     return { installed, enabled };
   }
 
   getHostedPluginItems(): HostedPluginItem[] {
     const pluginManager = (this.app as any)?.plugins;
-    const enabledPlugins = pluginManager?.plugins ?? {};
+    const pluginsMap = pluginManager?.plugins ?? {};
     const manifests = pluginManager?.manifests ?? {};
-    const ids = new Set<string>(["feishu-doc-toolbar", ...Object.keys(manifests), ...Object.keys(enabledPlugins)]);
+    const enabledSet = pluginManager?.enabledPlugins as Set<string> | undefined;
+    const ids = new Set<string>(["feishu-doc-toolbar", ...Object.keys(manifests), ...Object.keys(pluginsMap)]);
     return Array.from(ids)
       .map((id) => {
-        const manifest = manifests[id] ?? enabledPlugins[id]?.manifest ?? {};
-        const enabled = id === "feishu-doc-toolbar" || Boolean(enabledPlugins[id]);
-        const installed = enabled || Boolean(manifests[id]);
+        const manifest = manifests[id] ?? pluginsMap[id]?.manifest ?? {};
+        const enabled =
+          id === "feishu-doc-toolbar" ||
+          (enabledSet && typeof enabledSet.has === "function"
+            ? enabledSet.has(id)
+            : Boolean(pluginsMap[id]));
+        const installed = Boolean(manifests[id]) || Boolean(pluginsMap[id]);
         const originalName = id === "feishu-doc-toolbar" ? "Obsidian增强体验" : String(manifest.name ?? id);
         const alias = this.dataStore.managedPluginAliases[id] ?? "";
         const note = this.dataStore.managedPluginNotes[id] ?? "";
@@ -6045,6 +6146,69 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return true;
   }
 
+  async renderTemplatePreviewInto(hostEl: HTMLElement, templatePath: string) {
+    hostEl.replaceChildren();
+    const loading = hostEl.createDiv({ cls: "fdtb-template-settings-preview-status" });
+    loading.textContent = "加载中…";
+    try {
+      const markdown = await this.readTemplatePreviewContent(templatePath);
+      hostEl.replaceChildren();
+      if (!markdown.trim()) {
+        const empty = hostEl.createDiv({ cls: "fdtb-template-settings-preview-status" });
+        empty.textContent = "（模板为空）";
+        return;
+      }
+      const rendered = hostEl.createDiv({
+        cls: "fdtb-template-settings-preview-rendered markdown-rendered markdown-preview-view",
+      });
+      await MarkdownRenderer.renderMarkdown(markdown, rendered, templatePath, this);
+    } catch (error) {
+      console.warn("[fdtb] template preview render failed", error);
+      hostEl.replaceChildren();
+      const failed = hostEl.createDiv({ cls: "fdtb-template-settings-preview-status" });
+      failed.textContent = "读取模板失败，请稍后重试。";
+    }
+  }
+
+  async renameTemplateAtPath(templatePath: string, newTitle: string) {
+    const safe = newTitle.trim().replace(/[\\:*?"<>|]/g, "-").replace(/\.+$/g, "");
+    if (!safe) {
+      new Notice("模板名称无效");
+      return false;
+    }
+    const normalized = normalizePath(templatePath);
+    const root = this.getTemplateFolderPath();
+    if (!normalized.startsWith(`${root}/`) || this.isTemplateIndexPath(normalized) || this.isTemplateTrashPath(normalized)) {
+      new Notice("只能重命名模板库中的模板");
+      return false;
+    }
+    const adapter = this.app.vault.adapter;
+    if (!(await adapter.exists(normalized))) {
+      new Notice("模板文件不存在");
+      return false;
+    }
+    const parentDir = normalized.slice(0, normalized.lastIndexOf("/"));
+    const nextFileName = safe.toLowerCase().endsWith(".md") ? safe : `${safe}.md`;
+    const destPath = normalizePath(`${parentDir}/${nextFileName}`);
+    if (destPath === normalized) return true;
+    if (await adapter.exists(destPath)) {
+      new Notice("同分组里已有同名模板");
+      return false;
+    }
+    const renamed = await this.renameVaultPath(normalized, destPath);
+    if (!renamed) {
+      new Notice("模板改名失败");
+      return false;
+    }
+    this.dataStore.recentTemplatePaths = this.dataStore.recentTemplatePaths.map((item) =>
+      normalizeRecentTemplatePath(item) === normalized ? destPath : item
+    );
+    await this.saveData(this.dataStore);
+    await this.updateTemplateIndexNote();
+    new Notice(`模板已改名为：${this.getTemplateNameFromPath(destPath)}`);
+    return true;
+  }
+
   async readTemplatePreviewContent(templatePath: string) {
     const normalizedPath = normalizePath(templatePath);
     if (!(await this.app.vault.adapter.exists(normalizedPath))) {
@@ -6094,11 +6258,28 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return ok;
   }
 
+  private resolveVaultMarkdownFile(filePath: string): TFile | null {
+    const normalized = normalizePath(filePath);
+    const fromAbstract = this.app.vault.getAbstractFileByPath(normalized);
+    if (fromAbstract instanceof TFile) return fromAbstract;
+    return this.app.vault.getFiles().find((file) => file.path === normalized) ?? null;
+  }
+
   async editTemplateAtPath(templatePath: string) {
-    const file = this.app.vault.getAbstractFileByPath(templatePath);
-    if (file instanceof TFile) {
-      await this.app.workspace.getLeaf(false).openFile(file);
+    const normalized = normalizePath(templatePath);
+    if (!(await this.app.vault.adapter.exists(normalized))) {
+      new Notice("模板文件不存在");
+      return false;
     }
+
+    const file = this.resolveVaultMarkdownFile(normalized);
+    if (file) {
+      await this.app.workspace.getLeaf(false).openFile(file);
+      return true;
+    }
+
+    await this.app.workspace.openLinkText(normalized, "", false);
+    return true;
   }
 
   async deleteTemplateAtPath(templatePath: string) {
