@@ -9,7 +9,7 @@
 | `id` | `feishu-doc-toolbar` | 小写+连字符，不含 obsidian |
 | `name` | `ZengQiang Enhanced` | **英文**显示名；不可含 Obsidian、不可中文 |
 | `description` | 中文（见 manifest.json） | 设置页与目录简介 |
-| `version` | 与 GitHub Release tag 一致（如 `1.0.3`） |
+| `version` | 与 GitHub Release tag 一致（如 `1.0.4`） |
 
 设置页内标题仍为「Obsidian增强体验」（插件内 UI），与社区 `name` 可不同。
 

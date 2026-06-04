@@ -103,10 +103,14 @@ await esbuild.build({
               "__toESM(FDTB_BLP_CRYPTO())"
             );
           }
-          contents = contents.replace(
-            /window\.localStorage\.getItem\("language"\)/g,
-            '(window.localStorage && window.localStorage.getItem("language"))'
-          );
+          const langGet =
+            '(typeof window!=="undefined"&&window.__FDTB_BLP_LANG__&&window.__FDTB_BLP_LANG__.get("language"))';
+          contents = contents
+            .replace(
+              /\(window\.localStorage && window\.localStorage\.getItem\("language"\)\)/g,
+              langGet
+            )
+            .replace(/window\.localStorage\.getItem\("language"\)/g, langGet);
           return { contents, loader: "js" };
         });
       },

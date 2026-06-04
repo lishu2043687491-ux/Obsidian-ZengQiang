@@ -1,10 +1,10 @@
 {
   "name": "feishu-doc-toolbar",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "Obsidian Enhanced Experience — unified toolbar, templates, and utilities",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lishu2043687491-ux/Obsidian-ZengQiang.git"
+    "url": "https://github.com/lishu/feishu-doc-toolbar.git"
   },
   "author": "lishu",
   "license": "MIT",

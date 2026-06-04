@@ -96,28 +96,19 @@ const BLOCK_LINK_PLUS_MANIFEST = {
 
 type BlockLinkPlusConstructor = new (app: App, manifest: Plugin["manifest"]) => Plugin;
 
-/** bundle 内 i18n 在模块求值阶段会读 localStorage，缺省环境需 stub */
+type FdtbBlpLangStore = Map<string, string>;
+
+declare global {
+  interface Window {
+    __FDTB_BLP_LANG__?: FdtbBlpLangStore;
+  }
+}
+
+/** bundle 内 i18n 求值阶段读语言键；用插件私有 Map，不触碰 window.localStorage */
 function ensureBundleRuntimeGlobals(): void {
   if (typeof window === "undefined") return;
-  const w = window as Window & { localStorage?: Storage };
-  if (w.localStorage) return;
-  const store = new Map<string, string>();
-  w.localStorage = {
-    getItem: (key) => store.get(key) ?? null,
-    setItem: (key, value) => {
-      store.set(key, String(value));
-    },
-    removeItem: (key) => {
-      store.delete(key);
-    },
-    clear: () => {
-      store.clear();
-    },
-    key: (index) => [...store.keys()][index] ?? null,
-    get length() {
-      return store.size;
-    },
-  };
+  if (window.__FDTB_BLP_LANG__) return;
+  window.__FDTB_BLP_LANG__ = new Map();
 }
 
 function obsidianRequire(id: string): unknown {

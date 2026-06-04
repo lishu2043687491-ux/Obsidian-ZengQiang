@@ -101,14 +101,19 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export function resolveDeviceId(settings: ClaudianChatArchiveSettings): string {
-  if (settings.deviceId) return sanitizePathSegment(settings.deviceId);
-  try {
-    const os = require("os") as typeof import("os");
-    return sanitizePathSegment(os.hostname() || "unknown-device");
-  } catch {
-    return "unknown-device";
+/** 社区审核：不读取主机名；首次启用存档时写入插件 data.json */
+export function createLocalDeviceId(): string {
+  const crypto = globalThis.crypto;
+  if (crypto?.randomUUID) {
+    return sanitizePathSegment(crypto.randomUUID().replace(/-/g, "").slice(0, 12));
   }
+  return sanitizePathSegment(`dev-${Date.now().toString(36)}`);
+}
+
+export function resolveDeviceId(settings: ClaudianChatArchiveSettings): string {
+  const id = settings.deviceId?.trim();
+  if (id) return sanitizePathSegment(id);
+  return "unknown-device";
 }
 
 export function sanitizePathSegment(value: string): string {
