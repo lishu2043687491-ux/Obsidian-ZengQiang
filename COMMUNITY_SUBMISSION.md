@@ -1,34 +1,42 @@
-# Obsidian 社区插件提交清单
+# Obsidian 社区插件提交清单（目标版本 1.0.5）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
-## manifest 命名（已通过官方规则核对）
+## manifest
 
-| 字段 | 值 | 说明 |
-|------|-----|------|
-| `id` | `feishu-doc-toolbar` | 小写+连字符，不含 obsidian |
-| `name` | `ZengQiang Enhanced` | **英文**显示名；不可含 Obsidian、不可中文 |
-| `description` | 中文（见 manifest.json） | 设置页与目录简介 |
-| `version` | 与 GitHub Release tag 一致（如 `1.0.4`） |
+| 字段 | 值 |
+|------|-----|
+| `id` | `feishu-doc-toolbar` |
+| `name` | `ZengQiang Enhanced` |
+| `version` | `1.0.5`（与 Release tag 一致） |
 
-设置页内标题仍为「Obsidian增强体验」（插件内 UI），与社区 `name` 可不同。
+## 官方 1.0.3 审查对照（1.0.5）
 
-## 提交前检查
+| 类别 | 项 | 1.0.5 状态 |
+|------|-----|------------|
+| Manifest | description 以 `.` `!` `?` 结尾 | 已修复 |
+| Behavior | 无 os.hostname / 系统身份 | 已修复（随机 deviceId） |
+| Behavior | 无 localStorage stub | 已修复 |
+| Behavior | Vault Read/Write | Pass（保持） |
+| Behavior | Vault 枚举 / 剪贴板 | Recommendation → README 已说明 |
+| Releases | artifact attestation | 可选，未做 |
+| CSS lint | text-decoration / :has 抽样 | 1.0.5 已抽样修复 |
+| CSS lint | 大量 !important（BLP/表格） | 部分保留，非阻塞 |
+| Dependencies | 无漏洞 | Pass（保持） |
 
-- [ ] GitHub Release 最新 tag 与 `manifest.json` 的 `version` 一致
-- [ ] Release 附件：`main.js`、`manifest.json`、`styles.css`
-- [ ] README 说明需安装 `companion-plugins/markdown-table-enhancer/`
-- [ ] 仓库内无 `data.json`、`file-versions/`、个人笔记
+## Release 附件
 
-## Developer Dashboard 步骤
+- [ ] `main.js`
+- [ ] `manifest.json`
+- [ ] `styles.css`
 
-1. 打开 https://obsidian.md/plugins
-2. 登录 → **Manage plugins** → **Submit new plugin**
-3. 填写仓库 URL：`https://github.com/lishu2043687491-ux/Obsidian-ZengQiang`
-4. 勾选开发者政策与支持承诺 → **Submit**
-5. 等待自动检查（通常数分钟～24 小时）；通过后出现在社区目录
+## 提交步骤（由开发者操作）
 
-## 若再次被拒
+1. 知识仓库测验通过 → 授权助手推 GitHub **1.0.5**
+2. https://obsidian.md/plugins → Manage plugins → 更新仓库 Release
+3. https://community.obsidian.md/account/plugins/feishu-doc-toolbar → 等待 Review branch 对 **1.0.5** 扫描
 
-- **名称**：只能改 `manifest.json` 的 `name`，再发新 Release
-- **描述**：若机器人要求英文，在 `description` 末尾保留中文短句的同时，可改用中英双语（≤250 字符）
+## 禁止
+
+- 不要用 **1.0.4** 作为社区 Current release
+- 测验未通过前不要 `gh release create 1.0.5`

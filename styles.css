@@ -753,9 +753,9 @@
   padding: 0 0.25em;
 }
 
-.markdown-source-view.mod-cm6 .cm-line.fdtb-style-marker-line,
-.markdown-source-view.mod-cm6 [data-fdtb-style-marker-hidden="true"] {
-  display: none !important;
+.markdown-source-view.mod-cm6 .cm-content .cm-line.fdtb-style-marker-line,
+.markdown-source-view.mod-cm6 .cm-content [data-fdtb-style-marker-hidden="true"] {
+  display: none;
 }
 
 .fdtb-block-style {
@@ -2546,12 +2546,6 @@ body.blp-outliner-dragging .blp-file-outliner-view .bullet-container,
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed .markdown-preview-view > :is(h1, h2, h3, h4, h5, h6, p, ul, ol, blockquote, pre, .callout) {
   margin: revert;
 }
-@supports selector(p:has(+ ul)) {
-  .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p:has(+ ul),
-  .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p:has(+ ol) {
-    margin-bottom: 0;
-  }
-}
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p + ul,
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p + ol {
   margin-top: 0;
@@ -2584,17 +2578,15 @@ body.blp-outliner-dragging .blp-file-outliner-view .bullet-container,
   min-width: 0;
 }
 .blp-file-outliner-view .blp-outliner-task-checkbox:checked + .blp-outliner-task-content {
-  text-decoration-line: line-through;
+  text-decoration: line-through;
   opacity: 0.75;
 }
 .blp-file-outliner-view .blp-file-outliner-display p {
   margin: 0;
   white-space: pre-wrap;
 }
-@supports selector(p:has(br)) {
-  .blp-file-outliner-view .blp-file-outliner-display p:has(br) {
-    white-space: normal;
-  }
+.blp-file-outliner-view .blp-file-outliner-display p br {
+  white-space: normal;
 }
 .blp-file-outliner-view .blp-file-outliner-display ul,
 .blp-file-outliner-view .blp-file-outliner-display ol,
