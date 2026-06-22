@@ -44,6 +44,11 @@ export type ChatArchiveRecord = {
   };
 };
 
+export type MergedChatArchiveRecord = ChatArchiveRecord & {
+  sourceDevices: string[];
+  archivePaths: string[];
+};
+
 export type ClaudianSessionMeta = {
   id: string;
   providerId?: string;
@@ -69,6 +74,7 @@ export type ClaudianChatArchiveSettings = {
   maxMessageBytes: number;
   maxArchiveBytes: number;
   deviceId: string;
+  continuationMap: Record<string, string>;
 };
 
 export const DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS: ClaudianChatArchiveSettings = {
@@ -79,6 +85,7 @@ export const DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS: ClaudianChatArchiveSettings = {
   maxMessageBytes: 51200,
   maxArchiveBytes: 1048576,
   deviceId: "",
+  continuationMap: {},
 };
 
 export function normalizeClaudianArchiveSettings(value: unknown): ClaudianChatArchiveSettings {
@@ -92,7 +99,24 @@ export function normalizeClaudianArchiveSettings(value: unknown): ClaudianChatAr
     maxMessageBytes: clampNumber(saved.maxMessageBytes, 4096, 512000, 51200),
     maxArchiveBytes: clampNumber(saved.maxArchiveBytes, 65536, 5242880, 1048576),
     deviceId: typeof saved.deviceId === "string" ? saved.deviceId.trim().slice(0, 64) : "",
+    continuationMap: normalizeContinuationMap(saved.continuationMap),
   };
+}
+
+function normalizeContinuationMap(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, string> = {};
+  for (const [originId, continuationId] of Object.entries(value)) {
+    if (
+      typeof originId === "string" &&
+      originId.startsWith("conv-") &&
+      typeof continuationId === "string" &&
+      continuationId.startsWith("conv-")
+    ) {
+      result[originId] = continuationId;
+    }
+  }
+  return result;
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number) {
@@ -101,7 +125,6 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-/** 社区审核：不读取主机名；首次启用存档时写入插件 data.json */
 export function createLocalDeviceId(): string {
   const crypto = globalThis.crypto;
   if (crypto?.randomUUID) {
@@ -172,4 +195,62 @@ export function buildArchiveRecord(
       providerSkipped: omittedExtras.providerSkipped,
     },
   };
+}
+
+export function chooseBestArchiveRecord(
+  records: Array<{ path: string; record: ChatArchiveRecord }>
+): MergedChatArchiveRecord | null {
+  if (records.length === 0) return null;
+  const ranked = [...records].sort((a, b) => {
+    const messageDelta = b.record.messages.length - a.record.messages.length;
+    if (messageDelta !== 0) return messageDelta;
+    const updatedDelta = (Number(b.record.updatedAt) || 0) - (Number(a.record.updatedAt) || 0);
+    if (updatedDelta !== 0) return updatedDelta;
+    return (Number(b.record.lastArchivedAt) || 0) - (Number(a.record.lastArchivedAt) || 0);
+  });
+  const best = ranked[0].record;
+  return {
+    ...best,
+    messages: [...best.messages],
+    sourceDevices: Array.from(new Set(ranked.map((item) => item.record.sourceDevice).filter(Boolean))),
+    archivePaths: ranked.map((item) => item.path),
+  };
+}
+
+export function mergeArchiveRecords(
+  records: Array<{ path: string; record: ChatArchiveRecord }>
+): MergedChatArchiveRecord[] {
+  const groups = new Map<string, Array<{ path: string; record: ChatArchiveRecord }>>();
+  for (const item of records) {
+    if (!item.record?.conversationId) continue;
+    const group = groups.get(item.record.conversationId) ?? [];
+    group.push(item);
+    groups.set(item.record.conversationId, group);
+  }
+  return Array.from(groups.values())
+    .map(chooseBestArchiveRecord)
+    .filter((record): record is MergedChatArchiveRecord => record !== null)
+    .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+}
+
+export function buildArchiveHandoffPrompt(record: MergedChatArchiveRecord): string {
+  const transcript = record.messages
+    .map((message) => `${message.role === "user" ? "用户" : "助手"}：${message.text}`)
+    .join("\n\n");
+  return [
+    "<claudian_cross_device_handoff>",
+    "以下内容来自另一台设备同步的 Claudian 只读聊天记录。",
+    "这是一个新的本机 Codex 线程，不是原 thread 的精确恢复。",
+    `原会话标题：${record.title}`,
+    `来源设备：${record.sourceDevices.join("、") || record.sourceDevice}`,
+    record.currentNote ? `原关联笔记：${record.currentNote}` : "",
+    "",
+    "原聊天记录：",
+    transcript,
+    "</claudian_cross_device_handoff>",
+    "",
+    "请把以上记录作为当前对话的既有上下文，直接衔接处理用户接下来发送的新消息；不要重复复述整段记录。",
+  ]
+    .filter((line, index, lines) => line !== "" || (index > 0 && lines[index - 1] !== ""))
+    .join("\n");
 }

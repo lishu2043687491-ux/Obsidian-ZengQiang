@@ -29,10 +29,6 @@ var import_state = require("@codemirror/state");
 var import_view = require("@codemirror/view");
 var PLUGIN_ID = "markdown-table-enhancer";
 var TEMPLATE_LIBRARY_FOLDER = ".\u6A21\u677F\u5E93";
-var INITIALIZE_COMMAND_ID = "initialize-current-file-table-anchors";
-var INITIALIZE_COMMAND_NAME = "\u4E3A\u5F53\u524D\u6587\u4EF6\u5168\u90E8\u8868\u683C\u542F\u7528\u589E\u5F3A\uFF08\u6279\u91CF\uFF09";
-var INITIALIZE_CURRENT_TABLE_COMMAND_ID = "initialize-current-table-enhancement";
-var INITIALIZE_CURRENT_TABLE_COMMAND_NAME = "\u5BF9\u5F53\u524D\u8868\u542F\u7528\u589E\u5F3A";
 var INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID = "initialize-current-table-native-layout";
 var INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME = "\u5BF9\u5F53\u524D\u8868\u683C\u7F8E\u5316";
 var INSERT_NATIVE_COLOR_TABLE_COMMAND_ID = "insert-native-color-table-template";
@@ -41,30 +37,12 @@ var SET_NATIVE_ROW_COLOR_COMMAND_ID = "set-current-native-table-row-color";
 var SET_NATIVE_ROW_COLOR_COMMAND_NAME = "\u8BBE\u7F6E\u5F53\u524D\u539F\u751F\u8868\u683C\u9009\u4E2D\u884C\u989C\u8272";
 var OPEN_NATIVE_ROW_BANDS_COMMAND_ID = "open-current-native-table-row-bands";
 var OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "\u6253\u5F00\u5F53\u524D\u539F\u751F\u8868\u683C\u884C\u6BB5\u914D\u8272";
-var INSERT_TEMPLATE_COMMAND_ID = "insert-enhanced-table-template";
-var INSERT_TEMPLATE_COMMAND_NAME = "\u63D2\u5165\u589E\u5F3A\u8868\u683C\u6A21\u677F";
 var OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
 var OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "\u6A21\u677F\u5E93";
 var COPY_TABLE_AS_IMAGE_LABEL = "\u590D\u5236\u5F53\u524D\u8868\u683C\u6210\u56FE";
 var COPY_TABLE_AS_IMAGE_SHORT_LABEL = "\u56FE";
-var RESTORE_COMMAND_ID = "restore-last-table-enhancement-snapshot";
-var RESTORE_COMMAND_NAME = "\u6062\u590D\u5F53\u524D\u6587\u4EF6\u6700\u8FD1\u4E00\u6B21\u8868\u683C\u589E\u5F3A\u5FEB\u7167";
-var STATUS_COMMAND_ID = "show-current-file-table-enhancement-status";
-var STATUS_COMMAND_NAME = "\u67E5\u770B\u5F53\u524D\u6587\u4EF6\u8868\u683C\u589E\u5F3A\u72B6\u6001";
-var SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
-var SET_SELECTION_YELLOW_COMMAND_NAME = "\u5C06\u5F53\u524D\u8868\u683C\u9009\u533A\u8BBE\u4E3A\u6D45\u9EC4";
-var CLEAR_SELECTION_COLOR_COMMAND_ID = "clear-current-table-selection-color";
-var CLEAR_SELECTION_COLOR_COMMAND_NAME = "\u6E05\u9664\u5F53\u524D\u8868\u683C\u9009\u533A\u989C\u8272";
-var MERGE_SELECTION_COMMAND_ID = "merge-current-table-selection";
-var MERGE_SELECTION_COMMAND_NAME = "\u5408\u5E76\u5F53\u524D\u8868\u683C\u9009\u533A";
-var SPLIT_SELECTION_COMMAND_ID = "split-current-table-cell";
-var SPLIT_SELECTION_COMMAND_NAME = "\u62C6\u5206\u5F53\u524D\u8868\u683C\u5355\u5143\u683C";
-var PASTE_IMAGE_COMMAND_ID = "paste-clipboard-image-to-current-table-cell";
-var PASTE_IMAGE_COMMAND_NAME = "\u5C06\u526A\u8D34\u677F\u56FE\u7247\u7C98\u8D34\u5230\u5F53\u524D\u589E\u5F3A\u8868\u683C\u5355\u5143\u683C";
 var PASTE_ONENOTE_RICH_TABLE_COMMAND_ID = "paste-onenote-rich-table";
-var PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "\u4ECE OneNote \u7C98\u8D34\u4E3A\u589E\u5F3A\u8868\u683C";
-var TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID = "toggle-experimental-table-features";
-var TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME = "\u5207\u6362\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B";
+var PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "\u7C98\u8D34OneNote";
 var SNAPSHOT_LIMIT = 60;
 var TABLE_ID_PREFIX = "tbl_";
 var HTML_TABLE_MARKER_RE = /^\s*<!--\s*mdtp:(tbl_[a-z0-9_-]+)\s*-->\s*$/i;
@@ -721,10 +699,10 @@ var OneNoteRichPasteModal = class extends import_obsidian.Modal {
     contentEl.replaceChildren();
     contentEl.classList.add("mdtp-onenote-paste-modal");
     const title = document.createElement("h2");
-    title.textContent = "\u7C98\u8D34 OneNote \u589E\u5F3A\u8868\u683C";
+    title.textContent = "\u7C98\u8D34 OneNote\uFF08\u539F\u751F\u8868\u683C\uFF09";
     contentEl.appendChild(title);
     const hint = document.createElement("p");
-    hint.textContent = "\u4ECE OneNote \u590D\u5236\u9875\u9762\u6216\u8868\u683C\u540E\uFF0C\u70B9\u4E0B\u9762\u533A\u57DF\u6309 \u2318V \u7C98\u8D34\uFF0C\u63D2\u4EF6\u4F1A\u76F4\u63A5\u8F6C\u6210\u53EF\u7F16\u8F91\u589E\u5F3A\u8868\u683C\u3002";
+    hint.textContent = "\u4ECE OneNote \u590D\u5236\u540E\uFF0C\u70B9\u4E0B\u9762\u533A\u57DF\u6309 \u2318V \u7C98\u8D34\uFF0C\u5C06\u8F6C\u4E3A Obsidian \u539F\u751F Markdown \u8868\u683C\uFF08\u542B\u56FE\u7247\u672C\u5730\u5316\uFF0C\u65E0\u589E\u5F3A\u8868\u683C\u6807\u8BB0\uFF09\u3002";
     contentEl.appendChild(hint);
     const pasteZone = document.createElement("div");
     pasteZone.className = "mdtp-onenote-paste-zone";
@@ -738,9 +716,42 @@ var OneNoteRichPasteModal = class extends import_obsidian.Modal {
         pasteZone.textContent = "";
       }
     });
-    pasteZone.addEventListener("paste", (event) => void this.handlePaste(event));
+    pasteZone.addEventListener(
+      "paste",
+      (event) => void this.handlePaste(event),
+      true
+    );
     contentEl.appendChild(pasteZone);
+    const exportRow = document.createElement("div");
+    exportRow.className = "mdtp-onenote-paste-export-row";
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.textContent = "\u5BFC\u51FA\u539F\u59CB HTML\uFF08\u8C03\u8BD5\u6837\u672C\uFF09";
+    exportBtn.addEventListener("click", () => void this.exportOneNoteClipboardHtml());
+    exportRow.appendChild(exportBtn);
+    contentEl.appendChild(exportRow);
     window.setTimeout(() => pasteZone.focus(), 50);
+  }
+  async exportOneNoteClipboardHtml() {
+    const html = await this.plugin.resolveOneNoteClipboardHtml();
+    if (!html.trim()) {
+      new import_obsidian.Notice("\u526A\u8D34\u677F\u91CC\u6CA1\u6709 OneNote HTML\uFF0C\u8BF7\u5148\u4ECE OneNote \u590D\u5236");
+      return;
+    }
+    const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+    const fileName = `onenote-clipboard-${stamp}.html`;
+    try {
+      const electron = window.require?.("electron");
+      const { clipboard } = electron ?? {};
+      if (clipboard?.writeText) {
+        clipboard.writeText(html);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(html);
+      }
+    } catch {
+    }
+    console.log(`[mdtp] OneNote HTML export (${html.length} chars)`, fileName, html.slice(0, 500));
+    new import_obsidian.Notice(`\u5DF2\u590D\u5236\u539F\u59CB HTML \u5230\u526A\u8D34\u677F\uFF08${html.length} \u5B57\uFF09\u3002\u8BF7\u4FDD\u5B58\u4E3A tests/samples/${fileName}`);
   }
   onClose() {
     this.contentEl.replaceChildren();
@@ -845,6 +856,7 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     __publicField(this, "redoStack", []);
     __publicField(this, "historyApplying", false);
     __publicField(this, "suppressDocumentPasteUntil", 0);
+    __publicField(this, "oneNoteStatusBarGroupEl", null);
     __publicField(this, "oneNoteStatusButtonEl", null);
   }
   async onload() {
@@ -863,38 +875,12 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         ...savedTables
       },
       snapshots: Array.isArray(savedData?.snapshots) ? savedData.snapshots : [],
-      experimentalFeatureGate: !!savedData?.experimentalFeatureGate,
+      experimentalFeatureGate: false,
       nativeColorSavedPalettes: savedNativeColorPalettes,
       nativeColorDefaultPresetId: this.normalizeNativeColorPresetId(savedData?.nativeColorDefaultPresetId, savedNativeColorPalettes),
       nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT)
     };
     await this.migrateLegacyMarkersToHtmlComments();
-    this.addCommand({
-      id: INITIALIZE_COMMAND_ID,
-      name: INITIALIZE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.initializeCurrentFileTables(file);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: INITIALIZE_CURRENT_TABLE_COMMAND_ID,
-      name: INITIALIZE_CURRENT_TABLE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.initializeCurrentTable();
-        }
-        return true;
-      }
-    });
     this.addCommand({
       id: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID,
       name: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME,
@@ -950,19 +936,6 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       }
     });
     this.addCommand({
-      id: INSERT_TEMPLATE_COMMAND_ID,
-      name: INSERT_TEMPLATE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.insertEnhancedTableTemplate();
-        }
-        return true;
-      }
-    });
-    this.addCommand({
       id: OPEN_TEMPLATE_LIBRARY_COMMAND_ID,
       name: OPEN_TEMPLATE_LIBRARY_COMMAND_NAME,
       callback: () => {
@@ -973,117 +946,10 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       this.openTemplateLibraryModal();
     });
     this.addCommand({
-      id: RESTORE_COMMAND_ID,
-      name: RESTORE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.restoreLatestSnapshot(file);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: STATUS_COMMAND_ID,
-      name: STATUS_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.showCurrentFileStatus(file);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: SET_SELECTION_YELLOW_COMMAND_ID,
-      name: SET_SELECTION_YELLOW_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.setColor(context.tableId, context.file, context.tableEl, "cell", this.getCellKey(context.anchor), PALETTE[0].value);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: CLEAR_SELECTION_COLOR_COMMAND_ID,
-      name: CLEAR_SELECTION_COLOR_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.clearColor(
-            context.tableId,
-            context.file,
-            context.tableEl,
-            "cell",
-            this.getCellKey(context.anchor)
-          );
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: MERGE_SELECTION_COMMAND_ID,
-      name: MERGE_SELECTION_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context?.selection) return false;
-        if (context.selection.startRow === context.selection.endRow && context.selection.startCol === context.selection.endCol) {
-          return false;
-        }
-        if (!this.canMergeSelection(context.tableEl, this.dataStore.tables[context.tableId].layout, context.selection)) {
-          return false;
-        }
-        if (!checking) {
-          void this.mergeSelection(context.file, context.tableId, context.tableEl, context.selection);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: SPLIT_SELECTION_COMMAND_ID,
-      name: SPLIT_SELECTION_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        const merge = this.dataStore.tables[context.tableId].layout.merges.find(
-          (item) => item.row === context.anchor.row && item.col === context.anchor.col
-        );
-        if (!merge) return false;
-        if (!checking) {
-          void this.splitMerge(context.file, context.tableId, context.tableEl, merge);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
-      id: PASTE_IMAGE_COMMAND_ID,
-      name: PASTE_IMAGE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.handleClipboardPasteForSelectedCell(context.file, context.tableId, context.anchor);
-        }
-        return true;
-      }
-    });
-    this.addCommand({
       id: PASTE_ONENOTE_RICH_TABLE_COMMAND_ID,
       name: PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME,
       checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
+        if (!this.isOneNotePasteFeatureEnabled()) return false;
         const file = this.getActiveMarkdownFile(checking);
         if (!file) return false;
         if (!checking) {
@@ -1092,12 +958,13 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         return true;
       }
     });
-    this.oneNoteStatusButtonEl = this.addStatusBarItem();
-    this.oneNoteStatusButtonEl.addClass("mdtp-onenote-status-button");
-    this.oneNoteStatusButtonEl.setText("\u7C98\u8D34 OneNote");
+    this.oneNoteStatusBarGroupEl = this.addStatusBarItem();
+    this.oneNoteStatusBarGroupEl.addClass("mdtp-onenote-status-bar-group");
+    this.oneNoteStatusBarGroupEl.style.display = "none";
+    this.oneNoteStatusButtonEl = this.oneNoteStatusBarGroupEl.createDiv("mdtp-onenote-status-button");
+    this.oneNoteStatusButtonEl.setText("\u7C98\u8D34OneNote");
     this.oneNoteStatusButtonEl.setAttr("role", "button");
-    this.oneNoteStatusButtonEl.setAttr("aria-label", "\u4ECE OneNote \u7C98\u8D34\u4E3A\u589E\u5F3A\u8868\u683C");
-    this.oneNoteStatusButtonEl.style.display = "none";
+    this.oneNoteStatusButtonEl.setAttr("aria-label", PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME);
     this.oneNoteStatusButtonEl.addEventListener("click", () => {
       const file = this.getActiveMarkdownFile();
       if (!file) {
@@ -1105,11 +972,6 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
         return;
       }
       void this.pasteOneNoteFromSystemClipboardOrOpenModal(file);
-    });
-    this.addCommand({
-      id: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID,
-      name: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME,
-      callback: () => void this.toggleExperimentalFeatureGate()
     });
     this.registerMarkdownPostProcessor((element, context) => {
       this.decorateOneNoteRichTables(element, context);
@@ -1142,6 +1004,7 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
     this.registerDomEvent(document, "pointermove", (event) => this.handleGlobalPointerMove(event), true);
     this.registerDomEvent(document, "pointerup", () => void this.handleGlobalPointerUp(), true);
     this.registerDomEvent(document, "pointercancel", () => void this.handleGlobalPointerUp(), true);
+    this.updateOneNoteStatusBarVisibility();
     this.queueRefreshBurst();
   }
   async migrateLegacyMarkersToHtmlComments() {
@@ -2152,9 +2015,6 @@ var MarkdownTableEnhancerPlugin = class extends import_obsidian.Plugin {
       return false;
     }
   }
-  async insertEnhancedTemplateContentAtCursor(content, position) {
-    return this.insertTemplateContentAtCursor(content, position);
-  }
   async insertTemplateContentAtCursor(content, position) {
     const file = this.getActiveMarkdownFile();
     if (!file) return false;
@@ -2295,9 +2155,12 @@ ${tableMarkdown}
       return this.normalizeTemplateTableContent(parsedTable.raw);
     }
     const record = this.dataStore.tables[parsedTable.tableId];
+    if (this.getTableRecordMode(record) !== "nativeLayout") {
+      return this.normalizeTemplateTableContent(parsedTable.raw);
+    }
     const metadata = this.serializeTemplateTableMetadata({
       [parsedTable.tableId]: {
-        mode: this.getTableRecordMode(record),
+        mode: "nativeLayout",
         layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout()
       }
     });
@@ -2366,9 +2229,6 @@ ${this.normalizeTemplateTableContent(parsedTable.raw)}`;
     if (selectedContent?.trim()) {
       this.openTemplateNameModal(selectedContent);
       return true;
-    }
-    if (options?.file && options.tableId && options.tableSelection) {
-      return this.saveEnhancedTableSelectionAsTemplate(options.file, options.tableId, options.tableSelection);
     }
     if (options?.plainTableContext) {
       return this.savePlainTableSelectionAsTemplate(options.plainTableContext);
@@ -2453,18 +2313,28 @@ ${trimmedVisible}
     const lines = extracted.content.split(/\r?\n/);
     const parsedTables = this.parseMarkdownTables(extracted.content).filter((table) => !!table.tableId);
     const idMap = /* @__PURE__ */ new Map();
+    const tableModes = /* @__PURE__ */ new Map();
+    for (const table of parsedTables) {
+      if (!table.tableId) continue;
+      const templateRecord = extracted.metadata.tables[table.tableId];
+      const sourceRecord = this.dataStore.tables[table.tableId];
+      tableModes.set(table.tableId, templateRecord?.mode ?? this.getTableRecordMode(sourceRecord));
+    }
     for (const table of parsedTables) {
       if (!table.tableId || idMap.has(table.tableId)) continue;
+      if (tableModes.get(table.tableId) !== "nativeLayout") continue;
       idMap.set(table.tableId, this.generateTableId());
     }
     if (idMap.size === 0) {
-      return { content: extracted.content, tableRecords: [] };
+      return { content: this.stripTableMarkersFromContent(extracted.content), tableRecords: [] };
     }
     for (let index = 0; index < lines.length; index += 1) {
       const tableId = this.extractTableMarkerId(lines[index]);
       const nextId = tableId ? idMap.get(tableId) : null;
       if (nextId) {
         lines[index] = this.formatTableMarker(nextId);
+      } else if (tableId) {
+        lines[index] = "";
       }
     }
     this.ensureBlankLineAfterTableMarkers(lines);
@@ -2478,10 +2348,12 @@ ${trimmedVisible}
       if (!sourceTable.tableId || !targetTable.tableId) continue;
       const templateRecord = extracted.metadata.tables[sourceTable.tableId];
       const sourceRecord = this.dataStore.tables[sourceTable.tableId];
+      const mode = templateRecord?.mode ?? this.getTableRecordMode(sourceRecord);
+      if (mode !== "nativeLayout") continue;
       const layout = this.normalizeLayout(templateRecord?.layout ?? sourceRecord?.layout ?? this.createEmptyLayout());
       tableRecords.push({
         tableId: targetTable.tableId,
-        mode: templateRecord?.mode ?? this.getTableRecordMode(sourceRecord),
+        mode: "nativeLayout",
         filePath: file.path,
         createdAt: now,
         updatedAt: now,
@@ -2497,6 +2369,11 @@ ${trimmedVisible}
       content: transformedContent,
       tableRecords
     };
+  }
+  stripTableMarkersFromContent(content) {
+    const originalEndsWithNewline = /\r?\n$/.test(content);
+    const lines = content.split(/\r?\n/).filter((line) => !this.extractTableMarkerId(line));
+    return this.joinLines(lines, originalEndsWithNewline);
   }
   extractLayoutForSelection(layout, selection) {
     const next = this.createEmptyLayout();
@@ -2603,7 +2480,7 @@ ${trimmedVisible}
     new OneNoteRichPasteModal(this, file).open();
   }
   async pasteOneNoteFromSystemClipboardOrOpenModal(file) {
-    const html = await this.readHtmlFromAvailableClipboard();
+    const html = await this.resolveOneNoteClipboardHtml();
     if (html.trim()) {
       const ok = await this.importOneNoteRichContent(file, html, []);
       if (ok) return;
@@ -2651,32 +2528,37 @@ ${trimmedVisible}
     );
   }
   isExperimentalFeatureEnabled() {
-    return !!this.dataStore.experimentalFeatureGate;
+    return false;
+  }
+  isOneNotePasteFeatureEnabled() {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
+    if (typeof feishu?.isOneNoteRichPasteEnabled === "function") {
+      return feishu.isOneNoteRichPasteEnabled();
+    }
+    return false;
   }
   shouldShowEnhancedTableEntrances() {
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
-    if (typeof feishu?.isTableEnhancerEntrancesVisible === "function") {
-      return feishu.isTableEnhancerEntrancesVisible();
-    }
-    return this.isExperimentalFeatureEnabled();
+    return false;
   }
   async setExperimentalFeatureGate(enabled) {
-    this.dataStore.experimentalFeatureGate = !!enabled;
+    this.dataStore.experimentalFeatureGate = false;
     await this.savePluginData();
-    if (!enabled) {
-      this.hideImageManipulator();
-      if (this.oneNoteStatusButtonEl) {
-        this.oneNoteStatusButtonEl.style.display = "none";
-      }
+    this.hideImageManipulator();
+    this.updateOneNoteStatusBarVisibility();
+    void enabled;
+  }
+  updateOneNoteStatusBarVisibility() {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"];
+    const visible = typeof feishu?.isOneNoteRichPasteEnabled === "function" ? feishu.isOneNoteRichPasteEnabled() : false;
+    if (this.oneNoteStatusBarGroupEl) {
+      this.oneNoteStatusBarGroupEl.style.display = visible ? "inline-flex" : "none";
     }
   }
   async toggleExperimentalFeatureGate() {
-    this.dataStore.experimentalFeatureGate = !this.dataStore.experimentalFeatureGate;
+    this.dataStore.experimentalFeatureGate = false;
     await this.savePluginData();
-    if (!this.isExperimentalFeatureEnabled()) {
-      this.hideImageManipulator();
-    }
-    new import_obsidian.Notice(this.isExperimentalFeatureEnabled() ? "\u5DF2\u5F00\u542F\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B" : "\u5DF2\u5173\u95ED\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B");
+    this.hideImageManipulator();
+    new import_obsidian.Notice("\u589E\u5F3A\u8868\u683C\u6D4B\u8BD5\u7248\u80FD\u529B\u5DF2\u79FB\u9664");
   }
   decorateOneNoteRichTables(element, context) {
     const file = this.app.vault.getAbstractFileByPath(context.sourcePath);
@@ -2862,7 +2744,12 @@ ${trimmedVisible}
     this.indexTableCells(tableEl);
     this.clearInjectedTableArtifacts(tableEl);
     tableEl.dataset.mdtpTableId = tableId;
-    const record = await this.ensureRecordForParsedTable(file, parsedTable);
+    const record = this.dataStore.tables[tableId] ?? null;
+    if (!record) {
+      this.runtimeState.delete(tableEl);
+      this.restoreNativeTable(tableEl);
+      return;
+    }
     if (record.mode === "nativeLayout") {
       runtime.selection = null;
       runtime.anchor = null;
@@ -2872,12 +2759,10 @@ ${trimmedVisible}
       this.injectResizeHandles(tableEl, record.layout);
       return;
     }
-    tableEl.classList.remove("mdtp-table-uninitialized", "mdtp-table-native-layout", "mdtp-table-colored");
-    tableEl.classList.add("mdtp-table-enhanced");
-    this.applyLayout(tableEl, record.layout);
-    this.renderImageMarkupInEnhancedCells(tableEl, file, parsedTable, record.layout);
-    this.injectResizeHandles(tableEl, record.layout);
-    this.renderSelection(tableEl, runtime.selection, runtime.anchor);
+    runtime.selection = null;
+    runtime.anchor = null;
+    this.runtimeState.delete(tableEl);
+    this.restoreNativeTable(tableEl);
   }
   async ensureRecordForParsedTable(file, parsedTable) {
     const tableId = parsedTable.tableId;
@@ -4009,26 +3894,7 @@ ${trimmedVisible}
     new import_obsidian.Notice("\u8BF7\u5148\u542F\u7528 Obsidian\u589E\u5F3A\u4F53\u9A8C \u4E2D\u7684\u300C\u53F3\u952E\u590D\u5236\u6210\u56FE\u300D");
   }
   getEnhancedSidebarActionDescriptors() {
-    return [
-      { label: "\u4E0A\u65B9\u63D2\u5165\u884C" },
-      { label: "\u4E0B\u65B9\u63D2\u5165\u884C" },
-      { label: "\u5DE6\u4FA7\u63D2\u5165\u5217" },
-      { label: "\u53F3\u4FA7\u63D2\u5165\u5217" },
-      { label: "\u5220\u9664\u5F53\u524D\u884C" },
-      { label: "\u5220\u9664\u5F53\u524D\u5217" },
-      { label: "\u5408\u5E76" },
-      { label: "\u62C6\u5206" },
-      { label: "\u5355\u5143\u683C\u989C\u8272" },
-      { label: "\u5F53\u524D\u884C\u989C\u8272" },
-      { label: "\u5F53\u524D\u5217\u989C\u8272" },
-      { label: "\u6E05\u9664\u989C\u8272" },
-      { label: "\u590D\u5236\u5F53\u524D\u5757\u5185\u5BB9", wide: true },
-      { label: "\u9AD8\u4FDD\u771F\u590D\u5236", wide: true },
-      { label: "\u590D\u5236\u5F53\u524D\u5757\u6210\u56FE", wide: true },
-      { label: "\u4FDD\u5B58\u5F53\u524D\u9009\u533A\u4E3A\u6A21\u677F", wide: true },
-      { label: "\u63D2\u5165\u6A21\u677F", wide: true },
-      { label: "\u6A21\u677F\u5E93", wide: true }
-    ];
+    return [];
   }
   shouldExposeExperimentalAction(experimental) {
     return !experimental || !!this.dataStore?.experimentalFeatureGate;
@@ -4126,7 +3992,7 @@ ${trimmedVisible}
     const isTypingTarget = !!target?.closest("input, textarea, [contenteditable='true'], .cm-content");
     const isDirectFormTypingTarget = !!target?.closest("input, textarea, select, .mdtp-inline-editor, .mdtp-onenote-paste-zone");
     const isForeignEditableTarget = !!target?.closest("[contenteditable='true']") && !target?.closest(".cm-content") && !target?.closest(".mdtp-onenote-paste-zone");
-    if (this.activeImageManipulator && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
+    if (this.isExperimentalFeatureEnabled() && this.activeImageManipulator && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
       const handled = await this.removeActiveImageFromCell(this.activeImageManipulator);
       if (handled) {
         event.preventDefault();
@@ -4134,7 +4000,7 @@ ${trimmedVisible}
       }
       return;
     }
-    if (context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !isTypingTarget && event.key === "Enter") {
+    if (this.isExperimentalFeatureEnabled() && context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !isTypingTarget && event.key === "Enter") {
       const runtime = this.runtimeState.get(context.tableEl);
       const cell = context.tableEl.querySelector(
         `[data-mdtp-row='${context.anchor.row}'][data-mdtp-col='${context.anchor.col}']`
@@ -4146,7 +4012,7 @@ ${trimmedVisible}
         return;
       }
     }
-    if (context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
+    if (this.isExperimentalFeatureEnabled() && context?.tableId && !this.activeEditor && !event.metaKey && !event.ctrlKey && !event.altKey && !isDirectFormTypingTarget && !isForeignEditableTarget && (event.key === "Backspace" || event.key === "Delete")) {
       const selection = context.selection ?? this.normalizeSelection(context.anchor, context.anchor);
       const handled = await this.clearSelectionContents(context.file, context.tableId, selection);
       if (handled) {
@@ -4169,7 +4035,7 @@ ${trimmedVisible}
       this.suppressDocumentPasteUntil = Date.now() + PASTE_EVENT_SUPPRESSION_MS;
       return;
     }
-    if (context?.tableId) {
+    if (this.isExperimentalFeatureEnabled() && context?.tableId) {
       if (key === "c") {
         const selection = context.selection ?? this.normalizeSelection(context.anchor, context.anchor);
         const handled = await this.copySelectionToClipboard(context.file, context.tableId, selection);
@@ -4223,7 +4089,7 @@ ${trimmedVisible}
       return;
     }
     const context = this.getActiveInteractionContext(true);
-    if (context) {
+    if (this.isExperimentalFeatureEnabled() && context) {
       if (!context.tableId) {
         return;
       }
@@ -4291,7 +4157,7 @@ ${trimmedVisible}
     return true;
   }
   async importOneNoteRichClipboardEvent(file, event) {
-    const html = this.getHtmlFromClipboardEvent(event);
+    const html = await this.resolveOneNoteClipboardHtml(event);
     return this.importOneNoteRichContent(file, html, this.getImagesFromClipboard(event));
   }
   async importOneNoteRichContent(file, html, clipboardImages = []) {
@@ -4299,16 +4165,104 @@ ${trimmedVisible}
       new import_obsidian.Notice("\u6CA1\u6709\u8BFB\u53D6\u5230 OneNote \u5BCC\u6587\u672C\uFF0C\u8BF7\u4ECE OneNote \u590D\u5236\u540E\u5728\u5F39\u7A97\u91CC\u7C98\u8D34");
       return false;
     }
-    const converted = await this.buildOneNoteEnhancedMarkdownContent(file, html, clipboardImages);
-    if (!converted) {
+    const content = await this.buildOneNoteNativeMarkdownContent(file, html, clipboardImages);
+    if (!content?.trim()) {
       new import_obsidian.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u53EF\u8FC1\u79FB\u7684 OneNote \u5185\u5BB9");
       return false;
     }
-    await this.createSnapshot(file, "before-onenote-paste", converted.tableRecords.map((record) => record.tableId));
-    await this.insertOneNoteConvertedContentAtCursor(file, converted);
+    await this.createSnapshot(file, "before-onenote-paste", []);
+    await this.insertMarkdownBlockAtCursor(file, content);
     this.queueRefreshBurst();
-    new import_obsidian.Notice("\u5DF2\u63D2\u5165 OneNote \u589E\u5F3A\u8868\u683C");
+    new import_obsidian.Notice("\u5DF2\u7C98\u8D34 OneNote \u539F\u751F\u8868\u683C\uFF08\u65E0\u589E\u5F3A\u8868\u683C\u6807\u8BB0\uFF09");
     return true;
+  }
+  convertOneNoteTableToNativeMarkdown(file, table) {
+    const extracted = this.extractOneNoteTableMatrix(file, table);
+    if (!extracted || extracted.rows.length === 0) return null;
+    const { header, body } = this.splitOneNoteTableHeaderAndBody(extracted.rows);
+    const columnCount = Math.max(header.length, ...body.map((row) => row.length), 1);
+    const normalizedBody = columnCount === 2 && this.oneNoteTableBodyLooksLikeLabelContentRows(body) ? body.map((row) => this.normalizeOneNoteLabelContentRow(row, columnCount)) : body.map((row) => this.normalizeRowCells(row, columnCount));
+    const rawTable = {
+      header: this.normalizeRowCells(header, columnCount),
+      divider: Array.from({ length: columnCount }, () => "---"),
+      body: normalizedBody
+    };
+    return this.buildOneNoteRawTable(rawTable).join("\n");
+  }
+  oneNoteTableBodyLooksLikeLabelContentRows(body) {
+    if (!body.length) return false;
+    const labelRows = body.filter((row) => this.looksLikeOneNoteLabelCell(row[0] ?? ""));
+    return labelRows.length >= Math.max(1, Math.ceil(body.length * 0.5));
+  }
+  normalizeOneNoteLabelContentRow(row, columnCount) {
+    const col0 = (row[0] ?? "").trim();
+    const col1 = row.slice(1).join("<br>").trim();
+    if (col1.includes("\u2022 **")) {
+      return this.normalizeRowCells(row, columnCount);
+    }
+    if (this.looksLikeOneNoteLabelCell(col0)) {
+      const block = this.flattenTwoColumnNestedTable([[col0, col1]]);
+      return this.normalizeRowCells([col0, block], columnCount);
+    }
+    return this.normalizeRowCells(row, columnCount);
+  }
+  async buildOneNoteNativeMarkdownContent(file, html, clipboardImages = []) {
+    const container = await this.buildSanitizedOneNoteContainer(file, html, clipboardImages);
+    if (!container) return null;
+    const blocks = [];
+    for (const child of Array.from(container.childNodes)) {
+      this.appendOneNoteNodeAsNativeMarkdownBlocks(file, child, blocks);
+    }
+    return this.joinOneNoteMarkdownBlocks(blocks);
+  }
+  appendOneNoteNodeAsNativeMarkdownBlocks(file, node, blocks) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (text) blocks.push(text);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const element = node;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "table") {
+      const markdown2 = this.convertOneNoteTableToNativeMarkdown(file, element);
+      if (markdown2) blocks.push(markdown2);
+      return;
+    }
+    if (tag === "ul" || tag === "ol") {
+      const markdown2 = this.convertOneNoteListToMarkdown(file, element);
+      if (markdown2) blocks.push(markdown2);
+      return;
+    }
+    if (tag === "img") {
+      const markdown2 = this.convertOneNoteImageToMarkdown(element);
+      if (markdown2) blocks.push(markdown2);
+      return;
+    }
+    if (this.shouldExpandOneNoteWrapperElement(element)) {
+      for (const child of Array.from(element.childNodes)) {
+        this.appendOneNoteNodeAsNativeMarkdownBlocks(file, child, blocks);
+      }
+      return;
+    }
+    const markdown = this.convertOneNoteBlockElementToMarkdown(file, element);
+    if (markdown) blocks.push(markdown);
+  }
+  async insertMarkdownBlockAtCursor(file, block) {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
+    const editor = view?.editor;
+    const normalizedBlock = block.endsWith("\n") ? block : `${block}
+`;
+    if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
+      const cursor = editor.getCursor();
+      const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
+      const prefix = currentLine.trim() ? "\n\n" : "";
+      editor.replaceRange(`${prefix}${normalizedBlock}`, cursor);
+      return;
+    }
+    const originalContent = await this.app.vault.cachedRead(file);
+    const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
+    await this.app.vault.modify(file, `${originalContent}${separator}${normalizedBlock}`);
   }
   async insertOneNoteConvertedContentAtCursor(file, converted) {
     const normalizedContent = converted.content.endsWith("\n") ? converted.content : `${converted.content}
@@ -4338,22 +4292,6 @@ ${trimmedVisible}
     await this.app.vault.modify(file, nextContent);
     const parsedTables = this.parseMarkdownTables(nextContent);
     await this.syncTableRecords(file, parsedTables, { modeOverrides });
-  }
-  async insertMarkdownBlockAtCursor(file, block) {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian.MarkdownView);
-    const editor = view?.editor;
-    const normalizedBlock = block.endsWith("\n") ? block : `${block}
-`;
-    if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
-      const cursor = editor.getCursor();
-      const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
-      const prefix = currentLine.trim() ? "\n\n" : "";
-      editor.replaceRange(`${prefix}${normalizedBlock}`, cursor);
-      return;
-    }
-    const originalContent = await this.app.vault.cachedRead(file);
-    const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
-    await this.app.vault.modify(file, `${originalContent}${separator}${normalizedBlock}`);
   }
   async buildOneNoteEnhancedMarkdownContent(file, html, clipboardImages = []) {
     const container = await this.buildSanitizedOneNoteContainer(file, html, clipboardImages);
@@ -4456,8 +4394,26 @@ ${text2}
       if (!value) continue;
       parts.push(value);
     }
-    const joined = parts.join("").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
+    let joined = parts.join("").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
+    joined = this.collapseOneNoteMarkdownMarks(joined);
     return forCell ? joined.replace(/\n/g, "<br>").trim() : joined.trim();
+  }
+  /** 合并相邻 ** 段、去掉 OneNote 多 span 造成的星号连击 */
+  collapseOneNoteMarkdownMarks(text) {
+    let out = text;
+    out = out.replace(/\*\*\s*\*\*/g, "");
+    while (/\*\*([^*]+)\*\*\*\*([^*]+)\*\*/.test(out)) {
+      out = out.replace(/\*\*([^*]+)\*\*\*\*([^*]+)\*\*/g, "**$1$2**");
+    }
+    out = out.replace(/\*\*(\*\*[^*]+\*\*)\*\*/g, "$1");
+    out = out.replace(/\*{3,}([^*]+)\*{3,}/g, "**$1**");
+    return out;
+  }
+  innerAlreadyWrappedInBold(inner) {
+    const trimmed = inner.trim();
+    if (!trimmed.startsWith("**") || !trimmed.endsWith("**")) return false;
+    const markers = trimmed.match(/\*\*/g);
+    return (markers?.length ?? 0) === 2;
   }
   serializeOneNoteInlineNode(file, node, forCell) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -4479,25 +4435,263 @@ ${text2}
       const href = element.getAttribute("href")?.trim() ?? "";
       return href ? `[${inner}](${href})` : inner;
     }
-    if (tag === "strong" || tag === "b") return `**${inner}**`;
-    if (tag === "em" || tag === "i") return `*${inner}*`;
+    if (tag === "strong" || tag === "b") {
+      return this.innerAlreadyWrappedInBold(inner) ? inner : `**${inner}**`;
+    }
+    if (tag === "em" || tag === "i") {
+      const t = inner.trim();
+      if (t.startsWith("*") && t.endsWith("*") && !t.startsWith("**")) return inner;
+      return `*${inner}*`;
+    }
     if (tag === "code") return `\`${inner.replace(/`/g, "")}\``;
     if (tag === "u") return inner;
-    if (tag === "p" || tag === "div" || tag === "li") return `${inner}
-`;
+    if (tag === "s" || tag === "strike") return `~~${inner}~~`;
+    if (tag === "span" || tag === "p" || tag === "div") {
+      const styled = this.applyOneNoteInlineStyleMarks(element, inner);
+      if (tag === "p" || tag === "div") return styled ? `${styled}
+` : "";
+      return styled;
+    }
     return inner;
+  }
+  /** OneNote 剪贴板常用 span style 加粗/斜体，需转成 Markdown 才能在 Obsidian 里显示 */
+  applyOneNoteInlineStyleMarks(element, inner) {
+    if (!inner) return inner;
+    if (this.innerAlreadyWrappedInBold(inner)) return inner;
+    const styles = this.readOneNoteStyleMap(element);
+    let out = inner;
+    const weight = styles["font-weight"]?.trim().toLowerCase() ?? "";
+    const weightNum = Number.parseInt(weight, 10);
+    if (weight === "bold" || weight === "bolder" || Number.isFinite(weightNum) && weightNum >= 600) {
+      out = this.innerAlreadyWrappedInBold(out) ? out : `**${out}**`;
+    }
+    const fontStyle = styles["font-style"]?.trim().toLowerCase() ?? "";
+    if (fontStyle === "italic" || fontStyle === "oblique") {
+      const t = out.trim();
+      if (!(t.startsWith("*") && t.endsWith("*") && !t.startsWith("**"))) {
+        out = `*${out}*`;
+      }
+    }
+    const decoration = styles["text-decoration"]?.toLowerCase() ?? "";
+    if (decoration.includes("line-through")) {
+      out = `~~${out}~~`;
+    }
+    return out;
   }
   serializeNestedOneNoteTable(file, table) {
     const matrix = this.extractOneNoteTableMatrix(file, table);
     if (!matrix || matrix.rows.length === 0) return "";
-    return matrix.rows.map(
-      (row) => row.map((cell) => cell.trim()).filter((cell) => cell.length > 0).join(" / ")
-    ).filter((line) => line.length > 0).join("<br>");
+    const rows = matrix.rows.map(
+      (row) => row.map((cell) => this.normalizeOneNoteMarkdownTableCell(cell))
+    );
+    return this.flattenNestedTableToText(rows);
+  }
+  stripOneNoteCellPlainText(cell) {
+    return cell.replace(/<br>/gi, " ").replace(/\*\*/g, "").trim();
+  }
+  isOneNoteNumericIndexCell(text) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    return /^\d+[.、．]?$/.test(plain) || /^[①②③④⑤⑥⑦⑧⑨⑩][.、．]?$/.test(plain);
+  }
+  looksLikeOneNoteLabelCell(text) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    if (!plain) return false;
+    if (plain.length > 48) return false;
+    if (this.isOneNoteNumericIndexCell(plain)) return false;
+    if (/^\d+[.、．]\s/.test(plain)) return false;
+    return true;
+  }
+  maybeBoldShortHeading(text) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    if (!plain || plain.length > 24) return text;
+    if (this.innerAlreadyWrappedInBold(text)) return text;
+    if (/^[一二三四五六七八九十]+[、．.]/.test(plain)) return `**${plain}**`;
+    if (plain.includes("\uFF08") || plain.includes("(")) {
+      return text.replace(/^([^（(]+)/, "**$1**");
+    }
+    return text;
+  }
+  formatNestedCellBody(value) {
+    const lines = this.parseOneNoteNumberedLines(value, { keepSubBullets: true });
+    if (lines.length === 0) return value;
+    if (lines.length === 1 && !value.includes("<br>")) return lines[0];
+    return this.formatOneNoteNumberedBlock(lines);
+  }
+  flattenNestedTableToText(rows) {
+    if (!rows.length) return "";
+    const columnCount = Math.max(...rows.map((row) => row.length), 1);
+    const normalized = rows.map((row) => {
+      const cells = [...row];
+      while (cells.length < columnCount) cells.push("");
+      return cells.map((cell) => this.normalizeOneNoteMarkdownTableCell(cell));
+    });
+    if (columnCount === 1) {
+      return normalized.map((row) => row[0]).filter((cell) => cell.length > 0).join("<br>");
+    }
+    if (columnCount === 2) {
+      return this.flattenTwoColumnNestedTable(normalized);
+    }
+    return this.flattenMultiColumnNestedTable(normalized);
+  }
+  flattenTwoColumnNestedTable(rows) {
+    const blocks = [];
+    let activeLabel = "";
+    let activeLines = [];
+    const flushLabelBlock = () => {
+      if (!activeLabel && activeLines.length === 0) return;
+      const body = activeLines.length > 0 ? this.formatNestedCellBody(activeLines.join("<br>")) : "";
+      const label = this.collapseOneNoteMarkdownMarks(activeLabel);
+      if (activeLabel) {
+        blocks.push(body ? `\u2022 **${label}**\uFF1A${body.includes("<br>") ? `<br>${body}` : body}` : `\u2022 **${label}**\uFF1A`);
+      } else {
+        blocks.push(...activeLines);
+      }
+      activeLabel = "";
+      activeLines = [];
+    };
+    const appendToLastBlock = (line) => {
+      if (!line) return;
+      if (blocks.length === 0) {
+        blocks.push(line);
+        return;
+      }
+      blocks[blocks.length - 1] = `${blocks[blocks.length - 1]}<br>${line}`;
+    };
+    for (const row of rows) {
+      const col0 = (row[0] ?? "").trim();
+      const col1 = (row[1] ?? "").trim();
+      if (!col0 && !col1) continue;
+      if (!col0 && col1) {
+        const cont = this.parseOneNoteNumberedLines(col1, { keepSubBullets: true });
+        if (activeLabel) {
+          activeLines.push(...cont);
+        } else if (cont.length > 0) {
+          appendToLastBlock(this.formatOneNoteNumberedBlock(cont));
+        }
+        continue;
+      }
+      if (this.isOneNoteNumericIndexCell(col0)) {
+        flushLabelBlock();
+        const idx = this.stripOneNoteCellPlainText(col0).replace(/[.、．]$/, "");
+        blocks.push(`\u3000${idx}. ${col1}`);
+        continue;
+      }
+      if (this.looksLikeOneNoteLabelCell(col0)) {
+        flushLabelBlock();
+        activeLabel = col0.replace(/\*\*/g, "").trim();
+        if (col1) activeLines.push(...this.parseOneNoteNumberedLines(col1, { keepSubBullets: true }));
+        continue;
+      }
+      flushLabelBlock();
+      if (col0 && col1) {
+        const left = this.maybeBoldShortHeading(col0);
+        blocks.push(`${left}\uFF1A${col1}`);
+      } else if (col0) {
+        blocks.push(this.maybeBoldShortHeading(col0));
+      } else if (col1) {
+        blocks.push(col1);
+      }
+    }
+    flushLabelBlock();
+    return this.collapseOneNoteMarkdownMarks(blocks.join("<br>"));
+  }
+  flattenMultiColumnNestedTable(rows) {
+    let start = 0;
+    if (rows.length > 1 && this.oneNoteFirstRowLooksLikeHeader(rows)) {
+      start = 1;
+    }
+    const blocks = [];
+    let groupKey = "";
+    for (let i = start; i < rows.length; i += 1) {
+      const row = rows[i];
+      const col0 = (row[0] ?? "").trim();
+      const rest = row.slice(1).map((c) => c.trim()).filter((c) => c.length > 0);
+      if (col0) {
+        groupKey = col0;
+        const heading = this.maybeBoldShortHeading(col0);
+        if (rest.length === 0) {
+          blocks.push(heading);
+          continue;
+        }
+        blocks.push(heading);
+        blocks.push(this.formatMultiColumnNestedRow(rest, false));
+        continue;
+      }
+      if (!col0 && rest.length > 0) {
+        blocks.push(this.formatMultiColumnNestedRow(rest, true));
+        continue;
+      }
+      if (groupKey && rest.length === 0) continue;
+      const all = row.map((c) => c.trim()).filter((c) => c.length > 0);
+      if (all.length > 0) {
+        blocks.push(all.join(" \xB7 "));
+      }
+    }
+    return this.collapseOneNoteMarkdownMarks(blocks.join("<br>"));
+  }
+  formatMultiColumnNestedRow(cells, indent) {
+    const prefix = indent ? "\u3000\u3000" : "\u3000";
+    if (cells.length === 1) return `${prefix}${cells[0]}`;
+    return cells.map((cell, index) => `${prefix}${index + 1}. ${cell}`).join("<br>");
+  }
+  parseOneNoteNumberedLines(value, options) {
+    const lines = [];
+    for (const part of value.split(/<br>|\n/gi)) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const isNumbered = /^\d+[.、．]\s*/.test(trimmed);
+      const isSubBullet = /^[·•\-]\s*/.test(trimmed);
+      if (options?.keepSubBullets && (isSubBullet || !isNumbered && lines.length > 0)) {
+        lines.push(`\u3000\u3000${trimmed.replace(/^[·•\-]\s*/, "\xB7 ")}`);
+        continue;
+      }
+      lines.push(trimmed.replace(/^\d+[.、．]\s*/, "").trim());
+    }
+    return lines.filter((line) => line.length > 0);
+  }
+  formatOneNoteNumberedBlock(lines) {
+    let index = 0;
+    return lines.map((line) => {
+      if (line.startsWith("\u3000\u3000")) return line;
+      index += 1;
+      return `\u3000${index}. ${line}`;
+    }).join("<br>");
+  }
+  oneNoteFirstRowLooksLikeHeader(rows) {
+    const first = rows[0];
+    if (!first?.length) return false;
+    const firstPlain = first.map((cell) => this.stripOneNoteCellPlainText(cell));
+    if (firstPlain.some((cell) => !cell)) return false;
+    if (!firstPlain.every((cell) => cell.length <= 16)) return false;
+    if (firstPlain.some((cell) => this.isOneNoteNumericIndexCell(cell))) return false;
+    if (rows.length < 2) return true;
+    const body = rows.slice(1);
+    const bodyFirstNumeric = body.filter((row) => this.isOneNoteNumericIndexCell(row[0] ?? "")).length;
+    if (bodyFirstNumeric >= Math.max(1, Math.floor(body.length * 0.25))) return true;
+    const headerLen = firstPlain.reduce((sum, cell) => sum + cell.length, 0) / firstPlain.length;
+    const bodyLen = body.reduce((sum, row) => sum + this.stripOneNoteCellPlainText(row[0] ?? "").length, 0) / Math.max(body.length, 1);
+    return bodyLen > headerLen * 1.4;
+  }
+  oneNoteTableLooksHeaderless(rows) {
+    if (rows.length <= 1) return true;
+    return !this.oneNoteFirstRowLooksLikeHeader(rows);
+  }
+  splitOneNoteTableHeaderAndBody(rows) {
+    if (this.oneNoteTableLooksHeaderless(rows)) {
+      const columnCount = Math.max(...rows.map((row) => row.length), 1);
+      const header = columnCount <= 2 ? ["\u9879\u76EE", "\u5185\u5BB9"].slice(0, columnCount) : Array.from({ length: columnCount }, (_, index) => `\u5217${index + 1}`);
+      return { header: this.normalizeRowCells(header, columnCount), body: rows };
+    }
+    const [headerRow, ...bodyRows] = rows;
+    return {
+      header: headerRow,
+      body: bodyRows
+    };
   }
   convertOneNoteTableToEnhancedMarkdown(file, table) {
     const extracted = this.extractOneNoteTableMatrix(file, table);
     if (!extracted || extracted.rows.length === 0) return null;
-    const [headerRow, ...bodyRows] = extracted.rows;
+    const { header: headerRow, body: bodyRows } = this.splitOneNoteTableHeaderAndBody(extracted.rows);
     const rawTable = {
       header: headerRow,
       divider: Array(headerRow.length).fill("---"),
@@ -6159,8 +6353,8 @@ with open(out_path, "wb") as handle:
     return !!tableId && !!this.dataStore.tables[tableId];
   }
   isInitializedEnhancedTable(tableEl) {
-    const tableId = tableEl.dataset.mdtpTableId || "";
-    return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced";
+    void tableEl;
+    return false;
   }
   isNativeLayoutTable(tableEl) {
     const tableId = tableEl.dataset.mdtpTableId || "";
@@ -6171,8 +6365,8 @@ with open(out_path, "wb") as handle:
     return tableId && this.dataStore.tables[tableId] ? tableId : null;
   }
   getInitializedTableId(tableEl) {
-    const tableId = tableEl.dataset.mdtpTableId || "";
-    return tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced" ? tableId : null;
+    void tableEl;
+    return null;
   }
   normalizeSelection(anchor, current) {
     return {
@@ -6306,24 +6500,17 @@ with open(out_path, "wb") as handle:
       tableEl.classList.remove("mdtp-table-enhanced");
       tableEl.classList.add("mdtp-table-native-layout");
       this.applyNativeLayout(tableEl, record.layout);
-    } else {
-      tableEl.classList.remove("mdtp-table-native-layout");
-      tableEl.classList.add("mdtp-table-enhanced");
-      this.applyLayout(tableEl, record.layout);
-      const runtime2 = this.runtimeState.get(tableEl);
-      if (runtime2?.file && runtime2.parsedTable) {
-        this.renderImageMarkupInEnhancedCells(tableEl, runtime2.file, runtime2.parsedTable, record.layout);
+      this.injectResizeHandles(tableEl, record.layout);
+      const runtime = this.runtimeState.get(tableEl);
+      if (runtime) {
+        runtime.selection = null;
+        runtime.anchor = null;
+        this.renderSelection(tableEl, null, null);
       }
+      return;
     }
-    this.injectResizeHandles(tableEl, record.layout);
-    const runtime = this.runtimeState.get(tableEl);
-    if (runtime && record.mode !== "nativeLayout") {
-      this.renderSelection(tableEl, runtime.selection, runtime.anchor);
-    } else if (runtime) {
-      runtime.selection = null;
-      runtime.anchor = null;
-      this.renderSelection(tableEl, null, null);
-    }
+    this.runtimeState.delete(tableEl);
+    this.restoreNativeTable(tableEl);
   }
   clearAllEnhancedSelections(exceptTableEl) {
     const except = exceptTableEl ?? null;
@@ -6733,38 +6920,167 @@ ${normalizedImage}`;
 ${normalizedImage}`;
   }
   getTextFromClipboardEvent(event) {
-    const plainText = event.clipboardData?.getData("text/plain") ?? "";
-    if (plainText) return plainText;
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return "";
+    const plainText = clipboardData.getData("text/plain");
+    if (plainText?.trim()) return plainText;
+    for (const type of Array.from(clipboardData.types ?? [])) {
+      if (/html/i.test(type)) continue;
+      if (!/(?:text|plain|utf|string|unicode)/i.test(type)) continue;
+      const value = clipboardData.getData(type);
+      if (value?.trim()) return value;
+    }
     return "";
   }
   getHtmlFromClipboardEvent(event) {
-    return event.clipboardData?.getData("text/html") ?? "";
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return "";
+    const direct = clipboardData.getData("text/html");
+    if (direct?.trim()) return this.extractHtmlFragmentFromClipboardPayload(direct);
+    for (const type of Array.from(clipboardData.types ?? [])) {
+      if (type === "text/plain") continue;
+      if (!/html/i.test(type) && type !== "public.html") continue;
+      const value = clipboardData.getData(type);
+      if (value?.trim()) return this.extractHtmlFragmentFromClipboardPayload(value);
+    }
+    return "";
   }
-  async readHtmlFromAvailableClipboard() {
+  async resolveOneNoteClipboardHtml(event) {
+    let html = event ? this.getHtmlFromClipboardEvent(event) : "";
+    if (!html.trim()) {
+      html = await this.readHtmlFromAvailableClipboard();
+    }
+    if (!html.trim()) {
+      const plain = event ? this.getTextFromClipboardEvent(event) : "";
+      const text = plain.trim() ? plain : await this.readTextFromAvailableClipboard();
+      html = this.plainTextTableToSyntheticHtml(text);
+    }
+    return html.trim();
+  }
+  extractHtmlFragmentFromClipboardPayload(text) {
+    const normalized = text.replace(/\r\n?/g, "\n");
+    const startMarker = normalized.indexOf("StartFragment");
+    const endMarker = normalized.indexOf("EndFragment");
+    if (startMarker >= 0 && endMarker > startMarker) {
+      const fragmentStart = normalized.indexOf("<", startMarker);
+      const fragmentEnd = normalized.lastIndexOf(">", endMarker);
+      if (fragmentStart >= 0 && fragmentEnd > fragmentStart) {
+        return normalized.slice(fragmentStart, fragmentEnd + 1);
+      }
+    }
+    const htmlStart = normalized.search(/<(?:html|table|div|meta|body)/i);
+    if (htmlStart >= 0) return normalized.slice(htmlStart);
+    return normalized;
+  }
+  decodeClipboardHtmlBuffer(buffer) {
+    if (!buffer) return "";
+    let bytes;
+    const bufferAny = buffer;
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(buffer)) {
+      bytes = buffer;
+    } else if (bufferAny instanceof Uint8Array) {
+      bytes = bufferAny;
+    } else if (bufferAny?.buffer instanceof ArrayBuffer) {
+      bytes = new Uint8Array(bufferAny.buffer);
+    } else if (typeof bufferAny?.length === "number" && bufferAny.length > 0) {
+      bytes = Uint8Array.from(buffer);
+    } else {
+      return "";
+    }
+    const decode = (encoding) => {
+      if (typeof Buffer !== "undefined") {
+        return Buffer.from(bytes).toString(encoding);
+      }
+      const label = encoding === "utf16le" ? "utf-16le" : "utf-8";
+      return new TextDecoder(label).decode(bytes);
+    };
+    let text = decode("utf8");
+    if (!/<(?:html|table|div|meta|body)/i.test(text)) {
+      const utf16 = decode("utf16le");
+      if (/<(?:html|table|div|meta|body)/i.test(utf16)) text = utf16;
+    }
+    return this.extractHtmlFragmentFromClipboardPayload(text);
+  }
+  readHtmlBufferFromElectronFormat(clipboard, format) {
+    if (typeof clipboard.readBuffer !== "function") return "";
+    try {
+      const buffer = clipboard.readBuffer(format);
+      if (!buffer) return "";
+      const size = buffer.length ?? buffer.byteLength ?? 0;
+      if (!size) return "";
+      return this.decodeClipboardHtmlBuffer(buffer);
+    } catch {
+      return "";
+    }
+  }
+  readHtmlFromElectronClipboard() {
     try {
       const electron = window.require?.("electron");
-      if (typeof electron?.clipboard?.readHTML === "function") {
-        const html = electron.clipboard.readHTML();
-        if (html) return html;
+      const clipboard = electron?.clipboard;
+      if (!clipboard) return "";
+      const preferredFormats = [
+        "public.html",
+        "Apple HTML pasteboard type",
+        "NSHTMLPboardType",
+        "text/html",
+        "HTML Format"
+      ];
+      const available = new Set(clipboard.availableFormats?.() ?? []);
+      for (const format of preferredFormats) {
+        if (!available.has(format)) continue;
+        const html = this.readHtmlBufferFromElectronFormat(clipboard, format);
+        if (html.trim()) return html;
+      }
+      for (const format of available) {
+        if (preferredFormats.includes(format)) continue;
+        if (!/html/i.test(format) && format !== "public.html") continue;
+        const html = this.readHtmlBufferFromElectronFormat(clipboard, format);
+        if (html.trim()) return html;
+      }
+      if (typeof clipboard.readHTML === "function") {
+        const html = clipboard.readHTML();
+        if (html?.trim()) return this.extractHtmlFragmentFromClipboardPayload(html);
       }
     } catch (error) {
       console.error("[mdtp] electron clipboard readHTML failed", error);
     }
+    return "";
+  }
+  async readHtmlFromAvailableClipboard() {
+    const fromElectron = this.readHtmlFromElectronClipboard();
+    if (fromElectron.trim()) return fromElectron;
     try {
       const clipboardAny = navigator.clipboard;
       if (typeof clipboardAny?.read === "function") {
         const items = await clipboardAny.read();
         for (const item of items) {
-          if (!Array.from(item.types ?? []).includes("text/html")) continue;
-          const blob = await item.getType("text/html");
-          const html = await blob.text();
-          if (html) return html;
+          for (const type of Array.from(item.types ?? [])) {
+            if (!/html/i.test(type) && type !== "public.html") continue;
+            try {
+              const blob = await item.getType(type);
+              const html = await blob.text();
+              const extracted = this.extractHtmlFragmentFromClipboardPayload(html);
+              if (extracted.trim()) return extracted;
+            } catch {
+            }
+          }
         }
       }
     } catch (error) {
       console.error("[mdtp] navigator clipboard readHTML failed", error);
     }
     return "";
+  }
+  escapeHtmlForOneNotePaste(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  plainTextTableToSyntheticHtml(text) {
+    const matrix = this.parseClipboardMatrix(text);
+    if (!matrix?.length) return "";
+    const rows = matrix.map(
+      (row) => `<tr>${row.map((cell) => `<td>${this.escapeHtmlForOneNotePaste(cell)}</td>`).join("")}</tr>`
+    ).join("");
+    return `<table><tbody>${rows}</tbody></table>`;
   }
   async readTextFromAvailableClipboard() {
     try {
@@ -7402,7 +7718,7 @@ ${blocks.join("\n\n")}
     return `| ${Array.from({ length: columnCount }, () => "---").join(" | ")} |`;
   }
   normalizeOneNoteMarkdownTableCell(value) {
-    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, "<br>").replace(/(?:\s*<br>\s*)+$/gi, "").replace(/^(?:\s*<br>\s*)+/gi, "").replace(/\s+/g, " ").trim();
+    return value.replace(/\r\n?/g, "\n").replace(/\n+/g, "<br>").replace(/(?:[ \t]*<br>[ \t]*)+$/gi, "").replace(/^(?:[ \t]*<br>[ \t]*)+/gi, "").replace(/[ \t]+/g, " ").trim();
   }
   buildDividerLine(segments, widths) {
     const normalized = this.normalizeRowCells(segments, widths.length);

@@ -753,9 +753,9 @@
   padding: 0 0.25em;
 }
 
-.markdown-source-view.mod-cm6 .cm-content .cm-line.fdtb-style-marker-line,
-.markdown-source-view.mod-cm6 .cm-content [data-fdtb-style-marker-hidden="true"] {
-  display: none;
+.markdown-source-view.mod-cm6 .cm-line.fdtb-style-marker-line,
+.markdown-source-view.mod-cm6 [data-fdtb-style-marker-hidden="true"] {
+  display: none !important;
 }
 
 .fdtb-block-style {
@@ -971,6 +971,15 @@
   color: var(--text-on-accent);
   font-size: 12px;
   font-weight: 700;
+}
+
+.fdtb-goal-progress-status-button {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.fdtb-goal-progress-status-button:hover {
+  color: var(--text-normal);
 }
 
 .fdtb-settings-toolbar-workbench {
@@ -1408,6 +1417,36 @@
 .fdtb-native-color-saved-apply.is-active {
   border-color: color-mix(in srgb, var(--interactive-accent) 65%, var(--background-modifier-border));
   background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary));
+}
+
+.fdtb-auto-update-plugin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.fdtb-auto-update-plugin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.fdtb-auto-update-plugin-label {
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.fdtb-auto-update-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .fdtb-plugin-manager-row {
@@ -2546,6 +2585,12 @@ body.blp-outliner-dragging .blp-file-outliner-view .bullet-container,
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed .markdown-preview-view > :is(h1, h2, h3, h4, h5, h6, p, ul, ol, blockquote, pre, .callout) {
   margin: revert;
 }
+@supports selector(p:has(+ ul)) {
+  .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p:has(+ ul),
+  .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p:has(+ ol) {
+    margin-bottom: 0;
+  }
+}
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p + ul,
 .blp-file-outliner-view .blp-file-outliner-display .internal-embed.markdown-embed:not(.blp-inline-edit-active) .markdown-preview-view > p + ol {
   margin-top: 0;
@@ -2578,15 +2623,17 @@ body.blp-outliner-dragging .blp-file-outliner-view .bullet-container,
   min-width: 0;
 }
 .blp-file-outliner-view .blp-outliner-task-checkbox:checked + .blp-outliner-task-content {
-  text-decoration: line-through;
+  text-decoration-line: line-through;
   opacity: 0.75;
 }
 .blp-file-outliner-view .blp-file-outliner-display p {
   margin: 0;
   white-space: pre-wrap;
 }
-.blp-file-outliner-view .blp-file-outliner-display p br {
-  white-space: normal;
+@supports selector(p:has(br)) {
+  .blp-file-outliner-view .blp-file-outliner-display p:has(br) {
+    white-space: normal;
+  }
 }
 .blp-file-outliner-view .blp-file-outliner-display ul,
 .blp-file-outliner-view .blp-file-outliner-display ol,

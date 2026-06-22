@@ -13,7 +13,9 @@
     "build": "node scripts/build.mjs",
     "build:oss": "OSS_RELEASE=1 node scripts/build.mjs",
     "build:claudian-test": "esbuild tests/export-claudian-test.ts --bundle --platform=node --format=cjs --target=es2020 --outfile=tests/claudian-test-bundle.cjs",
-    "test:smoke": "npm run build && npm run build:claudian-test && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && node ./tests/file-version-history.cjs && node ./tests/file-version-history-integration.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs"
+    "build:auto-updater-test": "esbuild src/modules/managed-plugin-auto-updater.ts --bundle --platform=node --format=cjs --target=es2020 --external:obsidian --outfile=tests/managed-plugin-auto-updater-bundle.cjs",
+    "build:goal-progress-test": "esbuild src/modules/goal-progress-sync.ts --bundle --platform=node --format=cjs --target=es2020 --define:__OSS_RELEASE__=false --outfile=tests/goal-progress-sync-bundle.cjs",
+    "test:smoke": "npm run build && npm run build:claudian-test && npm run build:auto-updater-test && npm run build:goal-progress-test && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && NODE_PATH=./test-support node ./tests/claudian-cross-device-bridge.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater-integration.cjs && node ./tests/goal-progress-sync.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs"
   },
   "dependencies": {
     "html-to-image": "^1.11.13"

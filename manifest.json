@@ -1,9 +1,9 @@
 {
   "id": "feishu-doc-toolbar",
   "name": "ZengQiang Enhanced",
-  "version": "1.0.5",
+  "version": "1.11.0",
   "minAppVersion": "1.5.0",
-  "description": "浮动工具栏、模板库、原生表格配色与多种内嵌实用工具。需同时安装本仓库 companion-plugins 中的 markdown-table-enhancer。增强表格仅在开启实验性 OneNote 高保真粘贴时后台可用.",
+  "description": "浮动工具栏、模板库、原生表格配色与多种内嵌实用工具。需同时安装 markdown-table-enhancer 伴生插件。含 Claudian 跨设备续聊、粘贴触发文件本地化、OneNote 原生表格粘贴等.",
   "author": "lishu",
   "isDesktopOnly": false
 }

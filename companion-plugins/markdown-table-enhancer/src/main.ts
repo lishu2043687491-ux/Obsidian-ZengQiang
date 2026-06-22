@@ -13,9 +13,7 @@ import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@
 
 const PLUGIN_ID = "markdown-table-enhancer";
 const TEMPLATE_LIBRARY_FOLDER = ".模板库";
-const INITIALIZE_COMMAND_ID = "initialize-current-file-table-anchors";
 const INITIALIZE_COMMAND_NAME = "为当前文件全部表格启用增强（批量）";
-const INITIALIZE_CURRENT_TABLE_COMMAND_ID = "initialize-current-table-enhancement";
 const INITIALIZE_CURRENT_TABLE_COMMAND_NAME = "对当前表启用增强";
 const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID = "initialize-current-table-native-layout";
 const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME = "对当前表格美化";
@@ -25,15 +23,12 @@ const SET_NATIVE_ROW_COLOR_COMMAND_ID = "set-current-native-table-row-color";
 const SET_NATIVE_ROW_COLOR_COMMAND_NAME = "设置当前原生表格选中行颜色";
 const OPEN_NATIVE_ROW_BANDS_COMMAND_ID = "open-current-native-table-row-bands";
 const OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "打开当前原生表格行段配色";
-const INSERT_TEMPLATE_COMMAND_ID = "insert-enhanced-table-template";
 const INSERT_TEMPLATE_COMMAND_NAME = "插入增强表格模板";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "模板库";
 const COPY_TABLE_AS_IMAGE_LABEL = "复制当前表格成图";
 const COPY_TABLE_AS_IMAGE_SHORT_LABEL = "图";
-const RESTORE_COMMAND_ID = "restore-last-table-enhancement-snapshot";
 const RESTORE_COMMAND_NAME = "恢复当前文件最近一次表格增强快照";
-const STATUS_COMMAND_ID = "show-current-file-table-enhancement-status";
 const STATUS_COMMAND_NAME = "查看当前文件表格增强状态";
 const SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
 const SET_SELECTION_YELLOW_COMMAND_NAME = "将当前表格选区设为浅黄";
@@ -43,11 +38,9 @@ const MERGE_SELECTION_COMMAND_ID = "merge-current-table-selection";
 const MERGE_SELECTION_COMMAND_NAME = "合并当前表格选区";
 const SPLIT_SELECTION_COMMAND_ID = "split-current-table-cell";
 const SPLIT_SELECTION_COMMAND_NAME = "拆分当前表格单元格";
-const PASTE_IMAGE_COMMAND_ID = "paste-clipboard-image-to-current-table-cell";
 const PASTE_IMAGE_COMMAND_NAME = "将剪贴板图片粘贴到当前增强表格单元格";
 const PASTE_ONENOTE_RICH_TABLE_COMMAND_ID = "paste-onenote-rich-table";
-const PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "从 OneNote 粘贴为增强表格";
-const TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID = "toggle-experimental-table-features";
+const PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "粘贴OneNote";
 const TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME = "切换增强表格测试版能力";
 const SNAPSHOT_LIMIT = 60;
 const TABLE_ID_PREFIX = "tbl_";
@@ -1117,11 +1110,11 @@ class OneNoteRichPasteModal extends Modal {
     contentEl.classList.add("mdtp-onenote-paste-modal");
 
     const title = document.createElement("h2");
-    title.textContent = "粘贴 OneNote 增强表格";
+    title.textContent = "粘贴 OneNote（原生表格）";
     contentEl.appendChild(title);
 
     const hint = document.createElement("p");
-    hint.textContent = "从 OneNote 复制页面或表格后，点下面区域按 ⌘V 粘贴，插件会直接转成可编辑增强表格。";
+    hint.textContent = "从 OneNote 复制后，点下面区域按 ⌘V 粘贴，将转为 Obsidian 原生 Markdown 表格（含图片本地化，无增强表格标记）。";
     contentEl.appendChild(hint);
 
     const pasteZone = document.createElement("div");
@@ -1136,10 +1129,46 @@ class OneNoteRichPasteModal extends Modal {
         pasteZone.textContent = "";
       }
     });
-    pasteZone.addEventListener("paste", (event) => void this.handlePaste(event as ClipboardEvent));
+    pasteZone.addEventListener(
+      "paste",
+      (event) => void this.handlePaste(event as ClipboardEvent),
+      true
+    );
     contentEl.appendChild(pasteZone);
 
+    const exportRow = document.createElement("div");
+    exportRow.className = "mdtp-onenote-paste-export-row";
+    const exportBtn = document.createElement("button");
+    exportBtn.type = "button";
+    exportBtn.textContent = "导出原始 HTML（调试样本）";
+    exportBtn.addEventListener("click", () => void this.exportOneNoteClipboardHtml());
+    exportRow.appendChild(exportBtn);
+    contentEl.appendChild(exportRow);
+
     window.setTimeout(() => pasteZone.focus(), 50);
+  }
+
+  private async exportOneNoteClipboardHtml() {
+    const html = await this.plugin.resolveOneNoteClipboardHtml();
+    if (!html.trim()) {
+      new Notice("剪贴板里没有 OneNote HTML，请先从 OneNote 复制");
+      return;
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const fileName = `onenote-clipboard-${stamp}.html`;
+    try {
+      const electron = (window as any).require?.("electron");
+      const { clipboard } = electron ?? {};
+      if (clipboard?.writeText) {
+        clipboard.writeText(html);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(html);
+      }
+    } catch {
+      // clipboard write optional
+    }
+    console.log(`[mdtp] OneNote HTML export (${html.length} chars)`, fileName, html.slice(0, 500));
+    new Notice(`已复制原始 HTML 到剪贴板（${html.length} 字）。请保存为 tests/samples/${fileName}`);
   }
 
   onClose() {
@@ -1252,6 +1281,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private redoStack: HistoryEntry[] = [];
   private historyApplying = false;
   private suppressDocumentPasteUntil = 0;
+  private oneNoteStatusBarGroupEl: HTMLElement | null = null;
   private oneNoteStatusButtonEl: HTMLElement | null = null;
 
   async onload() {
@@ -1270,41 +1300,13 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         ...savedTables,
       },
       snapshots: Array.isArray(savedData?.snapshots) ? savedData.snapshots : [],
-      experimentalFeatureGate: !!savedData?.experimentalFeatureGate,
+      experimentalFeatureGate: false,
       nativeColorSavedPalettes: savedNativeColorPalettes,
       nativeColorDefaultPresetId: this.normalizeNativeColorPresetId(savedData?.nativeColorDefaultPresetId, savedNativeColorPalettes),
       nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
     };
 
     await this.migrateLegacyMarkersToHtmlComments();
-
-    this.addCommand({
-      id: INITIALIZE_COMMAND_ID,
-      name: INITIALIZE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.initializeCurrentFileTables(file);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: INITIALIZE_CURRENT_TABLE_COMMAND_ID,
-      name: INITIALIZE_CURRENT_TABLE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.initializeCurrentTable();
-        }
-        return true;
-      },
-    });
 
     this.addCommand({
       id: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID,
@@ -1365,20 +1367,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: INSERT_TEMPLATE_COMMAND_ID,
-      name: INSERT_TEMPLATE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.insertEnhancedTableTemplate();
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
       id: OPEN_TEMPLATE_LIBRARY_COMMAND_ID,
       name: OPEN_TEMPLATE_LIBRARY_COMMAND_NAME,
       callback: () => {
@@ -1391,127 +1379,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: RESTORE_COMMAND_ID,
-      name: RESTORE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.restoreLatestSnapshot(file);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: STATUS_COMMAND_ID,
-      name: STATUS_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const file = this.getActiveMarkdownFile(checking);
-        if (!file) return false;
-        if (!checking) {
-          void this.showCurrentFileStatus(file);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: SET_SELECTION_YELLOW_COMMAND_ID,
-      name: SET_SELECTION_YELLOW_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.setColor(context.tableId, context.file, context.tableEl, "cell", this.getCellKey(context.anchor), PALETTE[0].value);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: CLEAR_SELECTION_COLOR_COMMAND_ID,
-      name: CLEAR_SELECTION_COLOR_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.clearColor(
-            context.tableId,
-            context.file,
-            context.tableEl,
-            "cell",
-            this.getCellKey(context.anchor)
-          );
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: MERGE_SELECTION_COMMAND_ID,
-      name: MERGE_SELECTION_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context?.selection) return false;
-        if (
-          context.selection.startRow === context.selection.endRow &&
-          context.selection.startCol === context.selection.endCol
-        ) {
-          return false;
-        }
-        if (!this.canMergeSelection(context.tableEl, this.dataStore.tables[context.tableId].layout, context.selection)) {
-          return false;
-        }
-        if (!checking) {
-          void this.mergeSelection(context.file, context.tableId, context.tableEl, context.selection);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: SPLIT_SELECTION_COMMAND_ID,
-      name: SPLIT_SELECTION_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        const merge = this.dataStore.tables[context.tableId].layout.merges.find(
-          (item) => item.row === context.anchor.row && item.col === context.anchor.col
-        );
-        if (!merge) return false;
-        if (!checking) {
-          void this.splitMerge(context.file, context.tableId, context.tableEl, merge);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
-      id: PASTE_IMAGE_COMMAND_ID,
-      name: PASTE_IMAGE_COMMAND_NAME,
-      checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
-        const context = this.getActiveSelectionCommandContext(checking);
-        if (!context) return false;
-        if (!checking) {
-          void this.handleClipboardPasteForSelectedCell(context.file, context.tableId, context.anchor);
-        }
-        return true;
-      },
-    });
-
-    this.addCommand({
       id: PASTE_ONENOTE_RICH_TABLE_COMMAND_ID,
       name: PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME,
       checkCallback: (checking) => {
-        if (!this.isExperimentalFeatureEnabled()) return false;
+        if (!this.isOneNotePasteFeatureEnabled()) return false;
         const file = this.getActiveMarkdownFile(checking);
         if (!file) return false;
         if (!checking) {
@@ -1521,12 +1392,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       },
     });
 
-    this.oneNoteStatusButtonEl = this.addStatusBarItem();
-    this.oneNoteStatusButtonEl.addClass("mdtp-onenote-status-button");
-    this.oneNoteStatusButtonEl.setText("粘贴 OneNote");
+    this.oneNoteStatusBarGroupEl = this.addStatusBarItem();
+    this.oneNoteStatusBarGroupEl.addClass("mdtp-onenote-status-bar-group");
+    this.oneNoteStatusBarGroupEl.style.display = "none";
+
+    this.oneNoteStatusButtonEl = this.oneNoteStatusBarGroupEl.createDiv("mdtp-onenote-status-button");
+    this.oneNoteStatusButtonEl.setText("粘贴OneNote");
     this.oneNoteStatusButtonEl.setAttr("role", "button");
-    this.oneNoteStatusButtonEl.setAttr("aria-label", "从 OneNote 粘贴为增强表格");
-    this.oneNoteStatusButtonEl.style.display = "none";
+    this.oneNoteStatusButtonEl.setAttr("aria-label", PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME);
     this.oneNoteStatusButtonEl.addEventListener("click", () => {
       const file = this.getActiveMarkdownFile();
       if (!file) {
@@ -1534,12 +1407,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         return;
       }
       void this.pasteOneNoteFromSystemClipboardOrOpenModal(file);
-    });
-
-    this.addCommand({
-      id: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_ID,
-      name: TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME,
-      callback: () => void this.toggleExperimentalFeatureGate(),
     });
 
     this.registerMarkdownPostProcessor((element, context) => {
@@ -1577,6 +1444,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.registerDomEvent(document, "pointerup", () => void this.handleGlobalPointerUp(), true);
     this.registerDomEvent(document, "pointercancel", () => void this.handleGlobalPointerUp(), true);
 
+    this.updateOneNoteStatusBarVisibility();
     this.queueRefreshBurst();
   }
 
@@ -2797,11 +2665,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
   }
 
-  async insertEnhancedTemplateContentAtCursor(content: string, position?: { line: number; ch: number }) {
-    return this.insertTemplateContentAtCursor(content, position);
-  }
-
-  private async insertTemplateContentAtCursor(content: string, position?: { line: number; ch: number }) {
+  async insertTemplateContentAtCursor(content: string, position?: { line: number; ch: number }) {
     const file = this.getActiveMarkdownFile();
     if (!file) return false;
     if (content.trim().length === 0) {
@@ -2948,9 +2812,12 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return this.normalizeTemplateTableContent(parsedTable.raw);
     }
     const record = this.dataStore.tables[parsedTable.tableId];
+    if (this.getTableRecordMode(record) !== "nativeLayout") {
+      return this.normalizeTemplateTableContent(parsedTable.raw);
+    }
     const metadata = this.serializeTemplateTableMetadata({
       [parsedTable.tableId]: {
-        mode: this.getTableRecordMode(record),
+        mode: "nativeLayout",
         layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout(),
       },
     });
@@ -3030,9 +2897,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (selectedContent?.trim()) {
       this.openTemplateNameModal(selectedContent);
       return true;
-    }
-    if (options?.file && options.tableId && options.tableSelection) {
-      return this.saveEnhancedTableSelectionAsTemplate(options.file, options.tableId, options.tableSelection);
     }
     if (options?.plainTableContext) {
       return this.savePlainTableSelectionAsTemplate(options.plainTableContext);
@@ -3123,14 +2987,23 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const lines = extracted.content.split(/\r?\n/);
     const parsedTables = this.parseMarkdownTables(extracted.content).filter((table) => !!table.tableId);
     const idMap = new Map<string, string>();
+    const tableModes = new Map<string, TableRecordMode>();
+
+    for (const table of parsedTables) {
+      if (!table.tableId) continue;
+      const templateRecord = extracted.metadata.tables[table.tableId];
+      const sourceRecord = this.dataStore.tables[table.tableId];
+      tableModes.set(table.tableId, templateRecord?.mode ?? this.getTableRecordMode(sourceRecord));
+    }
 
     for (const table of parsedTables) {
       if (!table.tableId || idMap.has(table.tableId)) continue;
+      if (tableModes.get(table.tableId) !== "nativeLayout") continue;
       idMap.set(table.tableId, this.generateTableId());
     }
 
     if (idMap.size === 0) {
-      return { content: extracted.content, tableRecords: [] as TableRecord[] };
+      return { content: this.stripTableMarkersFromContent(extracted.content), tableRecords: [] as TableRecord[] };
     }
 
     for (let index = 0; index < lines.length; index += 1) {
@@ -3138,6 +3011,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const nextId = tableId ? idMap.get(tableId) : null;
       if (nextId) {
         lines[index] = this.formatTableMarker(nextId);
+      } else if (tableId) {
+        lines[index] = "";
       }
     }
 
@@ -3154,10 +3029,12 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       if (!sourceTable.tableId || !targetTable.tableId) continue;
       const templateRecord = extracted.metadata.tables[sourceTable.tableId];
       const sourceRecord = this.dataStore.tables[sourceTable.tableId];
+      const mode = templateRecord?.mode ?? this.getTableRecordMode(sourceRecord);
+      if (mode !== "nativeLayout") continue;
       const layout = this.normalizeLayout(templateRecord?.layout ?? sourceRecord?.layout ?? this.createEmptyLayout());
       tableRecords.push({
         tableId: targetTable.tableId,
-        mode: templateRecord?.mode ?? this.getTableRecordMode(sourceRecord),
+        mode: "nativeLayout",
         filePath: file.path,
         createdAt: now,
         updatedAt: now,
@@ -3174,6 +3051,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       content: transformedContent,
       tableRecords,
     };
+  }
+
+  private stripTableMarkersFromContent(content: string) {
+    const originalEndsWithNewline = /\r?\n$/.test(content);
+    const lines = content
+      .split(/\r?\n/)
+      .filter((line) => !this.extractTableMarkerId(line));
+    return this.joinLines(lines, originalEndsWithNewline);
   }
 
   private extractLayoutForSelection(layout: TableLayoutMetadata, selection: SelectionRect): TableLayoutMetadata {
@@ -3312,7 +3197,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   }
 
   private async pasteOneNoteFromSystemClipboardOrOpenModal(file: TFile) {
-    const html = await this.readHtmlFromAvailableClipboard();
+    const html = await this.resolveOneNoteClipboardHtml();
     if (html.trim()) {
       const ok = await this.importOneNoteRichContent(file, html, []);
       if (ok) return;
@@ -3367,37 +3252,49 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   }
 
   private isExperimentalFeatureEnabled() {
-    return !!this.dataStore.experimentalFeatureGate;
+    return false;
+  }
+
+  private isOneNotePasteFeatureEnabled() {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { isOneNoteRichPasteEnabled?: () => boolean }
+      | undefined;
+    if (typeof feishu?.isOneNoteRichPasteEnabled === "function") {
+      return feishu.isOneNoteRichPasteEnabled();
+    }
+    return false;
   }
 
   shouldShowEnhancedTableEntrances() {
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
-      | { isTableEnhancerEntrancesVisible?: () => boolean }
-      | undefined;
-    if (typeof feishu?.isTableEnhancerEntrancesVisible === "function") {
-      return feishu.isTableEnhancerEntrancesVisible();
-    }
-    return this.isExperimentalFeatureEnabled();
+    return false;
   }
 
   async setExperimentalFeatureGate(enabled: boolean) {
-    this.dataStore.experimentalFeatureGate = !!enabled;
+    this.dataStore.experimentalFeatureGate = false;
     await this.savePluginData();
-    if (!enabled) {
-      this.hideImageManipulator();
-      if (this.oneNoteStatusButtonEl) {
-        this.oneNoteStatusButtonEl.style.display = "none";
-      }
+    this.hideImageManipulator();
+    this.updateOneNoteStatusBarVisibility();
+    void enabled;
+  }
+
+  private updateOneNoteStatusBarVisibility() {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { isOneNoteRichPasteEnabled?: () => boolean }
+      | undefined;
+    const visible =
+      typeof feishu?.isOneNoteRichPasteEnabled === "function"
+        ? feishu.isOneNoteRichPasteEnabled()
+        : false;
+    if (this.oneNoteStatusBarGroupEl) {
+      this.oneNoteStatusBarGroupEl.style.display = visible ? "inline-flex" : "none";
     }
   }
 
   private async toggleExperimentalFeatureGate() {
-    this.dataStore.experimentalFeatureGate = !this.dataStore.experimentalFeatureGate;
+    this.dataStore.experimentalFeatureGate = false;
     await this.savePluginData();
-    if (!this.isExperimentalFeatureEnabled()) {
-      this.hideImageManipulator();
-    }
-    new Notice(this.isExperimentalFeatureEnabled() ? "已开启增强表格测试版能力" : "已关闭增强表格测试版能力");
+    this.hideImageManipulator();
+    new Notice("增强表格测试版能力已移除");
   }
 
   private decorateOneNoteRichTables(element: HTMLElement, context: MarkdownPostProcessorContext) {
@@ -3624,7 +3521,12 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.indexTableCells(tableEl);
     this.clearInjectedTableArtifacts(tableEl);
     tableEl.dataset.mdtpTableId = tableId;
-    const record = await this.ensureRecordForParsedTable(file, parsedTable);
+    const record = this.dataStore.tables[tableId] ?? null;
+    if (!record) {
+      this.runtimeState.delete(tableEl);
+      this.restoreNativeTable(tableEl);
+      return;
+    }
 
     if (record.mode === "nativeLayout") {
       runtime.selection = null;
@@ -3636,12 +3538,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return;
     }
 
-    tableEl.classList.remove("mdtp-table-uninitialized", "mdtp-table-native-layout", "mdtp-table-colored");
-    tableEl.classList.add("mdtp-table-enhanced");
-    this.applyLayout(tableEl, record.layout);
-    this.renderImageMarkupInEnhancedCells(tableEl, file, parsedTable, record.layout);
-    this.injectResizeHandles(tableEl, record.layout);
-    this.renderSelection(tableEl, runtime.selection, runtime.anchor);
+    runtime.selection = null;
+    runtime.anchor = null;
+    this.runtimeState.delete(tableEl);
+    this.restoreNativeTable(tableEl);
   }
 
   private async ensureRecordForParsedTable(file: TFile, parsedTable: ParsedTableBlock) {
@@ -5000,26 +4900,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   }
 
   getEnhancedSidebarActionDescriptors(): SidebarActionDescriptor[] {
-    return [
-      { label: "上方插入行" },
-      { label: "下方插入行" },
-      { label: "左侧插入列" },
-      { label: "右侧插入列" },
-      { label: "删除当前行" },
-      { label: "删除当前列" },
-      { label: "合并" },
-      { label: "拆分" },
-      { label: "单元格颜色" },
-      { label: "当前行颜色" },
-      { label: "当前列颜色" },
-      { label: "清除颜色" },
-      { label: "复制当前块内容", wide: true },
-      { label: "高保真复制", wide: true },
-      { label: "复制当前块成图", wide: true },
-      { label: "保存当前选区为模板", wide: true },
-      { label: "插入模板", wide: true },
-      { label: "模板库", wide: true },
-    ];
+    return [];
   }
 
   private shouldExposeExperimentalAction(experimental?: boolean) {
@@ -5146,6 +5027,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       !!target?.closest("[contenteditable='true']") && !target?.closest(".cm-content") && !target?.closest(".mdtp-onenote-paste-zone");
 
     if (
+      this.isExperimentalFeatureEnabled() &&
       this.activeImageManipulator &&
       !event.metaKey &&
       !event.ctrlKey &&
@@ -5163,6 +5045,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
 
     if (
+      this.isExperimentalFeatureEnabled() &&
       context?.tableId &&
       !this.activeEditor &&
       !event.metaKey &&
@@ -5185,6 +5068,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
 
     if (
+      this.isExperimentalFeatureEnabled() &&
       context?.tableId &&
       !this.activeEditor &&
       !event.metaKey &&
@@ -5219,7 +5103,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       this.suppressDocumentPasteUntil = Date.now() + PASTE_EVENT_SUPPRESSION_MS;
       return;
     }
-    if (context?.tableId) {
+    if (this.isExperimentalFeatureEnabled() && context?.tableId) {
       if (key === "c") {
         const selection = context.selection ?? this.normalizeSelection(context.anchor, context.anchor);
         const handled = await this.copySelectionToClipboard(context.file, context.tableId, selection);
@@ -5283,7 +5167,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
 
     const context = this.getActiveInteractionContext(true);
-    if (context) {
+    if (this.isExperimentalFeatureEnabled() && context) {
       if (!context.tableId) {
         return;
       }
@@ -5365,7 +5249,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   }
 
   async importOneNoteRichClipboardEvent(file: TFile, event: ClipboardEvent) {
-    const html = this.getHtmlFromClipboardEvent(event);
+    const html = await this.resolveOneNoteClipboardHtml(event);
     return this.importOneNoteRichContent(file, html, this.getImagesFromClipboard(event));
   }
 
@@ -5375,17 +5259,125 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return false;
     }
 
-    const converted = await this.buildOneNoteEnhancedMarkdownContent(file, html, clipboardImages);
-    if (!converted) {
+    const content = await this.buildOneNoteNativeMarkdownContent(file, html, clipboardImages);
+    if (!content?.trim()) {
       new Notice("没有识别到可迁移的 OneNote 内容");
       return false;
     }
 
-    await this.createSnapshot(file, "before-onenote-paste", converted.tableRecords.map((record) => record.tableId));
-    await this.insertOneNoteConvertedContentAtCursor(file, converted);
+    await this.createSnapshot(file, "before-onenote-paste", []);
+    await this.insertMarkdownBlockAtCursor(file, content);
     this.queueRefreshBurst();
-    new Notice("已插入 OneNote 增强表格");
+    new Notice("已粘贴 OneNote 原生表格（无增强表格标记）");
     return true;
+  }
+
+  convertOneNoteTableToNativeMarkdown(file: TFile, table: HTMLTableElement) {
+    const extracted = this.extractOneNoteTableMatrix(file, table);
+    if (!extracted || extracted.rows.length === 0) return null;
+
+    const { header, body } = this.splitOneNoteTableHeaderAndBody(extracted.rows);
+    const columnCount = Math.max(header.length, ...body.map((row) => row.length), 1);
+    const normalizedBody =
+      columnCount === 2 && this.oneNoteTableBodyLooksLikeLabelContentRows(body)
+        ? body.map((row) => this.normalizeOneNoteLabelContentRow(row, columnCount))
+        : body.map((row) => this.normalizeRowCells(row, columnCount));
+    const rawTable: ParsedRawTable = {
+      header: this.normalizeRowCells(header, columnCount),
+      divider: Array.from({ length: columnCount }, () => "---"),
+      body: normalizedBody,
+    };
+
+    return this.buildOneNoteRawTable(rawTable).join("\n");
+  }
+
+  private oneNoteTableBodyLooksLikeLabelContentRows(body: string[][]) {
+    if (!body.length) return false;
+    const labelRows = body.filter((row) => this.looksLikeOneNoteLabelCell(row[0] ?? ""));
+    return labelRows.length >= Math.max(1, Math.ceil(body.length * 0.5));
+  }
+
+  private normalizeOneNoteLabelContentRow(row: string[], columnCount: number) {
+    const col0 = (row[0] ?? "").trim();
+    const col1 = row.slice(1).join("<br>").trim();
+    if (col1.includes("• **")) {
+      return this.normalizeRowCells(row, columnCount);
+    }
+    if (this.looksLikeOneNoteLabelCell(col0)) {
+      const block = this.flattenTwoColumnNestedTable([[col0, col1]]);
+      return this.normalizeRowCells([col0, block], columnCount);
+    }
+    return this.normalizeRowCells(row, columnCount);
+  }
+
+  private async buildOneNoteNativeMarkdownContent(file: TFile, html: string, clipboardImages: File[] = []) {
+    const container = await this.buildSanitizedOneNoteContainer(file, html, clipboardImages);
+    if (!container) return null;
+
+    const blocks: string[] = [];
+    for (const child of Array.from(container.childNodes)) {
+      this.appendOneNoteNodeAsNativeMarkdownBlocks(file, child, blocks);
+    }
+
+    return this.joinOneNoteMarkdownBlocks(blocks);
+  }
+
+  private appendOneNoteNodeAsNativeMarkdownBlocks(file: TFile, node: Node, blocks: string[]) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (text) blocks.push(text);
+      return;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const element = node as HTMLElement;
+    const tag = element.tagName.toLowerCase();
+
+    if (tag === "table") {
+      const markdown = this.convertOneNoteTableToNativeMarkdown(file, element as HTMLTableElement);
+      if (markdown) blocks.push(markdown);
+      return;
+    }
+
+    if (tag === "ul" || tag === "ol") {
+      const markdown = this.convertOneNoteListToMarkdown(file, element);
+      if (markdown) blocks.push(markdown);
+      return;
+    }
+
+    if (tag === "img") {
+      const markdown = this.convertOneNoteImageToMarkdown(element as HTMLImageElement);
+      if (markdown) blocks.push(markdown);
+      return;
+    }
+
+    if (this.shouldExpandOneNoteWrapperElement(element)) {
+      for (const child of Array.from(element.childNodes)) {
+        this.appendOneNoteNodeAsNativeMarkdownBlocks(file, child, blocks);
+      }
+      return;
+    }
+
+    const markdown = this.convertOneNoteBlockElementToMarkdown(file, element);
+    if (markdown) blocks.push(markdown);
+  }
+
+  private async insertMarkdownBlockAtCursor(file: TFile, block: string) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
+    const normalizedBlock = block.endsWith("\n") ? block : `${block}\n`;
+
+    if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
+      const cursor = editor.getCursor();
+      const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
+      const prefix = currentLine.trim() ? "\n\n" : "";
+      editor.replaceRange(`${prefix}${normalizedBlock}`, cursor);
+      return;
+    }
+
+    const originalContent = await this.app.vault.cachedRead(file);
+    const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
+    await this.app.vault.modify(file, `${originalContent}${separator}${normalizedBlock}`);
   }
 
   private async insertOneNoteConvertedContentAtCursor(file: TFile, converted: OneNoteConvertedContent) {
@@ -5419,24 +5411,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     await this.app.vault.modify(file, nextContent);
     const parsedTables = this.parseMarkdownTables(nextContent);
     await this.syncTableRecords(file, parsedTables, { modeOverrides });
-  }
-
-  private async insertMarkdownBlockAtCursor(file: TFile, block: string) {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    const editor = (view as any)?.editor;
-    const normalizedBlock = block.endsWith("\n") ? block : `${block}\n`;
-
-    if (view?.file?.path === file.path && editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
-      const cursor = editor.getCursor();
-      const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
-      const prefix = currentLine.trim() ? "\n\n" : "";
-      editor.replaceRange(`${prefix}${normalizedBlock}`, cursor);
-      return;
-    }
-
-    const originalContent = await this.app.vault.cachedRead(file);
-    const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
-    await this.app.vault.modify(file, `${originalContent}${separator}${normalizedBlock}`);
   }
 
   private async buildOneNoteEnhancedMarkdownContent(file: TFile, html: string, clipboardImages: File[] = []) {
@@ -5578,12 +5552,32 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       parts.push(value);
     }
 
-    const joined = parts
+    let joined = parts
       .join("")
       .replace(/[ \t]+\n/g, "\n")
       .replace(/\n{3,}/g, "\n\n")
       .replace(/[ \t]{2,}/g, " ");
+    joined = this.collapseOneNoteMarkdownMarks(joined);
     return forCell ? joined.replace(/\n/g, "<br>").trim() : joined.trim();
+  }
+
+  /** 合并相邻 ** 段、去掉 OneNote 多 span 造成的星号连击 */
+  private collapseOneNoteMarkdownMarks(text: string) {
+    let out = text;
+    out = out.replace(/\*\*\s*\*\*/g, "");
+    while (/\*\*([^*]+)\*\*\*\*([^*]+)\*\*/.test(out)) {
+      out = out.replace(/\*\*([^*]+)\*\*\*\*([^*]+)\*\*/g, "**$1$2**");
+    }
+    out = out.replace(/\*\*(\*\*[^*]+\*\*)\*\*/g, "$1");
+    out = out.replace(/\*{3,}([^*]+)\*{3,}/g, "**$1**");
+    return out;
+  }
+
+  private innerAlreadyWrappedInBold(inner: string) {
+    const trimmed = inner.trim();
+    if (!trimmed.startsWith("**") || !trimmed.endsWith("**")) return false;
+    const markers = trimmed.match(/\*\*/g);
+    return (markers?.length ?? 0) === 2;
   }
 
   private serializeOneNoteInlineNode(file: TFile, node: Node, forCell: boolean): string {
@@ -5610,34 +5604,318 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const href = element.getAttribute("href")?.trim() ?? "";
       return href ? `[${inner}](${href})` : inner;
     }
-    if (tag === "strong" || tag === "b") return `**${inner}**`;
-    if (tag === "em" || tag === "i") return `*${inner}*`;
+    if (tag === "strong" || tag === "b") {
+      return this.innerAlreadyWrappedInBold(inner) ? inner : `**${inner}**`;
+    }
+    if (tag === "em" || tag === "i") {
+      const t = inner.trim();
+      if (t.startsWith("*") && t.endsWith("*") && !t.startsWith("**")) return inner;
+      return `*${inner}*`;
+    }
     if (tag === "code") return `\`${inner.replace(/`/g, "")}\``;
     if (tag === "u") return inner;
-    if (tag === "p" || tag === "div" || tag === "li") return `${inner}\n`;
+    if (tag === "s" || tag === "strike") return `~~${inner}~~`;
+
+    if (tag === "span" || tag === "p" || tag === "div") {
+      const styled = this.applyOneNoteInlineStyleMarks(element, inner);
+      if (tag === "p" || tag === "div") return styled ? `${styled}\n` : "";
+      return styled;
+    }
 
     return inner;
+  }
+
+  /** OneNote 剪贴板常用 span style 加粗/斜体，需转成 Markdown 才能在 Obsidian 里显示 */
+  private applyOneNoteInlineStyleMarks(element: HTMLElement, inner: string) {
+    if (!inner) return inner;
+    if (this.innerAlreadyWrappedInBold(inner)) return inner;
+    const styles = this.readOneNoteStyleMap(element);
+    let out = inner;
+
+    const weight = styles["font-weight"]?.trim().toLowerCase() ?? "";
+    const weightNum = Number.parseInt(weight, 10);
+    if (
+      weight === "bold" ||
+      weight === "bolder" ||
+      (Number.isFinite(weightNum) && weightNum >= 600)
+    ) {
+      out = this.innerAlreadyWrappedInBold(out) ? out : `**${out}**`;
+    }
+
+    const fontStyle = styles["font-style"]?.trim().toLowerCase() ?? "";
+    if (fontStyle === "italic" || fontStyle === "oblique") {
+      const t = out.trim();
+      if (!(t.startsWith("*") && t.endsWith("*") && !t.startsWith("**"))) {
+        out = `*${out}*`;
+      }
+    }
+
+    const decoration = styles["text-decoration"]?.toLowerCase() ?? "";
+    if (decoration.includes("line-through")) {
+      out = `~~${out}~~`;
+    }
+
+    return out;
   }
 
   private serializeNestedOneNoteTable(file: TFile, table: HTMLTableElement) {
     const matrix = this.extractOneNoteTableMatrix(file, table);
     if (!matrix || matrix.rows.length === 0) return "";
-    return matrix.rows
-      .map((row) =>
-        row
-          .map((cell) => cell.trim())
-          .filter((cell) => cell.length > 0)
-          .join(" / ")
-      )
-      .filter((line) => line.length > 0)
+
+    const rows = matrix.rows.map((row) =>
+      row.map((cell) => this.normalizeOneNoteMarkdownTableCell(cell))
+    );
+    return this.flattenNestedTableToText(rows);
+  }
+
+  private stripOneNoteCellPlainText(cell: string) {
+    return cell.replace(/<br>/gi, " ").replace(/\*\*/g, "").trim();
+  }
+
+  private isOneNoteNumericIndexCell(text: string) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    return /^\d+[.、．]?$/.test(plain) || /^[①②③④⑤⑥⑦⑧⑨⑩][.、．]?$/.test(plain);
+  }
+
+  private looksLikeOneNoteLabelCell(text: string) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    if (!plain) return false;
+    if (plain.length > 48) return false;
+    if (this.isOneNoteNumericIndexCell(plain)) return false;
+    if (/^\d+[.、．]\s/.test(plain)) return false;
+    return true;
+  }
+
+  private maybeBoldShortHeading(text: string) {
+    const plain = this.stripOneNoteCellPlainText(text);
+    if (!plain || plain.length > 24) return text;
+    if (this.innerAlreadyWrappedInBold(text)) return text;
+    if (/^[一二三四五六七八九十]+[、．.]/.test(plain)) return `**${plain}**`;
+    if (plain.includes("（") || plain.includes("(")) {
+      return text.replace(/^([^（(]+)/, "**$1**");
+    }
+    return text;
+  }
+
+  private formatNestedCellBody(value: string) {
+    const lines = this.parseOneNoteNumberedLines(value, { keepSubBullets: true });
+    if (lines.length === 0) return value;
+    if (lines.length === 1 && !value.includes("<br>")) return lines[0];
+    return this.formatOneNoteNumberedBlock(lines);
+  }
+
+  private flattenNestedTableToText(rows: string[][]) {
+    if (!rows.length) return "";
+    const columnCount = Math.max(...rows.map((row) => row.length), 1);
+    const normalized = rows.map((row) => {
+      const cells = [...row];
+      while (cells.length < columnCount) cells.push("");
+      return cells.map((cell) => this.normalizeOneNoteMarkdownTableCell(cell));
+    });
+
+    if (columnCount === 1) {
+      return normalized.map((row) => row[0]).filter((cell) => cell.length > 0).join("<br>");
+    }
+    if (columnCount === 2) {
+      return this.flattenTwoColumnNestedTable(normalized);
+    }
+    return this.flattenMultiColumnNestedTable(normalized);
+  }
+
+  private flattenTwoColumnNestedTable(rows: string[][]) {
+    const blocks: string[] = [];
+    let activeLabel = "";
+    let activeLines: string[] = [];
+
+    const flushLabelBlock = () => {
+      if (!activeLabel && activeLines.length === 0) return;
+      const body = activeLines.length > 0 ? this.formatNestedCellBody(activeLines.join("<br>")) : "";
+      const label = this.collapseOneNoteMarkdownMarks(activeLabel);
+      if (activeLabel) {
+        blocks.push(body ? `• **${label}**：${body.includes("<br>") ? `<br>${body}` : body}` : `• **${label}**：`);
+      } else {
+        blocks.push(...activeLines);
+      }
+      activeLabel = "";
+      activeLines = [];
+    };
+
+    const appendToLastBlock = (line: string) => {
+      if (!line) return;
+      if (blocks.length === 0) {
+        blocks.push(line);
+        return;
+      }
+      blocks[blocks.length - 1] = `${blocks[blocks.length - 1]}<br>${line}`;
+    };
+
+    for (const row of rows) {
+      const col0 = (row[0] ?? "").trim();
+      const col1 = (row[1] ?? "").trim();
+
+      if (!col0 && !col1) continue;
+
+      if (!col0 && col1) {
+        const cont = this.parseOneNoteNumberedLines(col1, { keepSubBullets: true });
+        if (activeLabel) {
+          activeLines.push(...cont);
+        } else if (cont.length > 0) {
+          appendToLastBlock(this.formatOneNoteNumberedBlock(cont));
+        }
+        continue;
+      }
+
+      if (this.isOneNoteNumericIndexCell(col0)) {
+        flushLabelBlock();
+        const idx = this.stripOneNoteCellPlainText(col0).replace(/[.、．]$/, "");
+        blocks.push(`　${idx}. ${col1}`);
+        continue;
+      }
+
+      if (this.looksLikeOneNoteLabelCell(col0)) {
+        flushLabelBlock();
+        activeLabel = col0.replace(/\*\*/g, "").trim();
+        if (col1) activeLines.push(...this.parseOneNoteNumberedLines(col1, { keepSubBullets: true }));
+        continue;
+      }
+
+      flushLabelBlock();
+      if (col0 && col1) {
+        const left = this.maybeBoldShortHeading(col0);
+        blocks.push(`${left}：${col1}`);
+      } else if (col0) {
+        blocks.push(this.maybeBoldShortHeading(col0));
+      } else if (col1) {
+        blocks.push(col1);
+      }
+    }
+
+    flushLabelBlock();
+    return this.collapseOneNoteMarkdownMarks(blocks.join("<br>"));
+  }
+
+  private flattenMultiColumnNestedTable(rows: string[][]) {
+    let start = 0;
+    if (rows.length > 1 && this.oneNoteFirstRowLooksLikeHeader(rows)) {
+      start = 1;
+    }
+
+    const blocks: string[] = [];
+    let groupKey = "";
+
+    for (let i = start; i < rows.length; i += 1) {
+      const row = rows[i];
+      const col0 = (row[0] ?? "").trim();
+      const rest = row.slice(1).map((c) => c.trim()).filter((c) => c.length > 0);
+
+      if (col0) {
+        groupKey = col0;
+        const heading = this.maybeBoldShortHeading(col0);
+        if (rest.length === 0) {
+          blocks.push(heading);
+          continue;
+        }
+        blocks.push(heading);
+        blocks.push(this.formatMultiColumnNestedRow(rest, false));
+        continue;
+      }
+
+      if (!col0 && rest.length > 0) {
+        blocks.push(this.formatMultiColumnNestedRow(rest, true));
+        continue;
+      }
+
+      if (groupKey && rest.length === 0) continue;
+      const all = row.map((c) => c.trim()).filter((c) => c.length > 0);
+      if (all.length > 0) {
+        blocks.push(all.join(" · "));
+      }
+    }
+
+    return this.collapseOneNoteMarkdownMarks(blocks.join("<br>"));
+  }
+
+  private formatMultiColumnNestedRow(cells: string[], indent: boolean) {
+    const prefix = indent ? "　　" : "　";
+    if (cells.length === 1) return `${prefix}${cells[0]}`;
+    return cells.map((cell, index) => `${prefix}${index + 1}. ${cell}`).join("<br>");
+  }
+
+  private parseOneNoteNumberedLines(value: string, options?: { keepSubBullets?: boolean }) {
+    const lines: string[] = [];
+    for (const part of value.split(/<br>|\n/gi)) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const isNumbered = /^\d+[.、．]\s*/.test(trimmed);
+      const isSubBullet = /^[·•\-]\s*/.test(trimmed);
+      if (options?.keepSubBullets && (isSubBullet || (!isNumbered && lines.length > 0))) {
+        lines.push(`　　${trimmed.replace(/^[·•\-]\s*/, "· ")}`);
+        continue;
+      }
+      lines.push(trimmed.replace(/^\d+[.、．]\s*/, "").trim());
+    }
+    return lines.filter((line) => line.length > 0);
+  }
+
+  private formatOneNoteNumberedBlock(lines: string[]) {
+    let index = 0;
+    return lines
+      .map((line) => {
+        if (line.startsWith("　　")) return line;
+        index += 1;
+        return `　${index}. ${line}`;
+      })
       .join("<br>");
+  }
+
+  private oneNoteFirstRowLooksLikeHeader(rows: string[][]) {
+    const first = rows[0];
+    if (!first?.length) return false;
+
+    const firstPlain = first.map((cell) => this.stripOneNoteCellPlainText(cell));
+    if (firstPlain.some((cell) => !cell)) return false;
+    if (!firstPlain.every((cell) => cell.length <= 16)) return false;
+    if (firstPlain.some((cell) => this.isOneNoteNumericIndexCell(cell))) return false;
+
+    if (rows.length < 2) return true;
+
+    const body = rows.slice(1);
+    const bodyFirstNumeric = body.filter((row) => this.isOneNoteNumericIndexCell(row[0] ?? "")).length;
+    if (bodyFirstNumeric >= Math.max(1, Math.floor(body.length * 0.25))) return true;
+
+    const headerLen = firstPlain.reduce((sum, cell) => sum + cell.length, 0) / firstPlain.length;
+    const bodyLen =
+      body.reduce((sum, row) => sum + this.stripOneNoteCellPlainText(row[0] ?? "").length, 0) /
+      Math.max(body.length, 1);
+    return bodyLen > headerLen * 1.4;
+  }
+
+  private oneNoteTableLooksHeaderless(rows: string[][]) {
+    if (rows.length <= 1) return true;
+    return !this.oneNoteFirstRowLooksLikeHeader(rows);
+  }
+
+  private splitOneNoteTableHeaderAndBody(rows: string[][]) {
+    if (this.oneNoteTableLooksHeaderless(rows)) {
+      const columnCount = Math.max(...rows.map((row) => row.length), 1);
+      const header =
+        columnCount <= 2
+          ? ["项目", "内容"].slice(0, columnCount)
+          : Array.from({ length: columnCount }, (_, index) => `列${index + 1}`);
+      return { header: this.normalizeRowCells(header, columnCount), body: rows };
+    }
+    const [headerRow, ...bodyRows] = rows;
+    return {
+      header: headerRow,
+      body: bodyRows,
+    };
   }
 
   private convertOneNoteTableToEnhancedMarkdown(file: TFile, table: HTMLTableElement): OneNoteTableConversion | null {
     const extracted = this.extractOneNoteTableMatrix(file, table);
     if (!extracted || extracted.rows.length === 0) return null;
 
-    const [headerRow, ...bodyRows] = extracted.rows;
+    const { header: headerRow, body: bodyRows } = this.splitOneNoteTableHeaderAndBody(extracted.rows);
     const rawTable: ParsedRawTable = {
       header: headerRow,
       divider: Array(headerRow.length).fill("---"),
@@ -7682,8 +7960,8 @@ with open(out_path, "wb") as handle:
   }
 
   private isInitializedEnhancedTable(tableEl: HTMLTableElement) {
-    const tableId = tableEl.dataset.mdtpTableId || "";
-    return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced";
+    void tableEl;
+    return false;
   }
 
   private isNativeLayoutTable(tableEl: HTMLTableElement) {
@@ -7697,8 +7975,8 @@ with open(out_path, "wb") as handle:
   }
 
   private getInitializedTableId(tableEl: HTMLTableElement) {
-    const tableId = tableEl.dataset.mdtpTableId || "";
-    return tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "enhanced" ? tableId : null;
+    void tableEl;
+    return null;
   }
 
   private normalizeSelection(anchor: CellCoord, current: CellCoord): SelectionRect {
@@ -7844,24 +8122,18 @@ with open(out_path, "wb") as handle:
       tableEl.classList.remove("mdtp-table-enhanced");
       tableEl.classList.add("mdtp-table-native-layout");
       this.applyNativeLayout(tableEl, record.layout);
-    } else {
-      tableEl.classList.remove("mdtp-table-native-layout");
-      tableEl.classList.add("mdtp-table-enhanced");
-      this.applyLayout(tableEl, record.layout);
+      this.injectResizeHandles(tableEl, record.layout);
       const runtime = this.runtimeState.get(tableEl);
-      if (runtime?.file && runtime.parsedTable) {
-        this.renderImageMarkupInEnhancedCells(tableEl, runtime.file, runtime.parsedTable, record.layout);
+      if (runtime) {
+        runtime.selection = null;
+        runtime.anchor = null;
+        this.renderSelection(tableEl, null, null);
       }
+      return;
     }
-    this.injectResizeHandles(tableEl, record.layout);
-    const runtime = this.runtimeState.get(tableEl);
-    if (runtime && record.mode !== "nativeLayout") {
-      this.renderSelection(tableEl, runtime.selection, runtime.anchor);
-    } else if (runtime) {
-      runtime.selection = null;
-      runtime.anchor = null;
-      this.renderSelection(tableEl, null, null);
-    }
+
+    this.runtimeState.delete(tableEl);
+    this.restoreNativeTable(tableEl);
   }
 
   private clearAllEnhancedSelections(exceptTableEl?: HTMLTableElement | null) {
@@ -8354,35 +8626,164 @@ with open(out_path, "wb") as handle:
   }
 
   private getTextFromClipboardEvent(event: ClipboardEvent) {
-    const plainText = event.clipboardData?.getData("text/plain") ?? "";
-    if (plainText) return plainText;
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return "";
+    const plainText = clipboardData.getData("text/plain");
+    if (plainText?.trim()) return plainText;
+    for (const type of Array.from(clipboardData.types ?? [])) {
+      if (/html/i.test(type)) continue;
+      if (!/(?:text|plain|utf|string|unicode)/i.test(type)) continue;
+      const value = clipboardData.getData(type);
+      if (value?.trim()) return value;
+    }
     return "";
   }
 
   private getHtmlFromClipboardEvent(event: ClipboardEvent) {
-    return event.clipboardData?.getData("text/html") ?? "";
+    const clipboardData = event.clipboardData;
+    if (!clipboardData) return "";
+    const direct = clipboardData.getData("text/html");
+    if (direct?.trim()) return this.extractHtmlFragmentFromClipboardPayload(direct);
+    for (const type of Array.from(clipboardData.types ?? [])) {
+      if (type === "text/plain") continue;
+      if (!/html/i.test(type) && type !== "public.html") continue;
+      const value = clipboardData.getData(type);
+      if (value?.trim()) return this.extractHtmlFragmentFromClipboardPayload(value);
+    }
+    return "";
   }
 
-  private async readHtmlFromAvailableClipboard() {
+  private async resolveOneNoteClipboardHtml(event?: ClipboardEvent): Promise<string> {
+    let html = event ? this.getHtmlFromClipboardEvent(event) : "";
+    if (!html.trim()) {
+      html = await this.readHtmlFromAvailableClipboard();
+    }
+    if (!html.trim()) {
+      const plain = event ? this.getTextFromClipboardEvent(event) : "";
+      const text = plain.trim() ? plain : await this.readTextFromAvailableClipboard();
+      html = this.plainTextTableToSyntheticHtml(text);
+    }
+    return html.trim();
+  }
+
+  private extractHtmlFragmentFromClipboardPayload(text: string): string {
+    const normalized = text.replace(/\r\n?/g, "\n");
+    const startMarker = normalized.indexOf("StartFragment");
+    const endMarker = normalized.indexOf("EndFragment");
+    if (startMarker >= 0 && endMarker > startMarker) {
+      const fragmentStart = normalized.indexOf("<", startMarker);
+      const fragmentEnd = normalized.lastIndexOf(">", endMarker);
+      if (fragmentStart >= 0 && fragmentEnd > fragmentStart) {
+        return normalized.slice(fragmentStart, fragmentEnd + 1);
+      }
+    }
+    const htmlStart = normalized.search(/<(?:html|table|div|meta|body)/i);
+    if (htmlStart >= 0) return normalized.slice(htmlStart);
+    return normalized;
+  }
+
+  private decodeClipboardHtmlBuffer(buffer: unknown): string {
+    if (!buffer) return "";
+    let bytes: Uint8Array;
+    const bufferAny = buffer as { length?: number; byteLength?: number; buffer?: ArrayBuffer };
+    if (typeof Buffer !== "undefined" && Buffer.isBuffer(buffer)) {
+      bytes = buffer;
+    } else if (bufferAny instanceof Uint8Array) {
+      bytes = bufferAny;
+    } else if (bufferAny?.buffer instanceof ArrayBuffer) {
+      bytes = new Uint8Array(bufferAny.buffer);
+    } else if (typeof bufferAny?.length === "number" && bufferAny.length > 0) {
+      bytes = Uint8Array.from(buffer as ArrayLike<number>);
+    } else {
+      return "";
+    }
+    const decode = (encoding: "utf8" | "utf16le") => {
+      if (typeof Buffer !== "undefined") {
+        return Buffer.from(bytes).toString(encoding);
+      }
+      const label = encoding === "utf16le" ? "utf-16le" : "utf-8";
+      return new TextDecoder(label).decode(bytes);
+    };
+    let text = decode("utf8");
+    if (!/<(?:html|table|div|meta|body)/i.test(text)) {
+      const utf16 = decode("utf16le");
+      if (/<(?:html|table|div|meta|body)/i.test(utf16)) text = utf16;
+    }
+    return this.extractHtmlFragmentFromClipboardPayload(text);
+  }
+
+  private readHtmlBufferFromElectronFormat(clipboard: { readBuffer?: (format: string) => unknown }, format: string) {
+    if (typeof clipboard.readBuffer !== "function") return "";
+    try {
+      const buffer = clipboard.readBuffer(format);
+      if (!buffer) return "";
+      const size =
+        (buffer as { length?: number }).length ?? (buffer as { byteLength?: number }).byteLength ?? 0;
+      if (!size) return "";
+      return this.decodeClipboardHtmlBuffer(buffer);
+    } catch {
+      return "";
+    }
+  }
+
+  private readHtmlFromElectronClipboard(): string {
     try {
       const electron = (window as any).require?.("electron");
-      if (typeof electron?.clipboard?.readHTML === "function") {
-        const html = electron.clipboard.readHTML();
-        if (html) return html;
+      const clipboard = electron?.clipboard;
+      if (!clipboard) return "";
+
+      const preferredFormats = [
+        "public.html",
+        "Apple HTML pasteboard type",
+        "NSHTMLPboardType",
+        "text/html",
+        "HTML Format",
+      ];
+      const available = new Set<string>(clipboard.availableFormats?.() ?? []);
+
+      for (const format of preferredFormats) {
+        if (!available.has(format)) continue;
+        const html = this.readHtmlBufferFromElectronFormat(clipboard, format);
+        if (html.trim()) return html;
+      }
+
+      for (const format of available) {
+        if (preferredFormats.includes(format)) continue;
+        if (!/html/i.test(format) && format !== "public.html") continue;
+        const html = this.readHtmlBufferFromElectronFormat(clipboard, format);
+        if (html.trim()) return html;
+      }
+
+      if (typeof clipboard.readHTML === "function") {
+        const html = clipboard.readHTML();
+        if (html?.trim()) return this.extractHtmlFragmentFromClipboardPayload(html);
       }
     } catch (error) {
       console.error("[mdtp] electron clipboard readHTML failed", error);
     }
+    return "";
+  }
+
+  private async readHtmlFromAvailableClipboard() {
+    const fromElectron = this.readHtmlFromElectronClipboard();
+    if (fromElectron.trim()) return fromElectron;
 
     try {
-      const clipboardAny = navigator.clipboard as any;
+      const clipboardAny = navigator.clipboard as Clipboard;
       if (typeof clipboardAny?.read === "function") {
         const items = await clipboardAny.read();
         for (const item of items) {
-          if (!Array.from(item.types ?? []).includes("text/html")) continue;
-          const blob = await item.getType("text/html");
-          const html = await blob.text();
-          if (html) return html;
+          for (const type of Array.from(item.types ?? [])) {
+            if (!/html/i.test(type) && type !== "public.html") continue;
+            try {
+              const blob = await item.getType(type);
+              const html = await blob.text();
+              const extracted = this.extractHtmlFragmentFromClipboardPayload(html);
+              if (extracted.trim()) return extracted;
+            } catch {
+              // type not readable in this context
+            }
+          }
         }
       }
     } catch (error) {
@@ -8390,6 +8791,28 @@ with open(out_path, "wb") as handle:
     }
 
     return "";
+  }
+
+  private escapeHtmlForOneNotePaste(text: string): string {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  private plainTextTableToSyntheticHtml(text: string): string {
+    const matrix = this.parseClipboardMatrix(text);
+    if (!matrix?.length) return "";
+    const rows = matrix
+      .map(
+        (row) =>
+          `<tr>${row
+            .map((cell) => `<td>${this.escapeHtmlForOneNotePaste(cell)}</td>`)
+            .join("")}</tr>`
+      )
+      .join("");
+    return `<table><tbody>${rows}</tbody></table>`;
   }
 
   private async readTextFromAvailableClipboard() {
@@ -9160,9 +9583,9 @@ with open(out_path, "wb") as handle:
     return value
       .replace(/\r\n?/g, "\n")
       .replace(/\n+/g, "<br>")
-      .replace(/(?:\s*<br>\s*)+$/gi, "")
-      .replace(/^(?:\s*<br>\s*)+/gi, "")
-      .replace(/\s+/g, " ")
+      .replace(/(?:[ \t]*<br>[ \t]*)+$/gi, "")
+      .replace(/^(?:[ \t]*<br>[ \t]*)+/gi, "")
+      .replace(/[ \t]+/g, " ")
       .trim();
   }
 

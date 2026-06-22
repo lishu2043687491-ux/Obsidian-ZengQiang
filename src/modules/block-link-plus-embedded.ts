@@ -104,7 +104,6 @@ declare global {
   }
 }
 
-/** bundle 内 i18n 求值阶段读语言键；用插件私有 Map，不触碰 window.localStorage */
 function ensureBundleRuntimeGlobals(): void {
   if (typeof window === "undefined") return;
   if (window.__FDTB_BLP_LANG__) return;

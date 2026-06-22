@@ -225,42 +225,171 @@ async function run() {
       ],
     });
 
-    const converted = plugin.convertOneNoteTableToEnhancedMarkdown(sourceFile, topTable);
-    assert.ok(converted, "OneNote table conversion should produce an enhanced table block");
+    const converted = plugin.convertOneNoteTableToNativeMarkdown(sourceFile, topTable);
+    assert.ok(converted, "OneNote table conversion should produce native markdown table");
+    assert.ok(!converted.includes("%% mdtp:tbl_"), "native OneNote paste must not insert enhanced table markers");
+    assert.ok(/^(\|[^\n]+\|\n){2,}/m.test(converted), "converted OneNote table should be pipe markdown rows");
     assert.ok(
-      converted.markdown.includes("%% mdtp:tbl_"),
-      "converted OneNote table should include an enhanced table marker"
-    );
-    assert.ok(
-      /^%% mdtp:tbl_[^\n]+ %%\n\n\| 模块 \| 内容 \|/m.test(converted.markdown),
-      "converted OneNote table should keep a blank line after the hidden marker so Obsidian renders it as a table"
-    );
-    assert.ok(
-      converted.markdown.split("\n")[3] === "| --- | --- |",
-      "converted OneNote table divider should stay compact instead of exposing very long source lines"
-    );
-    assert.ok(
-      converted.markdown.includes("[文档链接](https://example.com/doc)"),
+      converted.includes("[文档链接](https://example.com/doc)"),
       "converted OneNote table should keep hyperlinks in markdown form"
     );
     assert.ok(
-      converted.markdown.includes("![[assets/attachments/preview-a.png]]"),
+      converted.includes("![[assets/attachments/preview-a.png]]"),
       "converted OneNote table should keep localized images in markdown form"
     );
     assert.ok(
-      converted.markdown.includes("子项 / 说明<br>A / B"),
-      "nested OneNote tables should be flattened into readable multiline cell content"
+      converted.includes("**子项**：说明") && converted.includes("**A**：B"),
+      "nested OneNote tables should be flattened into readable cell content without raw pipe columns"
     );
-    assert.strictEqual(
-      converted.record.layout.cellImageWidths["1,1"],
-      320,
-      "converted OneNote table should carry image width metadata into enhanced layout"
+  }
+
+  {
+    const boldSpanTable = createElement("table", {
+      childNodes: [
+        createElement("tbody", {
+          childNodes: [
+            createElement("tr", {
+              childNodes: [
+                createElement("td", {
+                  childNodes: [
+                    createElement("span", {
+                      attributes: { style: "font-weight: bold" },
+                      childNodes: [createTextNode("重点标题")],
+                    }),
+                  ],
+                }),
+                createElement("td", { childNodes: [createTextNode("普通说明")] }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const boldConverted = plugin.convertOneNoteTableToNativeMarkdown(sourceFile, boldSpanTable);
+    assert.ok(boldConverted?.includes("**重点标题**"), "OneNote span font-weight:bold should become markdown bold");
+  }
+
+  {
+    const innerLunDian = createElement("table", {
+      childNodes: [
+        createElement("tbody", {
+          childNodes: [
+            createElement("tr", {
+              childNodes: [
+                createElement("td", { childNodes: [createTextNode("论点")] }),
+                createElement("td", {
+                  childNodes: [createTextNode("理解技巧的价值是，能把繁杂的知识，做清晰地分类")],
+                }),
+              ],
+            }),
+            createElement("tr", {
+              childNodes: [
+                createElement("td", { childNodes: [createTextNode("论据")] }),
+                createElement("td", {
+                  childNodes: [
+                    createTextNode("1. 事实性知识记忆技巧"),
+                    createElement("br"),
+                    createTextNode("2. 概念性知识三问"),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const wyhOuter = createElement("table", {
+      childNodes: [
+        createElement("tbody", {
+          childNodes: [
+            createElement("tr", {
+              childNodes: [
+                createElement("td", {
+                  childNodes: [createTextNode("为什么"), createElement("br"), createTextNode("（意义/原因）")],
+                }),
+                createElement("td", { childNodes: [innerLunDian] }),
+              ],
+            }),
+            createElement("tr", {
+              childNodes: [
+                createElement("td", {
+                  childNodes: [createTextNode("是什么"), createElement("br"), createTextNode("（概念/定义）")],
+                }),
+                createElement("td", { childNodes: [createTextNode("• 论点：占位")] }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const wyhConverted = plugin.convertOneNoteTableToNativeMarkdown(sourceFile, wyhOuter);
+    assert.ok(wyhConverted, "WYH outer table should convert");
+    assert.ok(!wyhConverted.includes("%% mdtp:tbl_"), "WYH paste must stay native markdown");
+    assert.ok(
+      wyhConverted.includes("事实性知识记忆技巧"),
+      "论据 cell lines on same row should be preserved"
     );
-    assert.strictEqual(converted.record.layout.colWidths["0"], 96, "OneNote inch-based cell width should become column width metadata");
-    assert.strictEqual(converted.record.layout.colWidths["1"], 192, "OneNote column width metadata should preserve relative width");
-    assert.strictEqual(converted.record.layout.rowHeights["0"], 32, "OneNote point-based row height should become row height metadata");
-    assert.strictEqual(converted.record.layout.cellColors["0,0"], "#FFE9E8", "OneNote cell background should become enhanced cell color");
-    assert.strictEqual(converted.record.layout.cellAlignments["0,0"], "center", "OneNote text alignment should become enhanced cell alignment");
+    assert.ok(
+      wyhConverted.includes("概念性知识三问"),
+      "multiple numbered 论据 lines should be preserved"
+    );
+    assert.ok(
+      wyhConverted.includes("• **论据**：") && wyhConverted.includes("• **论点**："),
+      "论点/论据 labels should be formatted"
+    );
+    assert.ok(
+      wyhConverted.includes("为什么") && wyhConverted.includes("意义/原因"),
+      "outer section label row should remain in table body"
+    );
+    assert.ok(
+      wyhConverted.includes("| 项目 | 内容 |"),
+      "headerless OneNote tables should use synthetic header and keep all data rows"
+    );
+  }
+
+  {
+    const mistakeMethodTable = createElement("table", {
+      childNodes: [
+        createElement("tbody", {
+          childNodes: [
+            createElement("tr", {
+              childNodes: [
+                createElement("td", { childNodes: [createTextNode("误区")] }),
+                createElement("td", {
+                  childNodes: [
+                    createTextNode("1. 低效率上手"),
+                    createElement("br"),
+                    createTextNode("· 没有梳理流程，一股脑就开始做"),
+                    createElement("br"),
+                    createTextNode("2. 无意识重复"),
+                    createElement("br"),
+                    createTextNode("· 一直重复一套做法"),
+                  ],
+                }),
+              ],
+            }),
+            createElement("tr", {
+              childNodes: [
+                createElement("td", { childNodes: [createTextNode("方法")] }),
+                createElement("td", {
+                  childNodes: [
+                    createTextNode("1. 流程化：书面整理出全部的流程"),
+                    createElement("br"),
+                    createTextNode("· 用表格，搭建时间顺序框架"),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const mistakeMethodMd = plugin.convertOneNoteTableToNativeMarkdown(sourceFile, mistakeMethodTable);
+    assert.ok(mistakeMethodMd?.includes("• **误区**："), "误区 label should be preserved");
+    assert.ok(mistakeMethodMd?.includes("低效率上手"), "误区 numbered content should be preserved");
+    assert.ok(mistakeMethodMd?.includes("　　· 没有梳理流程"), "误区 sub-bullets should be indented");
+    assert.ok(mistakeMethodMd?.includes("• **方法**："), "方法 label should be preserved");
+    assert.ok(mistakeMethodMd?.includes("流程化"), "方法 numbered content should be preserved");
   }
 
   {
@@ -286,8 +415,8 @@ async function run() {
         }),
       ],
     });
-    const converted = plugin.convertOneNoteTableToEnhancedMarkdown(sourceFile, tableWithFallbackText);
-    assert.ok(converted?.markdown.includes("平台约束：个人实名的注册上限"), "OneNote table import should keep cell text even when rich child nodes are unavailable");
+    const converted = plugin.convertOneNoteTableToNativeMarkdown(sourceFile, tableWithFallbackText);
+    assert.ok(converted?.includes("平台约束：个人实名的注册上限"), "OneNote table import should keep cell text even when rich child nodes are unavailable");
   }
 
   {
@@ -364,17 +493,11 @@ async function run() {
     ].join("\n");
     const prepared = plugin.prepareTemplateContentForInsertion(templateContent, createFile("目标.md"));
     assert.ok(!prepared.content.includes("mdtp-template:"), "template insertion should strip hidden metadata line");
-    assert.ok(!prepared.content.includes(sourceTableId), "template insertion should remap source table ids");
-    assert.equal(prepared.tableRecords.length, 1, "template insertion should create a fresh enhanced table record");
-    assert.equal(prepared.tableRecords[0].mode, "enhanced", "inserted template table should stay enhanced");
-    assert.deepStrictEqual(
-      prepared.tableRecords[0].layout,
-      plugin.dataStore.tables[sourceTableId].layout,
-      "inserted template table should preserve enhanced layout metadata"
-    );
+    assert.ok(!prepared.content.includes(sourceTableId), "legacy enhanced template insertion should strip source table ids");
+    assert.equal(prepared.tableRecords.length, 0, "legacy enhanced template insertion should not create table records");
     assert.ok(
-      /%% mdtp:tbl_[^\n]+ %%\n\n\| A \| B \|/.test(prepared.content),
-      "inserted template should keep a blank line between the marker and the table header so Obsidian renders it as a table"
+      /\| A \| B \|/.test(prepared.content),
+      "legacy enhanced template insertion should keep the readable markdown table"
     );
   }
 
@@ -802,34 +925,9 @@ async function run() {
   }
 
   assert.deepStrictEqual(
-    plugin.getEnhancedSidebarActionDescriptors().map((item) => item.label),
-    [
-      "上方插入行",
-      "下方插入行",
-      "左侧插入列",
-      "右侧插入列",
-      "删除当前行",
-      "删除当前列",
-      "合并",
-      "拆分",
-      "单元格颜色",
-      "当前行颜色",
-      "当前列颜色",
-      "清除颜色",
-      "复制当前块内容",
-      "高保真复制",
-      "复制当前块成图",
-      "保存当前选区为模板",
-      "插入模板",
-      "模板库",
-    ],
-    "enhanced table sidebar should expose the stable white-list including high-fidelity copy"
-  );
-
-  assert.strictEqual(
-    plugin.getEnhancedSidebarActionDescriptors().find((item) => item.label === "高保真复制")?.experimental,
-    undefined,
-    "high-fidelity copy should no longer be marked as experimental in the sidebar descriptors"
+    plugin.getEnhancedSidebarActionDescriptors(),
+    [],
+    "enhanced table sidebar should be removed"
   );
 
   {
@@ -1496,29 +1594,21 @@ async function run() {
   await plugin.handleDocumentKeyDown(deleteEvent);
   assert.strictEqual(
     removedImageManipulator,
-    activeManipulator,
-    "delete on a selected enhanced-table image should remove the selected image before clearing the whole cell"
+    null,
+    "delete should not run removed enhanced-table image handling"
   );
   assert.strictEqual(clearCall, null, "image delete should not fall through to cell clear");
-  assert.strictEqual(deleteEvent.defaultPrevented, true);
-  assert.strictEqual(deleteEvent.propagationStopped, true);
+  assert.strictEqual(deleteEvent.defaultPrevented, false);
+  assert.strictEqual(deleteEvent.propagationStopped, false);
 
   plugin.removeActiveImageFromCell = originalRemoveActiveImageFromCell;
   plugin.activeImageManipulator = null;
   deleteEvent.defaultPrevented = false;
   deleteEvent.propagationStopped = false;
   await plugin.handleDocumentKeyDown(deleteEvent);
-  assert.deepStrictEqual(
-    clearCall,
-    {
-      file: sourceFile,
-      tableId: "tbl_clean_acceptance_20260420",
-      selection: { startRow: 1, endRow: 1, startCol: 1, endCol: 1 },
-    },
-    "delete on a selected enhanced-table cell should clear contents without opening the editor"
-  );
-  assert.strictEqual(deleteEvent.defaultPrevented, true);
-  assert.strictEqual(deleteEvent.propagationStopped, true);
+  assert.strictEqual(clearCall, null, "delete should not clear removed enhanced-table cells");
+  assert.strictEqual(deleteEvent.defaultPrevented, false);
+  assert.strictEqual(deleteEvent.propagationStopped, false);
 
   clearCall = null;
   const deleteFromCodeMirrorEvent = {
@@ -1532,17 +1622,9 @@ async function run() {
     propagationStopped: false,
   };
   await plugin.handleDocumentKeyDown(deleteFromCodeMirrorEvent);
-  assert.deepStrictEqual(
-    clearCall,
-    {
-      file: sourceFile,
-      tableId: "tbl_clean_acceptance_20260420",
-      selection: { startRow: 1, endRow: 1, startCol: 1, endCol: 1 },
-    },
-    "delete should still clear a selected enhanced-table cell when Obsidian reports the key event from cm-content"
-  );
-  assert.strictEqual(deleteFromCodeMirrorEvent.defaultPrevented, true);
-  assert.strictEqual(deleteFromCodeMirrorEvent.propagationStopped, true);
+  assert.strictEqual(clearCall, null, "delete from cm-content should not run removed enhanced-table handling");
+  assert.strictEqual(deleteFromCodeMirrorEvent.defaultPrevented, false);
+  assert.strictEqual(deleteFromCodeMirrorEvent.propagationStopped, false);
 
   clearCall = null;
   const deleteFromTextareaEvent = {

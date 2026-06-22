@@ -3,12 +3,22 @@
   table-layout: fixed;
 }
 
+.mdtp-onenote-status-bar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  order: 9999;
+}
+
 .mdtp-onenote-status-button {
   cursor: pointer;
   color: var(--text-accent);
   font-weight: 600;
   border-radius: 6px;
-  padding: 0 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--background-modifier-border);
+  white-space: nowrap;
 }
 
 .mdtp-onenote-status-button:hover {

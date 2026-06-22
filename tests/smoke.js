@@ -363,6 +363,10 @@ async function run() {
         showOneNoteImport: false,
         showTableEnhancerEntrances: false,
         showDraggerIntegrationStatus: true,
+        autoUpdatePluginsEnabled: true,
+        autoUpdatePluginIds: ["yolo", "realclaudian"],
+        autoUpdateLastRunAt: 0,
+        autoUpdateLastResults: {},
       },
       "management settings should get stable defaults"
     );
@@ -430,14 +434,11 @@ async function run() {
     await plugin.refreshManagedPluginStatus();
     assert.ok(plugin.dataStore.managedPluginStatusCheckedAt > 0, "manual plugin status monitoring should store a check timestamp");
 
-    const commandOk = await plugin.runManagedCommand("markdown-table-enhancer:insert-enhanced-table-template");
-    assert.equal(commandOk, true, "management commands should call Obsidian command registry");
-    assert.deepEqual(plugin.app.commands.executed, ["markdown-table-enhancer:insert-enhanced-table-template"]);
     const nativeColorCommandOk = await plugin.runManagedCommand("markdown-table-enhancer:insert-native-color-table-template");
     assert.equal(nativeColorCommandOk, true, "native color table command should be callable through the command registry");
     assert.deepEqual(
       plugin.app.commands.executed,
-      ["markdown-table-enhancer:insert-enhanced-table-template", "markdown-table-enhancer:insert-native-color-table-template"]
+      ["markdown-table-enhancer:insert-native-color-table-template"]
     );
 
     const normalizedOrder = plugin.normalizeData({
@@ -1717,9 +1718,9 @@ async function run() {
     let received = null;
     const tableEnhancerPlugin = {
       dataStore: { experimentalFeatureGate: false },
-      async insertEnhancedTemplateContentAtCursor(content, position) {
+      async insertTemplateContentAtCursor(content, position) {
         received = { content, position };
-        editor.replaceRange("ENHANCED\n", position);
+        editor.replaceRange("TABLE\n", position);
         return true;
       },
     };
@@ -1737,9 +1738,9 @@ async function run() {
     const pluginWithEnhancerInsert = createPlugin(PluginClass, { fileContents, tableEnhancerPlugin });
     const ok = await pluginWithEnhancerInsert.insertTemplateIntoContext(createContext(pluginWithEnhancerInsert, editor, 0), ".模板库/周计划.md");
     assert.equal(ok, true, "template insertion should succeed through table enhancer bridge");
-    assert.equal(received.content.includes("mdtp-template"), true, "enhanced metadata should be handed to table enhancer, not stripped first");
+    assert.equal(received.content.includes("mdtp-template"), true, "table metadata should be handed to table enhancer for filtering");
     assert.deepEqual(received.position, { line: 1, ch: 0 }, "table enhancer bridge should preserve the toolbar insertion location");
-    assert.equal(editor.toString(), ["正文", "ENHANCED", "", "尾部"].join("\n"), "table enhancer bridge should own the actual insertion");
+    assert.equal(editor.toString(), ["正文", "TABLE", "", "尾部"].join("\n"), "table enhancer bridge should own the actual insertion");
   }
 
   {
@@ -1959,6 +1960,34 @@ async function run() {
     assert.ok(record.title.indexOf("跨设备") < 0, "title must not contain cross-device prefix");
     const rel = claudian.getArchiveRelativePath("codex", "conv-test-1", "Mac");
     assert.ok(rel.includes("conv-test-1@Mac.json"), "archive path should include device suffix");
+
+    const emptyRecord = {
+      ...record,
+      sourceDevice: "Air",
+      lastArchivedAt: 20,
+      messages: [],
+      omitted: { ...record.omitted, noLocalSessionFile: true },
+    };
+    const completeRecord = {
+      ...record,
+      sourceDevice: "Pro",
+      lastArchivedAt: 10,
+      messages: parsed.messages,
+    };
+    const merged = claudian.mergeArchiveRecords([
+      { path: "empty.json", record: emptyRecord },
+      { path: "complete.json", record: completeRecord },
+    ]);
+    assert.equal(merged.length, 1, "same conversation archives should merge into one list item");
+    assert.equal(merged[0].messages.length, 2, "merge should prefer the archive with readable messages");
+    assert.deepEqual(merged[0].sourceDevices, ["Pro", "Air"]);
+    assert.deepEqual(merged[0].archivePaths, ["complete.json", "empty.json"]);
+
+    const handoff = claudian.buildArchiveHandoffPrompt(merged[0]);
+    assert.ok(handoff.includes("<claudian_cross_device_handoff>"));
+    assert.ok(handoff.includes("原会话标题：测试会话标题"));
+    assert.ok(handoff.includes(parsed.messages[0].text));
+    assert.ok(handoff.includes("新的本机 Codex 线程"), "handoff must disclose that this is not exact thread resume");
   }
 
   console.log("feishu-doc-toolbar smoke tests passed");

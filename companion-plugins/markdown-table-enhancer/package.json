@@ -10,7 +10,9 @@
   "license": "MIT",
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=browser --format=cjs --target=es2020 --external:obsidian --external:@codemirror/state --external:@codemirror/view --outfile=main.js",
-    "test:smoke": "node tests/smoke.js"
+    "test:smoke": "node tests/smoke.js",
+    "test:onenote-acceptance": "node tests/onenote-paste-acceptance.cjs",
+    "test:paste": "npm run test:smoke && npm run test:onenote-acceptance"
   },
   "devDependencies": {
     "@codemirror/state": "^6.6.0",

@@ -21,13 +21,16 @@ import {
   type ChatArchiveRecord,
   type ClaudianChatArchiveSettings,
   type ClaudianSessionMeta,
+  type MergedChatArchiveRecord,
+  mergeArchiveRecords,
 } from "./claudian-archive-core";
 import { parseCodexJsonlFilePath, resolveCodexSessionFilePath } from "./claudian-codex-parser";
+import { ClaudianCrossDeviceBridge } from "./claudian-cross-device-bridge";
 import { EmbeddedSubModule, SubPluginHost } from "./sub-plugin-host";
 
 export type ArchiveListItem = {
   path: string;
-  record: ChatArchiveRecord;
+  record: MergedChatArchiveRecord;
   isCrossDevice: boolean;
 };
 
@@ -38,6 +41,7 @@ export class ClaudianChatArchiveRunner {
   settings: ClaudianChatArchiveSettings = { ...DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS };
   private autoTimer: number | null = null;
   private archiving = false;
+  private bridge: ClaudianCrossDeviceBridge | null = null;
 
   constructor(public host: SubPluginHost) {}
 
@@ -51,6 +55,13 @@ export class ClaudianChatArchiveRunner {
       await this.updateSettings({ enabled: true });
     }
     this.registerCommands();
+    this.bridge = new ClaudianCrossDeviceBridge(
+      this.host.app,
+      () => this.listArchives().then((items) => items.map((item) => item.record)),
+      () => ({ ...this.settings.continuationMap }),
+      async (continuationMap) => this.updateSettings({ continuationMap })
+    );
+    this.bridge.start();
     this.syncAutoArchiveTimer();
     if (this.settings.enabled) {
       window.setTimeout(() => void this.scanAndArchiveAll({ manual: false }), 2500);
@@ -59,6 +70,8 @@ export class ClaudianChatArchiveRunner {
 
   async stop() {
     this.clearAutoArchiveTimer();
+    this.bridge?.stop();
+    this.bridge = null;
   }
 
   async updateSettings(patch: Partial<ClaudianChatArchiveSettings>) {
@@ -178,6 +191,10 @@ export class ClaudianChatArchiveRunner {
       }
     }
 
+    if (messages.length === 0 && omitted.noLocalSessionFile) {
+      return "skipped";
+    }
+
     const record = buildArchiveRecord(meta, messages, deviceId, omitted);
     const json = JSON.stringify(record, null, 2);
     if (Buffer.byteLength(json, "utf-8") > this.settings.maxArchiveBytes * 1.1) {
@@ -196,7 +213,7 @@ export class ClaudianChatArchiveRunner {
     const adapter = this.host.app.vault.adapter;
     const root = normalizePath(ARCHIVE_ROOT);
     const currentDevice = resolveDeviceId(this.settings);
-    const items: ArchiveListItem[] = [];
+    const rawItems: Array<{ path: string; record: ChatArchiveRecord }> = [];
 
     const walk = async (dir: string) => {
       const listed = await adapter.list(dir).catch(() => null);
@@ -207,11 +224,7 @@ export class ClaudianChatArchiveRunner {
         try {
           const record = JSON.parse(content) as ChatArchiveRecord;
           if (!record?.conversationId) continue;
-          items.push({
-            path: file,
-            record,
-            isCrossDevice: record.sourceDevice !== currentDevice,
-          });
+          rawItems.push({ path: file, record });
         } catch {
           // skip corrupt
         }
@@ -222,8 +235,11 @@ export class ClaudianChatArchiveRunner {
     };
 
     await walk(root);
-    items.sort((a, b) => (Number(b.record.updatedAt) || 0) - (Number(a.record.updatedAt) || 0));
-    return items;
+    return mergeArchiveRecords(rawItems).map((record) => ({
+      path: record.archivePaths[0],
+      record,
+      isCrossDevice: record.sourceDevices.some((device) => device !== currentDevice),
+    }));
   }
 
   async cleanupOversizedArchives(): Promise<{ removed: number; trimmed: number }> {
@@ -317,7 +333,7 @@ class ArchiveListModal extends Modal {
       main.createDiv({ cls: "fdtb-claudian-archive-row-title", text: item.record.title });
       const meta = main.createDiv({ cls: "fdtb-claudian-archive-row-meta" });
       meta.setText(
-        `${item.record.sourceDevice} · ${new Date(item.record.lastArchivedAt).toLocaleString()} · ${item.record.messages.length} 条消息`
+        `${item.record.sourceDevices.join(" / ")} · ${new Date(item.record.lastArchivedAt).toLocaleString()} · ${item.record.messages.length} 条消息`
       );
       if (showBadge && item.isCrossDevice) {
         const badge = row.createSpan({ cls: "fdtb-claudian-badge fdtb-claudian-badge-cross" });
@@ -399,7 +415,7 @@ export function renderClaudianChatArchiveSettings(containerEl: HTMLElement, onRe
 
   containerEl.createEl("p", {
     cls: "setting-item-description",
-    text: "轻量 JSON 写入 .claudian-sync/chat-archives/，经 iCloud 跨设备只读查看；不修改 Claudian 标题。",
+    text: "轻量 JSON 写入 .claudian-sync/chat-archives/；换电脑后从 Claudian 原历史入口打开，并创建本机新线程续聊。",
   });
 
   new Setting(containerEl)
@@ -489,7 +505,7 @@ export const claudianChatArchiveModule: EmbeddedSubModule = {
   id: "claudian-chat-archive",
   displayName: "Claudian 聊天记录同步",
   description:
-    "将 Claudian/Codex 会话提取为轻量 JSON 存入 vault，经 iCloud 跨设备只读查看；不修改 Claudian 标题与会话目录",
+    "将 Claudian/Codex 会话提取为轻量 JSON 存入 vault；跨设备从 Claudian 原历史入口打开，并创建本机新线程续聊",
   defaultEnabled: true,
   load: async (host) => {
     const runner = new ClaudianChatArchiveRunner(host);

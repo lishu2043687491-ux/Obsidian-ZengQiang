@@ -15,10 +15,6 @@ import * as HtmlToImage from "html-to-image";
 
 import { EmbeddedSubModule, SubPluginHost, ModuleHostBackend } from "./modules/sub-plugin-host";
 import { fileAutoLocalizerModule, renderFileAutoLocalizerSettings } from "./modules/file-auto-localizer";
-import {
-  fileVersionHistoryModule,
-  renderFileVersionHistorySettings,
-} from "./modules/file-version-history";
 import { globalWidePageModule } from "./modules/global-wide-page";
 import {
   getRightClickCopyAsImageRunner,
@@ -30,16 +26,33 @@ import {
   type ClaudianChatArchiveRunner,
 } from "./modules/claudian-chat-archive";
 import {
+  AUTO_UPDATE_PLUGIN_LABELS,
+  DEFAULT_AUTO_UPDATE_PLUGIN_IDS,
+  formatAutoUpdateResult,
+  isAutoUpdateBlockedPluginId,
+  normalizeAutoUpdatePluginIds,
+  normalizeAutoUpdateResults,
+  resolveAutoUpdatePluginId,
+  runManagedPluginAutoUpdate,
+  type ManagedPluginAutoUpdateResult,
+} from "./modules/managed-plugin-auto-updater";
+import {
   blockLinkPlusModule,
   getEmbeddedBlockLinkPlusInstance,
 } from "./modules/block-link-plus-embedded";
 import { renderBlockLinkPlusSettings } from "./modules/block-link-plus-bridge";
 import { ensureObsidianRequireBinding } from "./modules/node-bridge";
+import {
+  GOAL_PROGRESS_PLAN_ROOT_PATH,
+  GOAL_PROGRESS_REVIEW_PATH,
+  GOAL_PROGRESS_TARGET_PATH,
+  buildGoalProgressSyncUpdate,
+  type GoalProgressPlanFile,
+} from "./modules/goal-progress-sync";
 
 /** 指向链接优先启动，避免与其它内嵌模块抢 PluginManager / 视图注册 */
 const EMBEDDED_MODULES: EmbeddedSubModule[] = [
   blockLinkPlusModule,
-  fileVersionHistoryModule,
   fileAutoLocalizerModule,
   globalWidePageModule,
   rightClickCopyAsImageModule,
@@ -55,8 +68,6 @@ type EmbeddedModuleSettingsRenderer = (containerEl: HTMLElement, onRefresh: () =
 
 const EMBEDDED_MODULE_SETTINGS_RENDERERS: Record<string, EmbeddedModuleSettingsRenderer> = {
   "file-auto-localizer": (containerEl) => renderFileAutoLocalizerSettings(containerEl),
-  "file-version-history": (containerEl, onRefresh) =>
-    renderFileVersionHistorySettings(containerEl, onRefresh),
   "claudian-chat-archive": (containerEl, onRefresh) =>
     renderClaudianChatArchiveSettings(containerEl, onRefresh),
 };
@@ -186,6 +197,12 @@ type FeishuDocToolbarData = {
   settingsTabOrder: ExperienceSettingsTabId[];
   /** 用户已删除/隐藏的内置插件分类 id */
   managedPluginCategoryRemoved: string[];
+  /** 启动时自动更新白名单内的社区插件 */
+  autoUpdatePluginsEnabled: boolean;
+  /** 允许自动更新的插件 id 列表 */
+  autoUpdatePluginIds: string[];
+  autoUpdateLastRunAt: number;
+  autoUpdateLastResults: Record<string, ManagedPluginAutoUpdateResult>;
 };
 
 type ManagementSettingKey = "showDraggerIntegrationStatus" | "showTableEnhancerEntrances" | "showOneNoteImport";
@@ -269,13 +286,6 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     status: "merged",
   },
   {
-    moduleId: "file-version-history",
-    displayName: "本地文件版本历史",
-    externalPluginId: "file-version-history",
-    description: "库内自动快照 + 版本历史弹窗；Obsidian Sync/文件恢复失败时仍可查看与恢复",
-    status: "merged",
-  },
-  {
     moduleId: "global-wide-page",
     displayName: "全局宽页面",
     externalPluginId: "global-wide-page",
@@ -294,7 +304,7 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     displayName: "Claudian 聊天记录同步",
     externalPluginId: "claudian",
     description:
-      "轻量存档 Claudian 会话到 vault，经 iCloud 跨设备只读查看。需保持 Claudian 插件启用；不替代 Claudian，不修改其标题",
+      "轻量同步 Claudian 会话到 vault；换电脑后从 Claudian 原历史入口打开，并创建本机新线程继续聊天。需保持 Claudian 插件启用",
     status: "merged",
   },
   {
@@ -303,6 +313,14 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     externalPluginId: "block-link-plus",
     description:
       "段落链接与文件夹链接均生成超短链接（^块ID / blp-folder://open?id=）；点击文件夹链接可在文件树定位并自定义高亮时长",
+    status: "merged",
+  },
+  {
+    moduleId: "onenote-rich-paste",
+    displayName: "OneNote 粘贴（原生表格）",
+    externalPluginId: MARKDOWN_TABLE_PLUGIN_ID,
+    description:
+      "从 OneNote 复制富文本后，点「粘贴OneNote」在光标处插入官方原生 Markdown 表格（无增强表格标记）；含表中表、链接、图片本地化。需启用 markdown-table-enhancer。",
     status: "merged",
   },
 ];
@@ -356,6 +374,8 @@ const HOSTED_PLUGIN_DESCRIPTIONS: Record<string, string> = {
   tasknotes: "任务笔记",
   "settings-search": "设置搜索",
   claudian: "Claudian",
+  realclaudian: "Claudian",
+  yolo: "YOLO",
 };
 
 const MANAGED_PLUGIN_FALLBACK_CATEGORY_ID = "other";
@@ -494,16 +514,10 @@ const TABLE_PICKER_COLS = 8;
 const MARKDOWN_TABLE_PLUGIN_ID = "markdown-table-enhancer";
 const ENHANCED_TABLE_COMMANDS = {
   insertNativeColorTemplate: `${MARKDOWN_TABLE_PLUGIN_ID}:insert-native-color-table-template`,
-  insertTemplate: `${MARKDOWN_TABLE_PLUGIN_ID}:insert-enhanced-table-template`,
-  initializeCurrent: `${MARKDOWN_TABLE_PLUGIN_ID}:initialize-current-table-enhancement`,
-  initializeBatch: `${MARKDOWN_TABLE_PLUGIN_ID}:initialize-current-file-table-anchors`,
   initializeNativeLayout: `${MARKDOWN_TABLE_PLUGIN_ID}:initialize-current-table-native-layout`,
   setNativeRowColor: `${MARKDOWN_TABLE_PLUGIN_ID}:set-current-native-table-row-color`,
   openNativeRowBands: `${MARKDOWN_TABLE_PLUGIN_ID}:open-current-native-table-row-bands`,
   pasteOneNoteRichTable: `${MARKDOWN_TABLE_PLUGIN_ID}:paste-onenote-rich-table`,
-  toggleExperimental: `${MARKDOWN_TABLE_PLUGIN_ID}:toggle-experimental-table-features`,
-  showStatus: `${MARKDOWN_TABLE_PLUGIN_ID}:show-current-file-table-enhancement-status`,
-  restoreSnapshot: `${MARKDOWN_TABLE_PLUGIN_ID}:restore-last-table-enhancement-snapshot`,
 };
 
 declare const __OSS_RELEASE__: boolean;
@@ -531,12 +545,16 @@ const DEFAULT_DATA: FeishuDocToolbarData = {
   managedPluginCategoryOrder: [],
   managedPluginStatusCheckedAt: 0,
   enableBetaFeatures: false,
-  showOneNoteImport: false,
+  showOneNoteImport: true,
   showTableEnhancerEntrances: false,
   showDraggerIntegrationStatus: true,
   embeddedModules: {},
   settingsTabOrder: [...DEFAULT_SETTINGS_TAB_ORDER],
   managedPluginCategoryRemoved: [],
+  autoUpdatePluginsEnabled: true,
+  autoUpdatePluginIds: [...DEFAULT_AUTO_UPDATE_PLUGIN_IDS],
+  autoUpdateLastRunAt: 0,
+  autoUpdateLastResults: {},
 };
 
 const ACTION_ICONS: Partial<Record<BlockAction, string>> = {
@@ -724,60 +742,132 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("启用测试功能")
-      .setDesc("开启后显示下方「OneNote 高保真粘贴」实验项；增强表格仅在启用 OneNote 粘贴时后台联动，不设单独按钮。")
+      .setDesc("解锁文字工具栏中的实验样式（颜色/格式实验项）。OneNote 粘贴已移至上方自研功能卡片。")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.isBetaFeaturesEnabled()).onChange(async (value) => {
           await this.plugin.setBetaFeaturesEnabled(value);
           this.display();
         })
       );
-
-    this.renderOneNotePasteTestSection(containerEl);
   }
 
-  /** OneNote 粘贴为实验能力，归在「自研功能开关」而非「原生表格增强」。 */
-  private renderOneNotePasteTestSection(containerEl: HTMLElement) {
-    this.appendCollapsibleSection(containerEl, "OneNote 高保真粘贴（测试）", (bodyEl) => {
-      const desc = document.createElement("p");
-      desc.className = "fdtb-settings-page-desc";
-      desc.textContent =
-        "从 OneNote 剪贴板导入图文/表中表。属实验能力；需先开启上方「启用测试功能」，再打开下方开关。";
-      bodyEl.appendChild(desc);
+  /** OneNote 粘贴：稳定自研功能，开关 showOneNoteImport（不经过 embeddedModules）。 */
+  private appendOneNoteRichPasteOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
+    const mteStatus = this.plugin.getManagedPluginStatus(descriptor.externalPluginId);
+    const isEnabled = this.plugin.isOneNoteRichPasteEnabled();
 
-      if (!this.plugin.isBetaFeaturesEnabled()) {
-        const hint = document.createElement("p");
-        hint.className = "setting-item-description";
-        hint.textContent = "请先开启「启用测试功能」后再配置。";
-        bodyEl.appendChild(hint);
-        return;
+    const card = document.createElement("details");
+    card.className = "fdtb-own-module-card";
+    card.open = isEnabled;
+
+    const summary = document.createElement("summary");
+    summary.className = "fdtb-own-module-card-summary";
+    const summaryRow = document.createElement("div");
+    summaryRow.className = "fdtb-plugin-manager-row";
+
+    const main = document.createElement("div");
+    main.className = "fdtb-plugin-manager-main";
+    const title = document.createElement("div");
+    title.className = "fdtb-plugin-manager-title";
+    title.textContent = descriptor.displayName;
+    const meta = document.createElement("div");
+    meta.className = "fdtb-plugin-manager-meta";
+    const mteNote = mteStatus.installed
+      ? mteStatus.enabled
+        ? "（表格底座 markdown-table-enhancer 已启用）"
+        : "（请先启用 markdown-table-enhancer 插件）"
+      : "（未安装 markdown-table-enhancer）";
+    meta.textContent = `稳定自研功能${mteNote}`;
+    const desc = document.createElement("div");
+    desc.className = "fdtb-plugin-manager-desc";
+    desc.textContent = descriptor.description;
+    main.append(title, meta, desc);
+
+    const controls = document.createElement("div");
+    controls.className = "fdtb-plugin-manager-controls";
+    const stateLabel = document.createElement("span");
+    stateLabel.className = "fdtb-plugin-manager-meta";
+    stateLabel.textContent = isEnabled ? "已启用" : "已禁用";
+    controls.appendChild(stateLabel);
+
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "fdtb-plugin-manager-toggle";
+    toggleLabel.title = "启用或关闭 OneNote 粘贴（原生表格）";
+    const toggleInput = document.createElement("input");
+    toggleInput.type = "checkbox";
+    toggleInput.checked = isEnabled;
+    const toggleTrack = document.createElement("span");
+    toggleTrack.className = "fdtb-plugin-manager-toggle-track";
+    toggleLabel.append(toggleInput, toggleTrack);
+    toggleLabel.addEventListener("click", (event) => event.stopPropagation());
+    toggleLabel.addEventListener("mousedown", (event) => event.stopPropagation());
+    toggleInput.addEventListener("change", async () => {
+      const nextEnabled = toggleInput.checked;
+      toggleInput.disabled = true;
+      try {
+        await this.plugin.setOneNoteRichPasteEnabled(nextEnabled);
+        this.display();
+      } catch (error) {
+        toggleInput.checked = isEnabled;
+        toggleInput.disabled = false;
+        new Notice(`开关失败：${error instanceof Error ? error.message : String(error)}`);
       }
+    });
+    controls.appendChild(toggleLabel);
 
-      new Setting(bodyEl)
-        .setName("启用 OneNote 高保真粘贴")
-        .setDesc(
-          "开启后后台启用增强表格能力（仅供粘贴管线，不显示增强表格按钮）；关闭后增强表格整体停用。"
-        )
-        .addToggle((toggle) =>
-          toggle.setValue(this.plugin.isOneNoteRichPasteEnabled()).onChange(async (value) => {
-            await this.plugin.setOneNoteRichPasteEnabled(value);
-            this.display();
-          })
-        );
+    summaryRow.append(main, controls);
+    summary.appendChild(summaryRow);
 
-      if (!this.plugin.isOneNoteRichPasteEnabled()) {
-        return;
-      }
-
+    const body = document.createElement("div");
+    body.className = "fdtb-own-module-card-body";
+    if (isEnabled) {
+      body.dataset.rendered = "1";
+      const hint = document.createElement("p");
+      hint.className = "fdtb-settings-page-desc";
+      hint.textContent =
+        "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。";
+      body.appendChild(hint);
       this.appendCommandRow(
-        bodyEl,
-        "执行 OneNote 高保真粘贴",
-        "从 OneNote 剪贴板导入图文/表中表内容",
+        body,
+        "粘贴OneNote",
+        "从剪贴板读取 OneNote 富文本并插入当前笔记（含表中表、加粗、图片）",
         ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable
       );
+    } else {
+      body.createEl("p", {
+        text: "开启上方开关后显示「粘贴OneNote」状态栏按钮。",
+        cls: "setting-item-description",
+      });
+    }
+
+    card.append(summary, body);
+    card.addEventListener("toggle", () => {
+      if (!card.open || body.dataset.rendered === "1") return;
+      body.dataset.rendered = "1";
+      body.empty();
+      const hint = document.createElement("p");
+      hint.className = "fdtb-settings-page-desc";
+      hint.textContent =
+        "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。";
+      body.appendChild(hint);
+      if (this.plugin.isOneNoteRichPasteEnabled()) {
+        this.appendCommandRow(
+          body,
+          "粘贴OneNote",
+          "从剪贴板读取 OneNote 富文本并插入当前笔记（含表中表、加粗、图片）",
+          ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable
+        );
+      }
     });
+
+    containerEl.appendChild(card);
   }
 
   private appendOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
+    if (descriptor.moduleId === "onenote-rich-paste") {
+      this.appendOneNoteRichPasteOwnModuleRow(containerEl, descriptor);
+      return;
+    }
     const externalStatus = this.plugin.getManagedPluginStatus(descriptor.externalPluginId);
     const showEmbeddedDetail =
       descriptor.status === "merged" &&
@@ -1685,7 +1775,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
-    intro.textContent = "原生表格颜色、长宽高与模板库。增强表格不设入口，仅在「自研功能开关 → OneNote 高保真粘贴」启用时后台联动。";
+    intro.textContent = "原生表格颜色、长宽高与模板库。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
     containerEl.appendChild(intro);
 
     this.appendManagedPluginToggleRow(containerEl, {
@@ -1972,6 +2062,8 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       "插件按分类分组展示，可折叠、改名、删除分类；每条插件右侧用小号「移到」切换分类。分类删除后，组内插件会移至「其他插件」。";
     containerEl.appendChild(intro);
 
+    this.renderPluginAutoUpdateSection(containerEl);
+
     new Setting(containerEl)
       .setName("自动监测插件启用状态")
       .setDesc(this.plugin.getPluginStatusMonitorDescription());
@@ -1995,6 +2087,93 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       this.appendPluginCategorySection(list, section.category, section.items, categoryOptions);
     }
     containerEl.appendChild(list);
+  }
+
+  private renderPluginAutoUpdateSection(containerEl: HTMLElement) {
+    this.appendCollapsibleSection(
+      containerEl,
+      "插件自动更新",
+      (bodyEl) => {
+        const intro = document.createElement("p");
+        intro.className = "fdtb-settings-page-desc";
+        intro.textContent =
+          "仅对白名单内的第三方社区插件（当前默认 YOLO、Claudian）执行自动更新。自研插件（ZengQiang Enhanced、原生表格增强等）永不自动更新，本地源码才是真相源。";
+        bodyEl.appendChild(intro);
+
+        new Setting(bodyEl)
+          .setName("启动时自动更新白名单插件")
+          .setDesc(this.plugin.getAutoUpdatePluginsDescription())
+          .addToggle((toggle) =>
+            toggle.setValue(this.plugin.dataStore.autoUpdatePluginsEnabled).onChange(async (value) => {
+              await this.plugin.setAutoUpdatePluginsEnabled(value);
+              this.display();
+            })
+          );
+
+        new Setting(bodyEl)
+          .setName("立即检查并更新")
+          .setDesc("手动触发一次白名单插件更新检查")
+          .addButton((button) =>
+            button.setButtonText("检查更新").onClick(async () => {
+              button.setDisabled(true);
+              button.setButtonText("检查中…");
+              try {
+                await this.plugin.runAutoUpdateManagedPlugins({ manual: true });
+                this.display();
+              } finally {
+                button.setDisabled(false);
+                button.setButtonText("检查更新");
+              }
+            })
+          );
+
+        const list = document.createElement("div");
+        list.className = "fdtb-auto-update-plugin-list";
+        for (const pluginId of this.plugin.dataStore.autoUpdatePluginIds) {
+          const row = document.createElement("div");
+          row.className = "fdtb-auto-update-plugin-row";
+          const label = document.createElement("span");
+          label.className = "fdtb-auto-update-plugin-label";
+          label.textContent = `${AUTO_UPDATE_PLUGIN_LABELS[pluginId] ?? pluginId} · ${pluginId}`;
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "fdtb-template-folder-delete-btn";
+          removeBtn.textContent = "移除";
+          removeBtn.addEventListener("click", async () => {
+            await this.plugin.removeAutoUpdatePluginId(pluginId);
+            this.display();
+          });
+          row.append(label, removeBtn);
+          list.appendChild(row);
+        }
+        bodyEl.appendChild(list);
+
+        this.appendInlineForm(bodyEl, {
+          label: "添加自动更新插件",
+          desc: "填写社区插件 id，例如 yolo、realclaudian（Claudian）",
+          placeholder: "插件 id",
+          buttonText: "添加",
+          onSubmit: async (value) => {
+            const ok = await this.plugin.addAutoUpdatePluginId(value);
+            if (ok) this.display();
+          },
+        });
+
+        const lastResults = this.plugin.getAutoUpdateLastResultLines();
+        if (lastResults.length > 0) {
+          const resultWrap = document.createElement("div");
+          resultWrap.className = "fdtb-auto-update-result-list";
+          for (const line of lastResults) {
+            const item = document.createElement("div");
+            item.className = "fdtb-settings-status-desc";
+            item.textContent = line;
+            resultWrap.appendChild(item);
+          }
+          bodyEl.appendChild(resultWrap);
+        }
+      },
+      { defaultOpen: true }
+    );
   }
 
   private appendPluginCategorySection(
@@ -2259,6 +2438,8 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private slashTrigger: SlashTriggerState | null = null;
   private readonly embeddedHosts: Map<string, SubPluginHost> = new Map();
   claudianArchiveRunner: ClaudianChatArchiveRunner | null = null;
+  private autoUpdateInFlight: Promise<void> | null = null;
+  private goalProgressStatusBarEl: HTMLElement | null = null;
 
   async onload() {
     ensureObsidianRequireBinding();
@@ -2266,6 +2447,9 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.dataStore.showTableEnhancerEntrances = false;
     this.ensureHandle();
     this.registerCommands();
+    if (!__OSS_RELEASE__) {
+      this.registerGoalProgressStatusBarButton();
+    }
     this.addSettingTab(new FeishuDocExperienceSettingTab(this.app, this));
     await this.startEnabledEmbeddedModules();
     await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
@@ -2315,6 +2499,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
     this.scheduleStyleRefresh();
     window.setTimeout(() => this.applyManagedPluginAliasesToSettingsSidebar(), 500);
+    this.scheduleStartupManagedPluginAutoUpdate();
   }
 
   onunload() {
@@ -2485,6 +2670,106 @@ export default class FeishuDocToolbarPlugin extends Plugin {
         void this.openTablePanelFromActiveEditor();
       },
     });
+
+    this.addCommand({
+      id: "auto-update-managed-plugins",
+      name: "检查并更新白名单插件",
+      callback: () => {
+        void this.runAutoUpdateManagedPlugins({ manual: true });
+      },
+    });
+
+    if (!__OSS_RELEASE__) {
+      this.addCommand({
+        id: "update-goal-progress-overview",
+        name: "查漏补缺目标进展",
+        callback: () => {
+          void this.updateGoalProgressOverview();
+        },
+      });
+    }
+  }
+
+  private registerGoalProgressStatusBarButton() {
+    this.goalProgressStatusBarEl = this.addStatusBarItem();
+    const buttonEl = this.goalProgressStatusBarEl as HTMLElement & {
+      addClass?: (className: string) => void;
+      setText?: (text: string) => void;
+    };
+    if (typeof buttonEl.addClass === "function") {
+      buttonEl.addClass("fdtb-goal-progress-status-button");
+    } else {
+      buttonEl.classList?.add("fdtb-goal-progress-status-button");
+    }
+    if (typeof buttonEl.setText === "function") {
+      buttonEl.setText("更新目标进展");
+    } else {
+      buttonEl.textContent = "更新目标进展";
+    }
+    buttonEl.title = "从周复盘查漏补缺到年度目标页";
+    buttonEl.setAttribute?.("aria-label", "更新目标进展");
+    buttonEl.addEventListener?.("click", () => {
+      void this.updateGoalProgressOverview();
+    });
+  }
+
+  private async updateGoalProgressOverview() {
+    try {
+      const reviewFile = this.getMarkdownFileByPath(GOAL_PROGRESS_REVIEW_PATH, "周复盘源");
+      const targetFile = this.getMarkdownFileByPath(GOAL_PROGRESS_TARGET_PATH, "目标进展页");
+      if (!reviewFile || !targetFile) return;
+
+      const reviewText = await this.app.vault.cachedRead(reviewFile);
+      const targetText = await this.app.vault.cachedRead(targetFile);
+      const planFiles = this.getGoalProgressPlanFiles();
+      const result = buildGoalProgressSyncUpdate({
+        reviewText,
+        targetText,
+        reviewPath: reviewFile.path,
+        planFiles,
+        generatedAt: this.formatGoalProgressSyncTime(new Date()),
+      });
+
+      if (!result.ok) {
+        new Notice(`目标进展未更新：${result.reason ?? "未识别到可写入内容"}`, 8000);
+        return;
+      }
+
+      if (!result.changed) {
+        new Notice("目标进展没有发现缺漏", 5000);
+        return;
+      }
+
+      await this.app.vault.modify(targetFile, result.targetText);
+      const uniqueWarnings = Array.from(new Set(result.warnings)).slice(0, 2);
+      const warningSuffix = uniqueWarnings.length > 0 ? `；${uniqueWarnings.join("；")}` : "";
+      new Notice(`目标进展已查漏补缺：新增 ${result.appendedCount} 行${warningSuffix}`, 8000);
+    } catch (error) {
+      console.error("[feishu-doc-toolbar] 更新目标进展总览失败", error);
+      new Notice(`目标进展更新失败：${this.formatError(error)}`, 8000);
+    }
+  }
+
+  private getMarkdownFileByPath(filePath: string, label: string): TFile | null {
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(filePath));
+    if (file instanceof TFile && file.extension === "md") return file;
+    new Notice(`${label}不存在：${filePath}`, 8000);
+    return null;
+  }
+
+  private getGoalProgressPlanFiles(): GoalProgressPlanFile[] {
+    const root = `${normalizePath(GOAL_PROGRESS_PLAN_ROOT_PATH)}/`;
+    return this.app.vault
+      .getMarkdownFiles()
+      .filter((file) => normalizePath(file.path).startsWith(root))
+      .map((file) => ({ path: file.path, basename: file.basename }));
+  }
+
+  private formatGoalProgressSyncTime(date: Date) {
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(
+      date.getHours()
+    )}:${pad(date.getMinutes())}`;
   }
 
   private async openInsertPanelFromActiveEditor() {
@@ -2687,6 +2972,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       embeddedModules: this.normalizeEmbeddedModulesData(saved.embeddedModules),
       settingsTabOrder: this.normalizeSettingsTabOrder(saved.settingsTabOrder),
       managedPluginCategoryRemoved: this.normalizePluginCategoryRemoved(saved.managedPluginCategoryRemoved),
+      autoUpdatePluginsEnabled: saved.autoUpdatePluginsEnabled !== false,
+      autoUpdatePluginIds: normalizeAutoUpdatePluginIds(saved.autoUpdatePluginIds),
+      autoUpdateLastRunAt: Number.isFinite(saved.autoUpdateLastRunAt) ? Number(saved.autoUpdateLastRunAt) : 0,
+      autoUpdateLastResults: normalizeAutoUpdateResults(saved.autoUpdateLastResults),
     };
     return data;
   }
@@ -2710,10 +2999,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return !!this.dataStore.showOneNoteImport;
   }
 
-  /** 增强表格后台能力：仅随 OneNote 高保真粘贴开关；永不暴露增强表格按钮。 */
+  /** OneNote 粘贴仅产出原生 Markdown 表，不再联动增强表格后台。 */
   isEnhancedTableFeatureEnabled() {
     if (ENHANCED_TABLE_FEATURE_LOCKED) return false;
-    return this.isOneNoteRichPasteEnabled();
+    return false;
   }
 
   isTableEnhancerEntrancesVisible() {
@@ -2727,7 +3016,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       showTableEnhancerEntrances: false,
     };
     await this.saveData(this.dataStore);
-    await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
+    await this.syncExperimentalFeatureGateToTableEnhancer(false);
   }
 
   async setBetaFeaturesEnabled(value: boolean) {
@@ -2735,7 +3024,6 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       ...this.dataStore,
       enableBetaFeatures: value,
       showTableEnhancerEntrances: false,
-      ...(value ? {} : { showOneNoteImport: false }),
     };
     await this.saveData(this.dataStore);
     if (!value) {
@@ -3185,6 +3473,118 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     const checkedAt = this.dataStore.managedPluginStatusCheckedAt;
     if (!checkedAt) return "进入本页会自动读取 Obsidian 当前插件状态；右侧开关用于启用或关闭插件";
     return `进入本页自动读取 Obsidian 当前插件状态；上次自动监测：${new Date(checkedAt).toLocaleString()}`;
+  }
+
+  getAutoUpdatePluginsDescription() {
+    const ids = this.dataStore.autoUpdatePluginIds
+      .map((id) => AUTO_UPDATE_PLUGIN_LABELS[id] ?? id)
+      .join("、");
+    const lastRunAt = this.dataStore.autoUpdateLastRunAt;
+    const lastRunText = lastRunAt ? `上次检查：${new Date(lastRunAt).toLocaleString()}` : "尚未执行自动更新";
+    return `当前白名单：${ids || "（空）"}。${lastRunText}`;
+  }
+
+  getAutoUpdateLastResultLines() {
+    const ids = [...this.dataStore.autoUpdatePluginIds];
+    const seen = new Set<string>();
+    const lines: string[] = [];
+    for (const pluginId of ids) {
+      const result = this.dataStore.autoUpdateLastResults[pluginId];
+      if (!result || seen.has(pluginId)) continue;
+      seen.add(pluginId);
+      lines.push(formatAutoUpdateResult(result));
+    }
+    return lines;
+  }
+
+  async setAutoUpdatePluginsEnabled(enabled: boolean) {
+    this.dataStore = { ...this.dataStore, autoUpdatePluginsEnabled: enabled };
+    await this.saveData(this.dataStore);
+  }
+
+  async addAutoUpdatePluginId(pluginId: string) {
+    const resolved = resolveAutoUpdatePluginId(pluginId);
+    if (!resolved || !/^[a-zA-Z0-9._-]+$/.test(resolved)) {
+      new Notice("插件 id 无效");
+      return false;
+    }
+    if (isAutoUpdateBlockedPluginId(resolved)) {
+      new Notice("自研插件不能加入自动更新白名单，请保持本地开发版本");
+      return false;
+    }
+    const nextIds = normalizeAutoUpdatePluginIds([
+      ...this.dataStore.autoUpdatePluginIds,
+      resolved,
+    ]);
+    if (nextIds.length === this.dataStore.autoUpdatePluginIds.length) {
+      new Notice("该插件已在白名单中");
+      return false;
+    }
+    this.dataStore = { ...this.dataStore, autoUpdatePluginIds: nextIds };
+    await this.saveData(this.dataStore);
+    new Notice(`已加入自动更新白名单：${AUTO_UPDATE_PLUGIN_LABELS[resolved] ?? resolved}`);
+    return true;
+  }
+
+  async removeAutoUpdatePluginId(pluginId: string) {
+    const resolved = resolveAutoUpdatePluginId(pluginId);
+    const nextIds = this.dataStore.autoUpdatePluginIds.filter((id) => id !== resolved);
+    if (nextIds.length === this.dataStore.autoUpdatePluginIds.length) return false;
+    if (nextIds.length === 0) {
+      new Notice("至少保留一个自动更新插件");
+      return false;
+    }
+    this.dataStore = { ...this.dataStore, autoUpdatePluginIds: nextIds };
+    await this.saveData(this.dataStore);
+    new Notice(`已移出自动更新白名单：${AUTO_UPDATE_PLUGIN_LABELS[resolved] ?? resolved}`);
+    return true;
+  }
+
+  private scheduleStartupManagedPluginAutoUpdate() {
+    if (!this.dataStore.autoUpdatePluginsEnabled) return;
+    window.setTimeout(() => {
+      void this.runAutoUpdateManagedPlugins({ manual: false });
+    }, 8000);
+  }
+
+  async runAutoUpdateManagedPlugins(options: { manual?: boolean } = {}) {
+    if (this.autoUpdateInFlight) {
+      if (options.manual) {
+        new Notice("上一次更新检查仍在进行，请稍后再试");
+      }
+      return;
+    }
+
+    const task = (async () => {
+      if (!options.manual && !this.dataStore.autoUpdatePluginsEnabled) return;
+      try {
+        const { results, summary } = await runManagedPluginAutoUpdate(
+          this.app,
+          this.dataStore.autoUpdatePluginIds,
+          { force: options.manual }
+        );
+        const nextResults = { ...this.dataStore.autoUpdateLastResults };
+        for (const result of results) {
+          nextResults[result.pluginId] = result;
+        }
+        this.dataStore = {
+          ...this.dataStore,
+          autoUpdateLastRunAt: Date.now(),
+          autoUpdateLastResults: nextResults,
+        };
+        await this.saveData(this.dataStore);
+        await this.refreshManagedPluginStatus({ silent: true });
+        new Notice(summary);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(`插件自动更新失败：${message}`);
+      }
+    })();
+
+    this.autoUpdateInFlight = task.finally(() => {
+      this.autoUpdateInFlight = null;
+    });
+    await this.autoUpdateInFlight;
   }
 
   async setManagedPluginEnabled(pluginId: string, enabled: boolean) {
@@ -6567,11 +6967,9 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private async insertTemplateViaTableEnhancer(context: BlockContext, content: string, insertAt: { line: number; ch: number }) {
     const enhancer = this.getTableEnhancerPlugin();
     const insertTemplate =
-      typeof enhancer?.insertEnhancedTemplateContentAtCursor === "function"
-        ? enhancer.insertEnhancedTemplateContentAtCursor
-        : typeof enhancer?.insertTemplateContentAtCursor === "function"
-          ? enhancer.insertTemplateContentAtCursor
-          : null;
+      typeof enhancer?.insertTemplateContentAtCursor === "function"
+        ? enhancer.insertTemplateContentAtCursor
+        : null;
     if (!insertTemplate) return false;
     try {
       if (typeof context.editor.setCursor === "function") {
@@ -6579,7 +6977,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       }
       return await insertTemplate.call(enhancer, content, insertAt);
     } catch (error) {
-      console.warn("[fdtb] enhanced template insertion failed; falling back to plain markdown", error);
+      console.warn("[fdtb] table template insertion failed; falling back to plain markdown", error);
       return false;
     }
   }
