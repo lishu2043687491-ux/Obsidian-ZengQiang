@@ -59,7 +59,6 @@ const NATIVE_COLOR_TABLE_LEGACY_HEADER = "#2F5F9F";
 const NATIVE_COLOR_TABLE_HEADER_TEXT = "#111111";
 const NATIVE_COLOR_TABLE_BASE_ROW = "#FFFFFF";
 const NATIVE_COLOR_TABLE_ALT_ROW = "#E2F0D9";
-const NATIVE_LAYOUT_SECTION_LABEL = "── 原生表格增强 ──";
 const NATIVE_LAYOUT_CURRENT_TABLE_LABEL = "对当前表格美化";
 const NATIVE_LAYOUT_PAGE_TABLES_LABEL = "对本页面所有的表格美化";
 const NATIVE_LAYOUT_ROW_COLOR_LABEL = "设置选中行颜色";
@@ -1284,8 +1283,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     await this.installRuntimeStyles();
     this.registerEditorExtension(this.createHiddenMarkerEditorExtension());
     const savedData = await this.loadData();
+    let migratedLegacyEnhancedTables = false;
     const savedTables = Object.fromEntries(
-      Object.entries(savedData?.tables ?? {}).map(([tableId, record]) => [tableId, this.normalizeLoadedTableRecord(record)])
+      Object.entries(savedData?.tables ?? {}).map(([tableId, record]) => {
+        if (this.getTableRecordMode(record) === "enhanced") {
+          migratedLegacyEnhancedTables = true;
+        }
+        return [tableId, this.normalizeLoadedTableRecord(record)];
+      })
     );
     const savedNativeColorPalettes = this.normalizeNativeColorSavedPalettes(savedData?.nativeColorSavedPalettes);
     this.dataStore = {
@@ -1301,6 +1306,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       nativeColorDefaultPresetId: this.normalizeNativeColorPresetId(savedData?.nativeColorDefaultPresetId, savedNativeColorPalettes),
       nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
     };
+    if (migratedLegacyEnhancedTables) {
+      await this.savePluginData();
+    }
 
     await this.migrateLegacyMarkersToHtmlComments();
 
@@ -1615,12 +1623,12 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const view = this.getContainingMarkdownView(focusTarget);
     if (!view?.file || !(view.contentEl instanceof HTMLElement)) return null;
 
+    const parsedTables = this.parseMarkdownTables(await this.app.vault.cachedRead(view.file));
     const renderedTables = Array.from(view.contentEl.querySelectorAll("table")) as HTMLTableElement[];
     const tableIndex = renderedTables.indexOf(resolved.tableEl);
-    if (tableIndex < 0) return null;
-
-    const parsedTables = this.parseMarkdownTables(await this.app.vault.cachedRead(view.file));
-    const parsedTable = parsedTables[tableIndex] ?? null;
+    const parsedTable =
+      (tableIndex >= 0 ? parsedTables[tableIndex] ?? null : null) ??
+      (parsedTables.length === 1 ? parsedTables[0] : null);
     if (!parsedTable || parsedTable.tableId) return null;
 
     const coord = resolved.coord ?? { row: 0, col: 0 };
@@ -1856,9 +1864,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const record = this.dataStore.tables[targetTable.tableId];
       if (record?.mode === "enhanced") {
         if (this.canConvertEnhancedRecordToNativeLayout(record)) {
-          record.mode = "nativeLayout";
-          this.applyNativeColorPresetToLayout(record.layout);
-          record.updatedAt = Date.now();
+          this.applyNativeLayoutBeautifyToRecord(record);
           await this.savePluginData();
           this.scheduleVisibleTableRefresh();
           new Notice("已对当前表格美化");
@@ -1868,9 +1874,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         return true;
       }
       if (record) {
-        record.mode = "nativeLayout";
-        this.applyNativeColorPresetToLayout(record.layout);
-        record.updatedAt = Date.now();
+        this.applyNativeLayoutBeautifyToRecord(record);
         await this.savePluginData();
       }
       this.scheduleVisibleTableRefresh();
@@ -1926,8 +1930,18 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private applyNativeLayoutBeautifyToRecord(record: TableRecord) {
     record.mode = "nativeLayout";
+    this.stripLegacyEnhancedLayout(record.layout);
     this.applyNativeColorPresetToLayout(record.layout);
     record.updatedAt = Date.now();
+  }
+
+  private stripLegacyEnhancedLayout(layout: TableLayoutMetadata) {
+    layout.cellColors = {};
+    layout.rowColors = {};
+    layout.colColors = {};
+    layout.cellAlignments = {};
+    layout.cellImageWidths = {};
+    layout.merges = [];
   }
 
   private async getVisibleParsedTablesInActiveView(file: TFile): Promise<ParsedTableBlock[]> {
@@ -2146,7 +2160,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private canConvertEnhancedRecordToNativeLayout(record: TableRecord | null | undefined) {
     if (!record || record.mode !== "enhanced") return false;
-    return record.layout.merges.length === 0 && Object.keys(record.layout.cellImageWidths).length === 0;
+    return true;
   }
 
   getNativeColorSettingsForManager() {
@@ -4084,16 +4098,23 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private async handleDocumentContextMenu(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
     if (!target) return;
+    const contextView = this.getContainingMarkdownView(target);
+    const isTableContextTarget = !!contextView && !!target.closest("table, .cm-table-widget");
+    if (isTableContextTarget) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    }
 
     const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl) {
-      const plainContext = await this.getTargetUninitializedTableContext(target);
+      const plainContext = await this.getActiveUninitializedTableContext(target);
       if (plainContext) {
         const menu = new Menu();
         this.addNativeLayoutMenuItem(menu, plainContext.file, plainContext.parsedTable);
         (menu as any).addSeparator?.();
         this.addTemplateMenuItems(menu, { plainTableContext: plainContext });
-        const view = this.getContainingMarkdownView(target);
+        const view = contextView;
         this.showTableContextMenu(menu, event, view, {
           parsedTable: plainContext.parsedTable,
           coord: plainContext.coord,
@@ -4123,7 +4144,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       this.renderSelection(tableEl, runtime.selection, runtime.anchor);
     }
 
-    const view = this.getContainingMarkdownView(target);
+    const view = contextView;
     if (view) {
       this.lastTableContext = {
         at: Date.now(),
@@ -6938,12 +6959,6 @@ with open(out_path, "wb") as handle:
     parsedTable: ParsedTableBlock | null,
     tableId?: string | null
   ) {
-    menu.addItem((item) => {
-      item.setTitle(NATIVE_LAYOUT_SECTION_LABEL);
-      item.setIcon("table");
-      item.setDisabled(true);
-    });
-
     const effectiveTableId = tableId ?? parsedTable?.tableId ?? null;
     const currentTableBeautified = this.isTableNativeLayoutBeautified(effectiveTableId);
 
@@ -10014,11 +10029,17 @@ with open(out_path, "wb") as handle:
   }
 
   private normalizeLoadedTableRecord(record: TableRecord): TableRecord {
+    const wasLegacyEnhanced = this.getTableRecordMode(record) === "enhanced";
+    const layout = this.normalizeLayout(record.layout);
+    if (wasLegacyEnhanced) {
+      this.stripLegacyEnhancedLayout(layout);
+      this.applyNativeColorPresetToLayout(layout);
+    }
     return {
       ...record,
-      mode: this.getTableRecordMode(record),
+      mode: "nativeLayout",
       lastKnownRange: { ...record.lastKnownRange },
-      layout: this.normalizeLayout(record.layout),
+      layout,
     };
   }
 

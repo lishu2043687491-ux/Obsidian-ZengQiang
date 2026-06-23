@@ -1,7 +1,7 @@
 {
   "id": "feishu-doc-toolbar",
   "name": "ZengQiang Enhanced",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "minAppVersion": "1.5.0",
   "description": "浮动工具栏、模板库、内置原生表格配色/长宽高与多种实用工具，无需再装表格插件。含 Claudian 跨设备续聊、粘贴触发文件本地化、OneNote 原生表格粘贴等.",
   "author": "lishu",

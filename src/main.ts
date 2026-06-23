@@ -194,6 +194,8 @@ type FeishuDocToolbarData = {
   showDraggerIntegrationStatus: boolean;
   /** 内嵌子模块（merged 状态）的开关 + 私有 data 桶 */
   embeddedModules: Record<string, { enabled: boolean; data?: unknown }>;
+  /** 已融合的原生表格增强私有数据，替代外部 markdown-table-enhancer/data.json */
+  embeddedNativeTableEnhancer?: unknown;
   /** 设置页顶部导航栏顺序 */
   settingsTabOrder: ExperienceSettingsTabId[];
   /** 用户已删除/隐藏的内置插件分类 id */
@@ -2495,6 +2497,41 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return plugins?.plugins?.[MARKDOWN_TABLE_PLUGIN_ID] ?? plugins?.getPlugin?.(MARKDOWN_TABLE_PLUGIN_ID) ?? null;
   }
 
+  private bindEmbeddedNativeTableStorage(plugin: EmbeddedNativeTableEnhancerPlugin) {
+    const pluginApi = plugin as any;
+    pluginApi.loadData = async () => {
+      const embeddedData = this.normalizeEmbeddedNativeTableData(this.dataStore.embeddedNativeTableEnhancer);
+      if (embeddedData) return embeddedData;
+
+      const legacyData = await this.loadLegacyExternalNativeTableData();
+      if (legacyData) {
+        this.dataStore.embeddedNativeTableEnhancer = legacyData;
+        await this.saveData(this.dataStore);
+        return legacyData;
+      }
+
+      return null;
+    };
+    pluginApi.saveData = async (data: unknown) => {
+      this.dataStore.embeddedNativeTableEnhancer = this.normalizeEmbeddedNativeTableData(data);
+      await this.saveData(this.dataStore);
+    };
+  }
+
+  private async loadLegacyExternalNativeTableData() {
+    const configDir = String((this.app.vault as any).configDir ?? ".obsidian");
+    const dataPath = normalizePath(`${configDir}/plugins/${MARKDOWN_TABLE_PLUGIN_ID}/data.json`);
+    try {
+      if (!(await this.app.vault.adapter.exists(dataPath))) return null;
+      const raw = await this.app.vault.adapter.read(dataPath);
+      const parsed = JSON.parse(raw);
+      return this.normalizeEmbeddedNativeTableData(parsed) ?? null;
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 读取旧原生表格增强数据失败", error);
+      return null;
+    }
+  }
+
   private async startEmbeddedNativeTableEnhancer() {
     if (this.getExternalTableEnhancerPlugin()) return;
     if (this.embeddedNativeTableEnhancer) return;
@@ -2511,6 +2548,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     };
     const plugin = new EmbeddedNativeTableEnhancerPlugin(this.app, manifest as any);
     if (!this.canUseEmbeddedNativeTablePlugin(plugin)) return;
+    this.bindEmbeddedNativeTableStorage(plugin);
     this.embeddedNativeTableEnhancer = plugin;
     try {
       const maybePromise = (plugin as any).load?.() ?? plugin.onload();
@@ -2985,7 +3023,8 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   private normalizeData(value: unknown): FeishuDocToolbarData {
     const saved = value && typeof value === "object" ? (value as Partial<FeishuDocToolbarData>) : {};
-    return {
+    const embeddedNativeTableEnhancer = this.normalizeEmbeddedNativeTableData(saved.embeddedNativeTableEnhancer);
+    const data: FeishuDocToolbarData = {
       ...DEFAULT_DATA,
       templateFolderPath: normalizeTemplateFolderPath(saved.templateFolderPath),
       templateUngroupedLabel:
@@ -3025,6 +3064,9 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       autoUpdateLastRunAt: Number.isFinite(saved.autoUpdateLastRunAt) ? Number(saved.autoUpdateLastRunAt) : 0,
       autoUpdateLastResults: normalizeAutoUpdateResults(saved.autoUpdateLastResults),
     };
+    if (embeddedNativeTableEnhancer) {
+      data.embeddedNativeTableEnhancer = embeddedNativeTableEnhancer;
+    }
     return data;
   }
 
@@ -3123,6 +3165,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       result[id] = { enabled, data };
     }
     return result;
+  }
+
+  private normalizeEmbeddedNativeTableData(value: unknown) {
+    return value && typeof value === "object" ? value : undefined;
   }
 
   private normalizePluginTextMap(value: unknown) {

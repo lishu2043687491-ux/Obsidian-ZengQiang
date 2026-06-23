@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.12.0）
+# Obsidian 社区插件提交清单（目标版本 1.13.0）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,12 +8,12 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.12.0`（与 Release tag 一致） |
+| `version` | `1.13.0`（与 Release tag 一致） |
 
-## 本版重点（1.12.0）
+## 本版重点（1.13.0）
 
-- 原生表格增强完整内置，单插件即用，**无需** companion `markdown-table-enhancer`
-- 修复重大 bug：非原生「增强表格」会乱自动开启 → 发布版恒定锁定
+- 1.12.0：原生表格增强完整内置，单插件即用，**无需** companion `markdown-table-enhancer`；修复非原生增强表格乱自动开启
+- 1.13.0：修复内置后普通表格右键「美化 / 启用配色 + 长宽高」失效；表格数据迁移到主插件托管
 
 ## 官方审查对照
 
