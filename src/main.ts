@@ -49,6 +49,7 @@ import {
   buildGoalProgressSyncUpdate,
   type GoalProgressPlanFile,
 } from "./modules/goal-progress-sync";
+import EmbeddedNativeTableEnhancerPlugin from "./modules/native-table-enhancer-embedded";
 
 /** 指向链接优先启动，避免与其它内嵌模块抢 PluginManager / 视图注册 */
 const EMBEDDED_MODULES: EmbeddedSubModule[] = [
@@ -320,7 +321,7 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     displayName: "OneNote 粘贴（原生表格）",
     externalPluginId: MARKDOWN_TABLE_PLUGIN_ID,
     description:
-      "从 OneNote 复制富文本后，点「粘贴OneNote」在光标处插入官方原生 Markdown 表格（无增强表格标记）；含表中表、链接、图片本地化。需启用 markdown-table-enhancer。",
+      "从 OneNote 复制富文本后，点「粘贴OneNote」在光标处插入官方原生 Markdown 表格（无增强表格标记）；含表中表、链接、图片本地化。原生表格能力已内置。",
     status: "merged",
   },
 ];
@@ -753,7 +754,6 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
   /** OneNote 粘贴：稳定自研功能，开关 showOneNoteImport（不经过 embeddedModules）。 */
   private appendOneNoteRichPasteOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
-    const mteStatus = this.plugin.getManagedPluginStatus(descriptor.externalPluginId);
     const isEnabled = this.plugin.isOneNoteRichPasteEnabled();
 
     const card = document.createElement("details");
@@ -772,12 +772,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     title.textContent = descriptor.displayName;
     const meta = document.createElement("div");
     meta.className = "fdtb-plugin-manager-meta";
-    const mteNote = mteStatus.installed
-      ? mteStatus.enabled
-        ? "（表格底座 markdown-table-enhancer 已启用）"
-        : "（请先启用 markdown-table-enhancer 插件）"
-      : "（未安装 markdown-table-enhancer）";
-    meta.textContent = `稳定自研功能${mteNote}`;
+    meta.textContent = "稳定自研功能（原生表格底座已内置）";
     const desc = document.createElement("div");
     desc.className = "fdtb-plugin-manager-desc";
     desc.textContent = descriptor.description;
@@ -1771,39 +1766,13 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
 
   private renderTableEnhancerSection(containerEl: HTMLElement) {
-    void this.plugin.refreshManagedPluginStatus({ silent: true });
-
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
-    intro.textContent = "原生表格颜色、长宽高与模板库。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
+    intro.textContent =
+      "原生表格颜色、长宽高与模板库已内置在 Obsidian增强体验中。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
     containerEl.appendChild(intro);
 
-    this.appendManagedPluginToggleRow(containerEl, {
-      pluginId: MARKDOWN_TABLE_PLUGIN_ID,
-      displayName: "原生表格增强",
-      meta: `插件 id：${MARKDOWN_TABLE_PLUGIN_ID}`,
-      description: "核心表格能力底座：彩色原生表、模板库与右键菜单",
-    });
-
-    const tableStatus = this.plugin.getManagedPluginStatus(MARKDOWN_TABLE_PLUGIN_ID);
-    if (!tableStatus.installed) {
-      this.appendStatusRow(
-        containerEl,
-        "未安装",
-        "—",
-        "请先在 Obsidian → 第三方插件 中安装 markdown-table-enhancer"
-      );
-      return;
-    }
-    if (!tableStatus.enabled) {
-      this.appendStatusRow(
-        containerEl,
-        "已安装未启用",
-        "—",
-        "打开上方开关后即可配置配色"
-      );
-      return;
-    }
+    this.appendStatusRow(containerEl, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
 
     this.renderNativeTableColorSettings(containerEl);
   }
@@ -2437,6 +2406,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   dataStore: FeishuDocToolbarData = { ...DEFAULT_DATA };
   private slashTrigger: SlashTriggerState | null = null;
   private readonly embeddedHosts: Map<string, SubPluginHost> = new Map();
+  private embeddedNativeTableEnhancer: EmbeddedNativeTableEnhancerPlugin | null = null;
   claudianArchiveRunner: ClaudianChatArchiveRunner | null = null;
   private autoUpdateInFlight: Promise<void> | null = null;
   private goalProgressStatusBarEl: HTMLElement | null = null;
@@ -2451,6 +2421,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       this.registerGoalProgressStatusBarButton();
     }
     this.addSettingTab(new FeishuDocExperienceSettingTab(this.app, this));
+    await this.startEmbeddedNativeTableEnhancer();
     await this.startEnabledEmbeddedModules();
     await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
     this.registerInterval(window.setInterval(() => this.applyManagedPluginAliasesToSettingsSidebar(), 1800));
@@ -2515,7 +2486,84 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.closeNativeTableImagePreview();
     this.clearAllStyledArtifacts();
     this.hideToolbar(true);
+    this.stopEmbeddedNativeTableEnhancer();
     this.stopAllEmbeddedModules();
+  }
+
+  private getExternalTableEnhancerPlugin() {
+    const plugins = (this.app as any).plugins;
+    return plugins?.plugins?.[MARKDOWN_TABLE_PLUGIN_ID] ?? plugins?.getPlugin?.(MARKDOWN_TABLE_PLUGIN_ID) ?? null;
+  }
+
+  private async startEmbeddedNativeTableEnhancer() {
+    if (this.getExternalTableEnhancerPlugin()) return;
+    if (this.embeddedNativeTableEnhancer) return;
+    if (!this.canStartEmbeddedNativeTableEnhancer()) return;
+
+    const manifest = {
+      id: MARKDOWN_TABLE_PLUGIN_ID,
+      name: "原生表格增强",
+      version: this.manifest?.version ?? "1.0.0",
+      minAppVersion: this.manifest?.minAppVersion ?? "1.5.0",
+      description: "内置于 Obsidian增强体验的原生表格颜色、长宽高、模板库与 OneNote 粘贴能力",
+      author: this.manifest?.author ?? "lishu",
+      isDesktopOnly: false,
+    };
+    const plugin = new EmbeddedNativeTableEnhancerPlugin(this.app, manifest as any);
+    if (!this.canUseEmbeddedNativeTablePlugin(plugin)) return;
+    this.embeddedNativeTableEnhancer = plugin;
+    try {
+      const maybePromise = (plugin as any).load?.() ?? plugin.onload();
+      await maybePromise;
+      console.info("[feishu-doc-toolbar] 已内置启动原生表格增强");
+    } catch (error) {
+      this.embeddedNativeTableEnhancer = null;
+      try {
+        (plugin as any).unload?.();
+      } catch {
+        // ignore
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("[feishu-doc-toolbar] 内置原生表格增强启动失败", error);
+      new Notice(`原生表格增强启动失败：${detail}`, 10000);
+    }
+  }
+
+  private canStartEmbeddedNativeTableEnhancer() {
+    const pluginApi = this as any;
+    return [
+      "addCommand",
+      "addRibbonIcon",
+      "addStatusBarItem",
+      "registerDomEvent",
+      "registerEditorExtension",
+      "registerEvent",
+      "registerMarkdownPostProcessor",
+    ].every((name) => typeof pluginApi[name] === "function");
+  }
+
+  private canUseEmbeddedNativeTablePlugin(plugin: EmbeddedNativeTableEnhancerPlugin) {
+    const pluginApi = plugin as any;
+    return [
+      "addCommand",
+      "addRibbonIcon",
+      "addStatusBarItem",
+      "registerDomEvent",
+      "registerEditorExtension",
+      "registerEvent",
+      "registerMarkdownPostProcessor",
+    ].every((name) => typeof pluginApi[name] === "function");
+  }
+
+  private stopEmbeddedNativeTableEnhancer() {
+    const plugin = this.embeddedNativeTableEnhancer;
+    this.embeddedNativeTableEnhancer = null;
+    if (!plugin) return;
+    try {
+      (plugin as any).unload?.();
+    } catch (error) {
+      console.error("[feishu-doc-toolbar] 卸载内置原生表格增强失败", error);
+    }
   }
 
   // --- 内嵌子模块管理 ---
@@ -6983,8 +7031,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   private getTableEnhancerPlugin() {
-    const plugins = (this.app as any).plugins;
-    return plugins?.plugins?.[MARKDOWN_TABLE_PLUGIN_ID] ?? plugins?.getPlugin?.(MARKDOWN_TABLE_PLUGIN_ID) ?? null;
+    return this.getExternalTableEnhancerPlugin() ?? this.embeddedNativeTableEnhancer;
   }
 
   private stripTemplateSystemLines(content: string) {

@@ -64,6 +64,33 @@ function FDTB_BLP_CRYPTO() {
  * 内联后 bundle 内 FDTB_BLP_OBSIDIAN_REQUIRE 必须优先 window.require（Obsidian Electron）。
  */
 const ossRelease = process.env.OSS_RELEASE === "1";
+const embeddedNativeTableStylesStart =
+  "\n/* === Embedded native table enhancer styles: BEGIN === */\n";
+const embeddedNativeTableStylesEnd =
+  "\n/* === Embedded native table enhancer styles: END === */\n";
+
+async function syncEmbeddedNativeTableStyles() {
+  const stylesPath = "styles.css";
+  const embeddedStylesPath = "src/modules/native-table-enhancer-embedded.css";
+  const ownCss = await fs.promises.readFile(stylesPath, "utf8");
+  const nativeTableCss = await fs.promises.readFile(embeddedStylesPath, "utf8");
+  const markerRe = new RegExp(
+    `${escapeRegExp(embeddedNativeTableStylesStart)}[\\s\\S]*?${escapeRegExp(embeddedNativeTableStylesEnd)}`,
+    "m"
+  );
+  const withoutPrevious = ownCss.replace(markerRe, "").trimEnd();
+  const merged = `${withoutPrevious}${embeddedNativeTableStylesStart}${nativeTableCss.trimEnd()}${embeddedNativeTableStylesEnd}`;
+  if (merged !== ownCss) {
+    await fs.promises.writeFile(stylesPath, merged, "utf8");
+    console.log("styles: embedded native table enhancer styles synced");
+  }
+}
+
+function escapeRegExp(input) {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+await syncEmbeddedNativeTableStyles();
 
 await esbuild.build({
   entryPoints: ["src/main.ts"],
