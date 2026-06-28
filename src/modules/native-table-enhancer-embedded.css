@@ -3,6 +3,10 @@
   table-layout: fixed;
 }
 
+.mdtp-table-shell.mdtp-table-native-layout {
+  font-size: calc(1em * var(--mdtp-table-scale, 1));
+}
+
 .mdtp-onenote-status-bar-group {
   display: inline-flex;
   align-items: center;
@@ -27,7 +31,7 @@
 
 .mdtp-rendered-cell-link {
   color: var(--link-color);
-  text-decoration-line: underline;
+  text-decoration: underline;
 }
 
 .mdtp-table-shell th,
@@ -35,7 +39,114 @@
   position: relative;
   width: var(--mdtp-col-width, auto);
   min-width: var(--mdtp-col-width, auto);
+  padding: calc(6px * var(--mdtp-table-scale, 1)) calc(10px * var(--mdtp-table-scale, 1));
   background: var(--mdtp-cell-bg, transparent);
+  background-color: var(--mdtp-cell-bg, transparent) !important;
+  background-clip: padding-box;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(
+  .cm-table-widget-cell,
+  .cm-table-widget-cell-content,
+  .cm-table-widget-cell-inner,
+  .table-cell-wrapper,
+  .table-cell-content,
+  .table-editor-cell,
+  .table-editor-cell-content
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(
+  th,
+  td
+):is(
+  .is-selected,
+  .mod-selected,
+  .table-cell-selected,
+  .table-editor-cell-selected,
+  .cm-table-widget-cell-selected,
+  [aria-selected="true"],
+  [data-selected="true"],
+  [data-is-selected="true"]
+) {
+  background: var(--mdtp-cell-bg, transparent) !important;
+  background-color: var(--mdtp-cell-bg, transparent) !important;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(
+  .cm-editor,
+  .cm-scroller,
+  .cm-gutters,
+  .cm-activeLine,
+  textarea,
+  input,
+  [contenteditable="true"],
+  .cm-content,
+  .cm-line
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  text-indent: 0 !important;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(.cm-line, .cm-content) {
+  white-space: normal !important;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(
+  .cm-formatting,
+  [class*="cm-formatting-"],
+  .cm-transparent,
+  .cm-hmd-table-sep,
+  .cm-hmd-html-begin,
+  .cm-hmd-html-end,
+  .cm-hmd-html-tag,
+  .cm-hmd-html-attribute,
+  .cm-html-tag,
+  .cm-html-attribute,
+  .cm-bracket
+) {
+  display: inline-block !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  font-size: 0 !important;
+  letter-spacing: 0 !important;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget table.mdtp-table-shell.mdtp-table-native-layout :is(
+  th.is-selected,
+  td.is-selected
+)::after,
+.markdown-source-view.mod-cm6 .cm-table-widget.is-selected table.mdtp-table-shell.mdtp-table-native-layout::after {
+  background: transparent !important;
+  background-color: transparent !important;
+  mix-blend-mode: normal !important;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget table.mdtp-table-shell.mdtp-table-native-layout :is(
+  .cm-editor,
+  .cm-scroller,
+  .cm-content,
+  .cm-line,
+  .table-cell-wrapper
+) {
+  background: transparent !important;
+  background-color: transparent !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+  text-indent: 0 !important;
 }
 
 .mdtp-table-shell.mdtp-table-colored th,
@@ -63,8 +174,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 42px;
+  height: 24px;
   padding: 0;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
@@ -74,6 +185,7 @@
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .mdtp-sidebar-handle[data-mdtp-integrated="dragger"] {
@@ -81,10 +193,6 @@
   border-radius: 6px;
   box-shadow: 0 2px 8px rgba(31, 35, 41, 0.12);
   background: var(--background-primary);
-}
-
-.mdtp-copy-image-handle {
-  z-index: 43;
 }
 
 .mdtp-sidebar-handle[data-mdtp-integrated="dragger"]::after {
@@ -157,6 +265,23 @@
   grid-column: 1 / -1;
 }
 
+.mdtp-sidebar-primary-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+}
+
+.mdtp-sidebar-button.is-primary {
+  border-color: color-mix(in srgb, var(--color-accent) 42%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--color-accent) 12%, var(--background-secondary));
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.mdtp-sidebar-button.is-primary:hover {
+  background: color-mix(in srgb, var(--color-accent) 18%, var(--background-secondary));
+}
+
 .mdtp-sidebar-popover::-webkit-scrollbar {
   width: 8px;
 }
@@ -164,6 +289,58 @@
 .mdtp-sidebar-popover::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--text-muted) 22%, transparent);
   border-radius: 999px;
+}
+
+.mdtp-sidebar-popover-categorized {
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: stretch;
+  width: min(292px, calc(100vw - 28px));
+  max-width: min(292px, calc(100vw - 28px));
+  gap: 8px;
+}
+
+.mdtp-sidebar-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding-right: 6px;
+  border-right: 1px solid var(--background-modifier-border);
+}
+
+.mdtp-sidebar-category-button {
+  min-height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: left;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.mdtp-sidebar-category-button:hover,
+.mdtp-sidebar-category-button.is-active {
+  border-color: var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.mdtp-sidebar-action-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  min-width: 0;
+  align-content: start;
+}
+
+.mdtp-sidebar-action-panel .mdtp-sidebar-section-title {
+  top: -8px;
 }
 
 .mdtp-table-shell .mdtp-resize-handle {
@@ -193,6 +370,107 @@
   cursor: row-resize;
 }
 
+.mdtp-table-shell .mdtp-scale-handle {
+  right: -10px;
+  bottom: -10px;
+  z-index: 8;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  opacity: 0.78;
+}
+
+.mdtp-table-shell .mdtp-scale-handle::before {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid #ed7d31;
+  border-bottom: 2px solid #ed7d31;
+  border-radius: 0 0 2px 0;
+}
+
+.mdtp-table-shell .mdtp-scale-handle:hover::before {
+  border-color: var(--color-accent);
+}
+
+.mdtp-table-shell .mdtp-autofill-handle {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  z-index: 6;
+  width: 7px;
+  height: 7px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 75%, white);
+  border-radius: 1px;
+  background: var(--color-accent);
+  box-sizing: border-box;
+  cursor: crosshair;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mdtp-table-shell .mdtp-cell:hover > .mdtp-autofill-handle,
+.mdtp-table-shell .mdtp-autofill-source > .mdtp-autofill-handle,
+.mdtp-table-shell .mdtp-autofill-preview > .mdtp-autofill-handle {
+  opacity: 1;
+}
+
+.mdtp-table-shell .mdtp-autofill-source {
+  box-shadow: inset 0 0 0 2px var(--color-accent);
+}
+
+.mdtp-table-shell .mdtp-autofill-preview {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.mdtp-table-shell .mdtp-formula-source {
+  display: none;
+}
+
+.mdtp-table-shell .mdtp-formula-result {
+  font-variant-numeric: tabular-nums;
+}
+
+.mdtp-formula-help-table {
+  grid-column: 1 / -1;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.mdtp-formula-help-table th,
+.mdtp-formula-help-table td {
+  padding: 5px 6px;
+  border: 1px solid var(--background-modifier-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.mdtp-formula-help-table th {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+.mdtp-formula-help-table td:first-child {
+  width: 42%;
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+.mdtp-table-shell .mdtp-formula-error {
+  text-decoration: underline dotted color-mix(in srgb, var(--text-warning) 75%, transparent);
+  text-underline-offset: 3px;
+}
+
+.mdtp-table-shell .mdtp-latex-cell {
+  line-height: 1.5;
+}
+
 .mdtp-table-shell .mdtp-cell-selected {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-accent) 65%, transparent);
 }
@@ -210,7 +488,7 @@
 }
 
 .mdtp-table-shell .mdtp-cell-editing {
-  padding: 0 !important;
+  padding: 0;
   outline: 2px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
   outline-offset: -2px;
   z-index: 6;

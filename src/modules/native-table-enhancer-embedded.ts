@@ -10,6 +10,11 @@ import {
 } from "obsidian";
 import { RangeSetBuilder } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
+import {
+  buildNativeAutoFillValues,
+  containsNativeLatex,
+  evaluateNativeTableFormula,
+} from "./native-table-video-helpers";
 
 const PLUGIN_ID = "markdown-table-enhancer";
 const TEMPLATE_LIBRARY_FOLDER = ".模板库";
@@ -26,8 +31,6 @@ const OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "打开当前原生表格行段配色
 const INSERT_TEMPLATE_COMMAND_NAME = "插入原生表格模板";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "模板库";
-const COPY_TABLE_AS_IMAGE_LABEL = "复制当前表格成图";
-const COPY_TABLE_AS_IMAGE_SHORT_LABEL = "图";
 const RESTORE_COMMAND_NAME = "恢复当前文件最近一次表格增强快照";
 const STATUS_COMMAND_NAME = "查看当前文件表格增强状态";
 const SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
@@ -52,6 +55,14 @@ const PALETTE = [
   { label: "浅红", value: "#FFE3E3" },
   { label: "浅灰", value: "#F1F3F5" },
 ];
+const TEXT_COLOR_PALETTE = [
+  { label: "默认橙色", value: "#ED7D31" },
+  { label: "黑色", value: "#111111" },
+  { label: "深灰", value: "#595959" },
+  { label: "蓝色", value: "#2F75B5" },
+  { label: "绿色", value: "#548235" },
+  { label: "红色", value: "#C00000" },
+];
 const NATIVE_COLOR_PRESET_BLUE_ZEBRA = "blueZebra";
 const NATIVE_COLOR_DEFAULT_PRESET_ID = "green";
 const NATIVE_COLOR_TABLE_HEADER = "#A9D18E";
@@ -61,10 +72,31 @@ const NATIVE_COLOR_TABLE_BASE_ROW = "#FFFFFF";
 const NATIVE_COLOR_TABLE_ALT_ROW = "#E2F0D9";
 const NATIVE_LAYOUT_CURRENT_TABLE_LABEL = "对当前表格美化";
 const NATIVE_LAYOUT_PAGE_TABLES_LABEL = "对本页面所有的表格美化";
+const NATIVE_LAYOUT_TABLE_STYLE_LABEL = "套用表格样式";
+const NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL = "取消斑马样式";
 const NATIVE_LAYOUT_ROW_COLOR_LABEL = "设置选中行颜色";
 const NATIVE_LAYOUT_ROW_BANDS_LABEL = "行段配色";
+const NATIVE_LAYOUT_SCALE_LABEL = "整体比例";
+const NATIVE_LAYOUT_SIZE_LABEL = "尺寸调节";
+const NATIVE_LAYOUT_TEXT_COLOR_LABEL = "文字颜色";
+const NATIVE_LAYOUT_CLEAR_TEXT_COLOR_LABEL = "恢复文字颜色";
+const NATIVE_LAYOUT_FORMULA_HELP_LABEL = "公式提示";
+const NATIVE_LAYOUT_ALIGN_LEFT_LABEL = "居左";
+const NATIVE_LAYOUT_ALIGN_CENTER_LABEL = "居中";
+const NATIVE_LAYOUT_ALIGN_RIGHT_LABEL = "居右";
+const NATIVE_LAYOUT_ALIGN_CLEAR_LABEL = "恢复默认对齐";
+const NATIVE_LAYOUT_FILL_DOWN_LABEL = "向下自动填充";
+const NATIVE_LAYOUT_FILL_RIGHT_LABEL = "向右自动填充";
 const MIN_COLUMN_WIDTH = 60;
 const MIN_ROW_HEIGHT = 28;
+const MAX_COLUMN_WIDTH = 640;
+const MAX_ROW_HEIGHT = 120;
+const NATIVE_TABLE_DEFAULT_SCALE = 1;
+const NATIVE_TABLE_MIN_SCALE = 0.75;
+const NATIVE_TABLE_MAX_SCALE = 1.5;
+const NATIVE_TABLE_DEFAULT_COLUMN_WIDTH = 170;
+const NATIVE_TABLE_DEFAULT_ROW_HEIGHT = 34;
+const NATIVE_TABLE_DEFAULT_TEXT_COLOR = "#ED7D31";
 const DRAGGER_HANDLE_SELECTOR = ".dnd-drag-handle[data-block-start]";
 const HISTORY_LIMIT = 100;
 const PASTE_EVENT_SUPPRESSION_MS = 2000;
@@ -105,11 +137,18 @@ type TableLayoutMetadata = {
   cellColors: Record<string, string>;
   rowColors: Record<string, string>;
   colColors: Record<string, string>;
+  cellTextColors: Record<string, string>;
   cellAlignments: Record<string, "left" | "center" | "right">;
   cellImageWidths: Record<string, number>;
   merges: TableMergeMetadata[];
+  tableScale?: number;
   nativeColorPreset?: "blueZebra";
   nativeColorPalette?: NativeColorPalette;
+};
+
+type NativeTableSizeBase = {
+  colWidths: Record<string, number>;
+  rowHeights: Record<string, number>;
 };
 
 type TableRecordMode = "enhanced" | "nativeLayout";
@@ -146,6 +185,10 @@ type PluginDataShape = {
   nativeColorDefaultPresetId?: NativeColorPresetId;
   nativeColorCustomPalette?: NativeColorPalette;
   nativeColorSavedPalettes?: NativeColorSavedPalette[];
+  nativeTableDefaultScale?: number;
+  nativeTableDefaultColumnWidth?: number;
+  nativeTableDefaultRowHeight?: number;
+  nativeTableDefaultTextColor?: string;
 };
 
 type TemplateRecord = {
@@ -261,11 +304,30 @@ type ResizeState =
       index: number;
       startClient: number;
       startSize: number;
+    }
+  | {
+      kind: "scale";
+      tableEl: HTMLTableElement;
+      tableId: string;
+      file: TFile;
+      startClientX: number;
+      startClientY: number;
+      startScale: number;
+      currentScale: number;
+      sizeBase: NativeTableSizeBase;
     };
 
 type SelectionDragState = {
   tableEl: HTMLTableElement;
   anchor: CellCoord;
+};
+
+type AutoFillDragState = {
+  tableEl: HTMLTableElement;
+  tableId: string;
+  file: TFile;
+  sourceCoord: CellCoord;
+  targetCoord: CellCoord | null;
 };
 
 type TableRuntimeState = {
@@ -395,12 +457,29 @@ const DEFAULT_DATA: PluginDataShape = {
   nativeColorDefaultPresetId: NATIVE_COLOR_DEFAULT_PRESET_ID,
   nativeColorCustomPalette: NATIVE_COLOR_CUSTOM_DEFAULT,
   nativeColorSavedPalettes: [],
+  nativeTableDefaultScale: NATIVE_TABLE_DEFAULT_SCALE,
+  nativeTableDefaultColumnWidth: NATIVE_TABLE_DEFAULT_COLUMN_WIDTH,
+  nativeTableDefaultRowHeight: NATIVE_TABLE_DEFAULT_ROW_HEIGHT,
+  nativeTableDefaultTextColor: NATIVE_TABLE_DEFAULT_TEXT_COLOR,
 };
 
 type SidebarActionDescriptor = {
   label: string;
   wide?: boolean;
   experimental?: boolean;
+};
+
+type SidebarPopoverAction = {
+  label: string;
+  run: () => void | Promise<void>;
+  wide?: boolean;
+};
+
+type SidebarPopoverCategory = {
+  id: string;
+  label: string;
+  actions: SidebarPopoverAction[];
+  render?: (panel: HTMLElement) => void;
 };
 
 type SyncTableRecordsOptions = {
@@ -1259,14 +1338,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private runtimeState = new Map<HTMLTableElement, TableRuntimeState>();
   private activeResize: ResizeState | null = null;
   private activeSelectionDrag: SelectionDragState | null = null;
+  private activeAutoFill: AutoFillDragState | null = null;
   private refreshTimer: number | null = null;
   private lastTableContext: TableContextTarget | null = null;
   private refreshBurstToken = 0;
   private injectedStyleEl: HTMLStyleElement | null = null;
   private activeEditor: InlineEditorState | null = null;
   private activeNativeTableContext: UninitializedTableContext | null = null;
+  private plainTableSidebarFallbackTimer: number | null = null;
   private tableSidebarHandleEl: HTMLButtonElement | null = null;
-  private tableCopyImageHandleEl: HTMLButtonElement | null = null;
   private tableSidebarPopoverEl: HTMLDivElement | null = null;
   private activeTableSidebarContext: TableSidebarContext | null = null;
   private activeImageToolbar: ImageToolbarState | null = null;
@@ -1305,6 +1385,20 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       nativeColorSavedPalettes: savedNativeColorPalettes,
       nativeColorDefaultPresetId: this.normalizeNativeColorPresetId(savedData?.nativeColorDefaultPresetId, savedNativeColorPalettes),
       nativeColorCustomPalette: this.normalizeNativeColorPalette(savedData?.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
+      nativeTableDefaultScale: this.normalizeNativeTableScale(savedData?.nativeTableDefaultScale, NATIVE_TABLE_DEFAULT_SCALE),
+      nativeTableDefaultColumnWidth: this.normalizeNativeTableDefaultSize(
+        savedData?.nativeTableDefaultColumnWidth,
+        NATIVE_TABLE_DEFAULT_COLUMN_WIDTH,
+        MIN_COLUMN_WIDTH,
+        MAX_COLUMN_WIDTH
+      ),
+      nativeTableDefaultRowHeight: this.normalizeNativeTableDefaultSize(
+        savedData?.nativeTableDefaultRowHeight,
+        NATIVE_TABLE_DEFAULT_ROW_HEIGHT,
+        MIN_ROW_HEIGHT,
+        MAX_ROW_HEIGHT
+      ),
+      nativeTableDefaultTextColor: this.normalizeHexColor(savedData?.nativeTableDefaultTextColor, NATIVE_TABLE_DEFAULT_TEXT_COLOR),
     };
     if (migratedLegacyEnhancedTables) {
       await this.savePluginData();
@@ -1444,6 +1538,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.registerDomEvent(document, "contextmenu", (event) => void this.handleDocumentContextMenu(event as MouseEvent), true);
     this.registerDomEvent(document, "keydown", (event) => void this.handleDocumentKeyDown(event as KeyboardEvent), true);
     this.registerDomEvent(document, "paste", (event) => void this.handleDocumentPaste(event as ClipboardEvent), true);
+    this.registerDomEvent(document, "selectionchange", () => this.schedulePlainTableSidebarFallback(null), true);
     this.registerDomEvent(document, "pointermove", (event) => this.handleGlobalPointerMove(event as PointerEvent), true);
     this.registerDomEvent(document, "pointerup", () => void this.handleGlobalPointerUp(), true);
     this.registerDomEvent(document, "pointercancel", () => void this.handleGlobalPointerUp(), true);
@@ -1593,7 +1688,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     coord: CellCoord | null;
   } | null {
     if (!target) return null;
-    if (target.closest(".mdtp-table-shell")) return null;
+    const initializedTable = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
+    if (initializedTable && this.isInitializedTable(initializedTable)) return null;
 
     let cell = target.closest("th, td") as HTMLTableCellElement | null;
     let tableEl = cell?.closest("table") as HTMLTableElement | null;
@@ -1607,7 +1703,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       }
     }
 
-    if (!tableEl || tableEl.matches(".mdtp-table-shell")) return null;
+    if (!tableEl) return null;
+    if (tableEl.matches(".mdtp-table-shell") && this.isInitializedTable(tableEl)) return null;
 
     const coord = cell ? this.getPlainTableCellCoord(cell) : null;
     return { tableEl, cell, coord };
@@ -1682,7 +1779,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (!cursor || !Number.isFinite(cursor.line) || !Number.isFinite(cursor.ch)) return null;
 
     const content = await this.app.vault.cachedRead(file);
-    const parsedTables = this.parseMarkdownTables(content).filter((table) => !table.tableId);
+    const allParsedTables = this.parseMarkdownTables(content);
+    const parsedTables = allParsedTables.filter((table) => !table.tableId);
     const parsedTable =
       parsedTables.find((table) => cursor.line >= table.startLine && cursor.line <= table.endLine) ?? null;
     if (!parsedTable) return null;
@@ -1708,8 +1806,23 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       file,
       parsedTable,
       coord: { row, col },
-      tableEl: null,
+      tableEl: this.findRenderedTableForParsedBlock(view, allParsedTables, parsedTable),
     };
+  }
+
+  private findRenderedTableForParsedBlock(
+    view: MarkdownView,
+    parsedTables: ParsedTableBlock[],
+    parsedTable: ParsedTableBlock
+  ) {
+    if (!(view.contentEl instanceof HTMLElement)) return null;
+    const tableIndex = parsedTables.indexOf(parsedTable);
+    if (tableIndex < 0) return null;
+    const renderedTables = Array.from(view.contentEl.querySelectorAll("table")) as HTMLTableElement[];
+    const tableEl = renderedTables[tableIndex] ?? null;
+    if (!tableEl) return null;
+    if (tableEl.matches(".mdtp-table-shell") && this.isInitializedTable(tableEl)) return null;
+    return tableEl;
   }
 
   private resolveCursorTableColumn(line: string, cursorCh: number, expectedLength: number) {
@@ -1864,7 +1977,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const record = this.dataStore.tables[targetTable.tableId];
       if (record?.mode === "enhanced") {
         if (this.canConvertEnhancedRecordToNativeLayout(record)) {
-          this.applyNativeLayoutBeautifyToRecord(record);
+          this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(targetTable.raw));
           await this.savePluginData();
           this.scheduleVisibleTableRefresh();
           new Notice("已对当前表格美化");
@@ -1874,7 +1987,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         return true;
       }
       if (record) {
-        this.applyNativeLayoutBeautifyToRecord(record);
+        this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(targetTable.raw));
         await this.savePluginData();
       }
       this.scheduleVisibleTableRefresh();
@@ -1896,6 +2009,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const record = this.dataStore.tables[tableId];
     if (record) {
       this.applyNativeColorPresetToLayout(record.layout);
+      this.applyNativeTableDefaultLayoutSettings(record.layout, this.parseRawTable(targetTable.raw));
       record.updatedAt = Date.now();
       await this.savePluginData();
     }
@@ -1928,10 +2042,11 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return true;
   }
 
-  private applyNativeLayoutBeautifyToRecord(record: TableRecord) {
+  private applyNativeLayoutBeautifyToRecord(record: TableRecord, rawTable?: ParsedRawTable | null) {
     record.mode = "nativeLayout";
     this.stripLegacyEnhancedLayout(record.layout);
     this.applyNativeColorPresetToLayout(record.layout);
+    this.applyNativeTableDefaultLayoutSettings(record.layout, rawTable);
     record.updatedAt = Date.now();
   }
 
@@ -1939,6 +2054,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     layout.cellColors = {};
     layout.rowColors = {};
     layout.colColors = {};
+    layout.cellTextColors = {};
     layout.cellAlignments = {};
     layout.cellImageWidths = {};
     layout.merges = [];
@@ -2131,11 +2247,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private createNativeColorTableLayout() {
     const layout = this.createEmptyLayout();
     this.applyNativeColorPresetToLayout(layout);
-    layout.colWidths = {
-      "0": 170,
-      "1": 190,
-      "2": 430,
-    };
     return layout;
   }
 
@@ -2147,6 +2258,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     layout.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
     layout.nativeColorPalette = palette;
     layout.rowColors["0"] = palette.header;
+  }
+
+  private applyNativeTableDefaultLayoutSettings(_layout: TableLayoutMetadata, _rawTable?: ParsedRawTable | null) {
+    // Size metadata is created only after manual adjustment, so beautify keeps the native table dimensions.
   }
 
   private normalizeNativeColorPresetLayout(layout: TableLayoutMetadata) {
@@ -2192,6 +2307,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       ],
       customPalette: this.normalizeNativeColorPalette(this.dataStore.nativeColorCustomPalette, NATIVE_COLOR_CUSTOM_DEFAULT),
       savedPalettes: savedPresets,
+      defaultScale: this.getNativeTableDefaultScale(),
+      defaultColumnWidth: this.getNativeTableDefaultColumnWidth(),
+      defaultRowHeight: this.getNativeTableDefaultRowHeight(),
+      defaultTextColor: this.getNativeTableDefaultTextColor(),
     };
   }
 
@@ -2209,6 +2328,39 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     await this.savePluginData();
     this.scheduleVisibleTableRefresh();
     new Notice("已更新原生表格颜色预设");
+    return this.getNativeColorSettingsForManager();
+  }
+
+  async updateNativeTableDefaultsFromManager(input: {
+    defaultScale?: number;
+    defaultColumnWidth?: number;
+    defaultRowHeight?: number;
+    defaultTextColor?: string;
+  }) {
+    if (input.defaultScale !== undefined) {
+      this.dataStore.nativeTableDefaultScale = this.normalizeNativeTableScale(input.defaultScale, this.getNativeTableDefaultScale());
+    }
+    if (input.defaultColumnWidth !== undefined) {
+      this.dataStore.nativeTableDefaultColumnWidth = this.normalizeNativeTableDefaultSize(
+        input.defaultColumnWidth,
+        this.getNativeTableDefaultColumnWidth(),
+        MIN_COLUMN_WIDTH,
+        MAX_COLUMN_WIDTH
+      );
+    }
+    if (input.defaultRowHeight !== undefined) {
+      this.dataStore.nativeTableDefaultRowHeight = this.normalizeNativeTableDefaultSize(
+        input.defaultRowHeight,
+        this.getNativeTableDefaultRowHeight(),
+        MIN_ROW_HEIGHT,
+        MAX_ROW_HEIGHT
+      );
+    }
+    if (input.defaultTextColor !== undefined) {
+      this.dataStore.nativeTableDefaultTextColor = this.normalizeHexColor(input.defaultTextColor, this.getNativeTableDefaultTextColor());
+    }
+    await this.savePluginData();
+    new Notice("已更新原生表格设置");
     return this.getNativeColorSettingsForManager();
   }
 
@@ -2320,6 +2472,51 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`.toUpperCase();
     }
     return fallback.toUpperCase();
+  }
+
+  private normalizeOptionalHexColor(value: unknown) {
+    const raw = typeof value === "string" ? value.trim() : "";
+    if (!raw) return "";
+    return this.normalizeHexColor(raw, "");
+  }
+
+  private normalizeNativeTableScale(value: unknown, fallback = NATIVE_TABLE_DEFAULT_SCALE) {
+    const numeric = Number(value);
+    const base = Number.isFinite(numeric) ? numeric : fallback;
+    const clamped = Math.min(NATIVE_TABLE_MAX_SCALE, Math.max(NATIVE_TABLE_MIN_SCALE, base));
+    return Math.round(clamped * 20) / 20;
+  }
+
+  private normalizeNativeTableDefaultSize(value: unknown, fallback: number, min: number, max: number) {
+    const numeric = Number(value);
+    const base = Number.isFinite(numeric) ? numeric : fallback;
+    return Math.round(Math.min(max, Math.max(min, base)));
+  }
+
+  private getNativeTableDefaultScale() {
+    return this.normalizeNativeTableScale(this.dataStore.nativeTableDefaultScale, NATIVE_TABLE_DEFAULT_SCALE);
+  }
+
+  private getNativeTableDefaultColumnWidth() {
+    return this.normalizeNativeTableDefaultSize(
+      this.dataStore.nativeTableDefaultColumnWidth,
+      NATIVE_TABLE_DEFAULT_COLUMN_WIDTH,
+      MIN_COLUMN_WIDTH,
+      MAX_COLUMN_WIDTH
+    );
+  }
+
+  private getNativeTableDefaultRowHeight() {
+    return this.normalizeNativeTableDefaultSize(
+      this.dataStore.nativeTableDefaultRowHeight,
+      NATIVE_TABLE_DEFAULT_ROW_HEIGHT,
+      MIN_ROW_HEIGHT,
+      MAX_ROW_HEIGHT
+    );
+  }
+
+  private getNativeTableDefaultTextColor() {
+    return this.normalizeHexColor(this.dataStore.nativeTableDefaultTextColor, NATIVE_TABLE_DEFAULT_TEXT_COLOR);
   }
 
   private colorsMatch(left: string, right: string) {
@@ -3008,6 +3205,11 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       if (!coord || !this.selectionContains(selection, coord)) continue;
       next.cellColors[this.getCellKey({ row: coord.row - selection.startRow, col: coord.col - selection.startCol })] = value;
     }
+    for (const [key, value] of Object.entries(layout.cellTextColors)) {
+      const coord = this.parseCellKey(key);
+      if (!coord || !this.selectionContains(selection, coord)) continue;
+      next.cellTextColors[this.getCellKey({ row: coord.row - selection.startRow, col: coord.col - selection.startCol })] = value;
+    }
     for (const [key, value] of Object.entries(layout.cellAlignments)) {
       const coord = this.parseCellKey(key);
       if (!coord || !this.selectionContains(selection, coord)) continue;
@@ -3431,6 +3633,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (!tableId || !parsedTable) {
       this.runtimeState.delete(tableEl);
       this.restoreNativeTable(tableEl);
+      this.registerPlainTableSidebarEntry(tableEl, file, parsedTable);
       return;
     }
 
@@ -3462,7 +3665,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       tableEl.classList.remove("mdtp-table-uninitialized", "mdtp-table-enhanced");
       tableEl.classList.add("mdtp-table-native-layout");
       this.applyNativeLayout(tableEl, record.layout);
+      this.renderNativeTableComputedCells(tableEl, parsedTable);
       this.injectResizeHandles(tableEl, record.layout);
+      this.injectAutoFillHandles(tableEl);
       return;
     }
 
@@ -3470,6 +3675,24 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     runtime.anchor = null;
     this.runtimeState.delete(tableEl);
     this.restoreNativeTable(tableEl);
+  }
+
+  private registerPlainTableSidebarEntry(tableEl: HTMLTableElement, file: TFile, parsedTable: ParsedTableBlock | null) {
+    if (!parsedTable) return;
+    const activeFile = this.app.workspace.getActiveFile();
+    if (activeFile?.path !== file.path) return;
+    const rect = tableEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    if (rect.bottom < 72 || rect.top > window.innerHeight) return;
+    const context: NativeTableSidebarContext = {
+      mode: "native",
+      file,
+      parsedTable,
+      coord: { row: 0, col: 0 },
+      tableEl,
+    };
+    this.activeNativeTableContext = context;
+    this.showTableSidebar(context);
   }
 
   private async ensureRecordForParsedTable(file: TFile, parsedTable: ParsedTableBlock) {
@@ -3522,6 +3745,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     for (const element of Array.from(tableEl.querySelectorAll(".mdtp-resize-handle"))) {
       element.remove();
     }
+    for (const element of Array.from(tableEl.querySelectorAll(".mdtp-autofill-handle"))) {
+      element.remove();
+    }
 
     const rows = Array.from(tableEl.rows);
     for (const row of rows) {
@@ -3544,14 +3770,24 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         cell.style.display = "";
         cell.rowSpan = 1;
         cell.colSpan = 1;
+        const hadFormulaTitle = cell.classList.contains("mdtp-formula-cell") || !!cell.dataset.mdtpFormulaSource;
+        this.restoreFormulaCellContent(cell);
         cell.classList.remove(
           "mdtp-col-resized",
           "mdtp-cell-selected",
           "mdtp-cell-anchor",
           "mdtp-cell-dark-header",
+          "mdtp-cell-text-colored",
           "mdtp-merge-start",
-          "mdtp-merge-covered"
+          "mdtp-merge-covered",
+          "mdtp-formula-cell",
+          "mdtp-formula-error",
+          "mdtp-latex-cell",
+          "mdtp-autofill-source",
+          "mdtp-autofill-preview"
         );
+        delete cell.dataset.mdtpFormulaSource;
+        if (hadFormulaTitle) cell.removeAttribute("title");
         for (const wrapper of Array.from(cell.querySelectorAll(".image-embed, .internal-embed, .media-embed")) as HTMLElement[]) {
           wrapper.style.display = "";
           wrapper.style.maxWidth = "";
@@ -3572,6 +3808,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     tableEl.classList.remove("mdtp-table-shell", "mdtp-table-enhanced", "mdtp-table-native-layout", "mdtp-table-uninitialized", "mdtp-table-colored");
     tableEl.style.tableLayout = "";
     tableEl.style.removeProperty("--mdtp-native-color-border");
+    tableEl.style.removeProperty("--mdtp-table-scale");
     delete tableEl.dataset.mdtpBound;
     delete tableEl.dataset.mdtpTableId;
 
@@ -3606,9 +3843,59 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       tableEl.style.removeProperty("--mdtp-native-color-border");
     }
     tableEl.style.tableLayout = Object.keys(layout.colWidths).length > 0 ? "fixed" : "auto";
+    tableEl.style.setProperty("--mdtp-table-scale", String(this.getLayoutTableScale(layout)));
     tableEl.classList.toggle("mdtp-table-colored", this.hasLayoutColors(layout));
     this.applySizeLayout(tableEl, layout);
     this.applyColors(this.collectTableStructure(tableEl), layout);
+  }
+
+  private renderNativeTableComputedCells(tableEl: HTMLTableElement, parsedTable: ParsedTableBlock) {
+    const rawTable = this.parseRawTable(parsedTable.raw);
+    if (!rawTable) return;
+
+    const matrix = this.buildRawTableMatrix(rawTable);
+    const structure = this.collectTableStructure(tableEl);
+    for (let row = 0; row < structure.matrix.length; row += 1) {
+      for (let col = 0; col < structure.matrix[row].length; col += 1) {
+        const cell = structure.matrix[row][col];
+        const rawValue = matrix[row]?.[col] ?? "";
+        if (!cell || !rawValue) continue;
+
+        if (containsNativeLatex(rawValue)) {
+          cell.classList.add("mdtp-latex-cell");
+        }
+
+        if (!rawValue.trim().startsWith("=")) continue;
+        const result = evaluateNativeTableFormula(rawValue, matrix, { row, col });
+        if (!result) {
+          cell.classList.add("mdtp-formula-error");
+          cell.title = "公式暂未识别，已保留原文";
+          continue;
+        }
+
+        const source = document.createElement("span");
+        source.className = "mdtp-formula-source";
+        while (cell.firstChild) {
+          source.appendChild(cell.firstChild);
+        }
+
+        const display = document.createElement("span");
+        display.className = "mdtp-formula-result";
+        display.textContent = result.value;
+
+        cell.replaceChildren(source, display);
+        cell.classList.add("mdtp-formula-cell");
+        cell.dataset.mdtpFormulaSource = rawValue;
+        cell.title = rawValue;
+      }
+    }
+  }
+
+  private restoreFormulaCellContent(cell: HTMLTableCellElement) {
+    const source = cell.querySelector(":scope > .mdtp-formula-source");
+    if (!source) return;
+    const restored = Array.from(source.childNodes);
+    cell.replaceChildren(...restored);
   }
 
   private hasLayoutColors(layout: TableLayoutMetadata) {
@@ -3622,18 +3909,67 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private applySizeLayout(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     const structure = this.collectTableStructure(tableEl);
+    const scale = this.getLayoutTableScale(layout);
 
     for (const [colKey, width] of Object.entries(layout.colWidths)) {
       const colIndex = Number.parseInt(colKey, 10);
       if (!Number.isFinite(colIndex)) continue;
-      this.applyColumnWidth(structure, colIndex, width);
+      this.applyColumnWidth(structure, colIndex, width, scale);
     }
 
     for (const [rowKey, height] of Object.entries(layout.rowHeights)) {
       const rowIndex = Number.parseInt(rowKey, 10);
       if (!Number.isFinite(rowIndex)) continue;
-      this.applyRowHeight(structure, rowIndex, height);
+      this.applyRowHeight(structure, rowIndex, height, scale);
     }
+  }
+
+  private previewNativeLayoutTableScale(
+    tableEl: HTMLTableElement,
+    layout: TableLayoutMetadata,
+    scale: number,
+    sizeBase?: NativeTableSizeBase
+  ) {
+    const previewLayout = sizeBase
+      ? { ...layout, colWidths: { ...sizeBase.colWidths }, rowHeights: { ...sizeBase.rowHeights }, tableScale: scale }
+      : { ...layout, tableScale: scale };
+    if (Object.keys(previewLayout.colWidths).length > 0) {
+      tableEl.style.tableLayout = "fixed";
+    }
+    tableEl.style.setProperty("--mdtp-table-scale", String(scale));
+    this.applySizeLayout(tableEl, previewLayout);
+  }
+
+  private captureNativeLayoutSizeBase(tableEl: HTMLTableElement, layout: TableLayoutMetadata): NativeTableSizeBase {
+    const structure = this.collectTableStructure(tableEl);
+    const scale = this.getLayoutTableScale(layout);
+    const unscale = (value: number, minimum: number) => Math.max(minimum, Math.round(value / scale));
+    const maxColumns = Math.max(...structure.matrix.map((row) => row.length), 0);
+    const colWidths: Record<string, number> = {};
+    const rowHeights: Record<string, number> = {};
+
+    for (let colIndex = 0; colIndex < maxColumns; colIndex += 1) {
+      const key = String(colIndex);
+      const stored = Number(layout.colWidths[key]);
+      colWidths[key] = Number.isFinite(stored) && stored > 0
+        ? Math.round(stored)
+        : unscale(this.getColumnWidth(structure, colIndex), MIN_COLUMN_WIDTH);
+    }
+
+    for (let rowIndex = 0; rowIndex < structure.rows.length; rowIndex += 1) {
+      const key = String(rowIndex);
+      const stored = Number(layout.rowHeights[key]);
+      rowHeights[key] = Number.isFinite(stored) && stored > 0
+        ? Math.round(stored)
+        : unscale(this.getRowHeight(structure, rowIndex), MIN_ROW_HEIGHT);
+    }
+
+    return { colWidths, rowHeights };
+  }
+
+  private materializeNativeLayoutSizeBase(layout: TableLayoutMetadata, sizeBase: NativeTableSizeBase) {
+    layout.colWidths = { ...sizeBase.colWidths };
+    layout.rowHeights = { ...sizeBase.rowHeights };
   }
 
   private collectTableStructure(tableEl: HTMLTableElement): TableStructure {
@@ -3645,10 +3981,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return { rows, matrix };
   }
 
-  private applyColumnWidth(structure: TableStructure, colIndex: number, width: number) {
+  private applyColumnWidth(structure: TableStructure, colIndex: number, width: number, scale = 1) {
     const storedWidth = Number(width);
     if (!Number.isFinite(storedWidth) || storedWidth <= 0) return;
-    const nextWidth = Math.max(MIN_COLUMN_WIDTH, Math.round(storedWidth));
+    const nextWidth = Math.max(MIN_COLUMN_WIDTH, Math.round(storedWidth * scale));
     for (const row of structure.matrix) {
       const cell = row[colIndex];
       if (!cell) continue;
@@ -3659,10 +3995,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
   }
 
-  private applyRowHeight(structure: TableStructure, rowIndex: number, height: number) {
+  private applyRowHeight(structure: TableStructure, rowIndex: number, height: number, scale = 1) {
     const storedHeight = Number(height);
     if (!Number.isFinite(storedHeight) || storedHeight <= 0) return;
-    const nextHeight = Math.max(MIN_ROW_HEIGHT, Math.round(storedHeight));
+    const nextHeight = Math.max(MIN_ROW_HEIGHT, Math.round(storedHeight * scale));
     const row = structure.rows[rowIndex];
     if (!row) return;
     row.style.setProperty("--mdtp-row-height", `${nextHeight}px`);
@@ -3685,9 +4021,11 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         }
 
         const headerTextColor = rowIndex === 0 ? this.getNativeHeaderTextColor(layout, color) : "";
-        if (headerTextColor) {
-          cell.style.color = headerTextColor;
-          cell.classList.add("mdtp-cell-dark-header");
+        const cellTextColor = this.resolveCellTextColor(layout, rowIndex, cellKey);
+        const effectiveTextColor = cellTextColor || headerTextColor;
+        if (effectiveTextColor) {
+          cell.style.color = effectiveTextColor;
+          cell.classList.add(cellTextColor ? "mdtp-cell-text-colored" : "mdtp-cell-dark-header");
         }
 
         const alignment = layout.cellAlignments[cellKey] ?? "";
@@ -3730,6 +4068,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const palette = this.getLayoutNativeColorPalette(layout) ?? this.getCurrentNativeColorPalette();
     if (rowIndex === 0) return palette.header;
     return rowIndex % 2 === 0 ? palette.altRow : palette.baseRow;
+  }
+
+  private getLayoutTableScale(layout: TableLayoutMetadata) {
+    return this.normalizeNativeTableScale(layout.tableScale, NATIVE_TABLE_DEFAULT_SCALE);
+  }
+
+  private resolveCellTextColor(layout: TableLayoutMetadata, rowIndex: number, cellKey: string) {
+    if (rowIndex === 0) return "";
+    return this.normalizeOptionalHexColor(layout.cellTextColors[cellKey]);
   }
 
   private getNativeHeaderTextColor(layout: TableLayoutMetadata, color: string) {
@@ -3906,23 +4253,27 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private injectResizeHandles(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     const structure = this.collectTableStructure(tableEl);
-    const firstRow = structure.matrix[0] ?? [];
-    for (let colIndex = 0; colIndex < firstRow.length; colIndex += 1) {
-      const cell = firstRow[colIndex];
-      if (!cell) continue;
-      const handle = document.createElement("div");
-      handle.className = "mdtp-resize-handle mdtp-col-handle";
-      handle.dataset.mdtpResizeKind = "column";
-      handle.dataset.mdtpIndex = String(colIndex);
-      handle.style.position = "absolute";
-      handle.style.top = "0";
-      handle.style.right = "-4px";
-      handle.style.width = "8px";
-      handle.style.height = "100%";
-      handle.style.cursor = "col-resize";
-      handle.style.zIndex = "5";
-      handle.style.opacity = "0.12";
-      cell.appendChild(handle);
+    const scale = this.getLayoutTableScale(layout);
+    for (let rowIndex = 0; rowIndex < structure.matrix.length; rowIndex += 1) {
+      const row = structure.matrix[rowIndex] ?? [];
+      for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+        const cell = row[colIndex];
+        if (!cell) continue;
+        const handle = document.createElement("div");
+        handle.className = "mdtp-resize-handle mdtp-col-handle";
+        handle.dataset.mdtpResizeKind = "column";
+        handle.dataset.mdtpIndex = String(colIndex);
+        handle.style.position = "absolute";
+        handle.style.top = "0";
+        handle.style.right = "-4px";
+        handle.style.width = "8px";
+        handle.style.height = "100%";
+        handle.style.cursor = "col-resize";
+        handle.style.zIndex = "5";
+        handle.style.opacity = "0.12";
+        this.prepareInjectedTableControl(handle);
+        cell.appendChild(handle);
+      }
     }
 
     for (let rowIndex = 0; rowIndex < structure.rows.length; rowIndex += 1) {
@@ -3940,18 +4291,56 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       handle.style.cursor = "row-resize";
       handle.style.zIndex = "5";
       handle.style.opacity = "0.12";
+      this.prepareInjectedTableControl(handle);
       cell.appendChild(handle);
       if (layout.rowHeights[String(rowIndex)]) {
-        structure.rows[rowIndex].style.setProperty("--mdtp-row-height", `${layout.rowHeights[String(rowIndex)]}px`);
-        structure.rows[rowIndex].style.height = `${layout.rowHeights[String(rowIndex)]}px`;
+        const scaledHeight = Math.max(MIN_ROW_HEIGHT, Math.round(layout.rowHeights[String(rowIndex)] * scale));
+        structure.rows[rowIndex].style.setProperty("--mdtp-row-height", `${scaledHeight}px`);
+        structure.rows[rowIndex].style.height = `${scaledHeight}px`;
       }
     }
+
+    const lastRow = structure.matrix[structure.matrix.length - 1];
+    const lastCell = lastRow?.[lastRow.length - 1];
+    if (lastCell) {
+      const handle = document.createElement("div");
+      handle.className = "mdtp-resize-handle mdtp-scale-handle";
+      handle.dataset.mdtpResizeKind = "scale";
+      handle.title = "拖拽调节整体比例";
+      this.prepareInjectedTableControl(handle);
+      lastCell.appendChild(handle);
+    }
+  }
+
+  private injectAutoFillHandles(tableEl: HTMLTableElement) {
+    const structure = this.collectTableStructure(tableEl);
+    for (let rowIndex = 0; rowIndex < structure.matrix.length; rowIndex += 1) {
+      for (let colIndex = 0; colIndex < structure.matrix[rowIndex].length; colIndex += 1) {
+        const cell = structure.matrix[rowIndex][colIndex];
+        if (!cell) continue;
+        const handle = document.createElement("div");
+        handle.className = "mdtp-autofill-handle";
+        handle.dataset.mdtpRow = String(rowIndex);
+        handle.dataset.mdtpCol = String(colIndex);
+        handle.title = "拖拽自动填充";
+        this.prepareInjectedTableControl(handle);
+        cell.appendChild(handle);
+      }
+    }
+  }
+
+  private prepareInjectedTableControl(element: HTMLElement) {
+    element.contentEditable = "false";
+    element.draggable = false;
+    element.tabIndex = -1;
+    element.setAttribute("aria-hidden", "true");
+    element.dataset.mdtpInjectedControl = "true";
   }
 
   private handleDocumentPointerDown(event: PointerEvent) {
     const target = event.target as HTMLElement | null;
     if (!target) return;
-    if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover, .mdtp-copy-image-handle")) return;
+    if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover")) return;
     if (target.closest(".mdtp-image-manipulator")) return;
     if (target.closest(".mdtp-inline-editor")) return;
 
@@ -3959,8 +4348,18 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       this.hideTableSidebarPopover();
     }
 
+    const plainTableTarget = this.resolvePlainMarkdownTableFromTarget(target);
+    if (plainTableTarget) {
+      void this.showPlainTableSidebarFromTarget(target);
+      this.clearAllEnhancedSelections();
+      this.hideImageToolbar();
+      this.hideImageManipulator();
+      return;
+    }
+
     const tableEl = target.closest("table.mdtp-table-shell") as HTMLTableElement | null;
     if (!tableEl) {
+      this.schedulePlainTableSidebarFallback(target);
       if (!target.closest("table:not(.mdtp-table-shell)")) {
         this.activeNativeTableContext = null;
       }
@@ -3987,13 +4386,54 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.handleTablePointerDown(event, tableEl);
   }
 
+  private async showPlainTableSidebarFromTarget(target: HTMLElement) {
+    const nativeContext =
+      (await this.getTargetUninitializedTableContext(target)) ??
+      (this.isMarkdownContentTarget(target) ? await this.getActiveUninitializedTableContext(target) : null);
+    if (!nativeContext?.tableEl) return;
+    this.activeNativeTableContext = nativeContext;
+    this.showTableSidebar({
+      mode: "native",
+      file: nativeContext.file,
+      parsedTable: nativeContext.parsedTable,
+      coord: nativeContext.coord,
+      tableEl: nativeContext.tableEl,
+    });
+  }
+
+  private schedulePlainTableSidebarFallback(target: HTMLElement | null) {
+    if (target && !this.isMarkdownContentTarget(target)) return;
+    if (this.plainTableSidebarFallbackTimer) {
+      window.clearTimeout(this.plainTableSidebarFallbackTimer);
+    }
+    this.plainTableSidebarFallbackTimer = window.setTimeout(() => {
+      this.plainTableSidebarFallbackTimer = null;
+      void this.showPlainTableSidebarFromCursor();
+    }, 40);
+  }
+
+  private async showPlainTableSidebarFromCursor() {
+    const nativeContext = await this.getCursorBasedUninitializedTableContext();
+    if (!nativeContext?.tableEl) return;
+    this.activeNativeTableContext = nativeContext;
+    this.showTableSidebar({
+      mode: "native",
+      file: nativeContext.file,
+      parsedTable: nativeContext.parsedTable,
+      coord: nativeContext.coord,
+      tableEl: nativeContext.tableEl,
+    });
+  }
+
   private async handleDocumentClick(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
     if (!target) return;
-    if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover, .mdtp-copy-image-handle")) return;
+    if (target.closest(".mdtp-sidebar-handle, .mdtp-sidebar-popover")) return;
     if (target.closest(".mdtp-image-manipulator")) return;
 
-    const nativeContext = await this.getTargetUninitializedTableContext(target);
+    const nativeContext =
+      (await this.getTargetUninitializedTableContext(target)) ??
+      (this.isMarkdownContentTarget(target) ? await this.getActiveUninitializedTableContext(target) : null);
     if (nativeContext) {
       this.activeNativeTableContext = nativeContext;
       if (nativeContext.tableEl) {
@@ -4008,6 +4448,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     } else if (!target.closest("table.mdtp-table-shell")) {
       this.activeNativeTableContext = null;
       this.hideTableSidebar(true);
+      this.schedulePlainTableSidebarFallback(target);
     }
 
     const nativeLayoutContext = this.getNativeLayoutTableSidebarContext(target);
@@ -4024,6 +4465,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.hideImageManipulator();
   }
 
+  private isMarkdownContentTarget(target: HTMLElement) {
+    return !!target.closest(".markdown-source-view, .markdown-reading-view, .cm-editor, .workspace-leaf-content");
+  }
+
   private async maybeOpenEnhancedCellEditorFromClick(event: MouseEvent, target: HTMLElement) {
     if (event.defaultPrevented || event.button !== 0) return false;
     if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
@@ -4033,7 +4478,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
           ".mdtp-inline-editor",
           ".mdtp-resize-handle",
           ".mdtp-sidebar-handle",
-          ".mdtp-copy-image-handle",
           ".mdtp-sidebar-popover",
           ".mdtp-image-manipulator",
           "img",
@@ -4474,6 +4918,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     button.type = "button";
     button.className = "mdtp-sidebar-handle";
     button.textContent = "表";
+    button.setAttribute("aria-label", "打开表格增强面板");
+    button.title = "打开表格增强面板";
     button.style.display = "none";
     button.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -4492,35 +4938,8 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private showTableSidebar(context: TableSidebarContext) {
     if (context.mode === "enhanced") return;
     this.ensureTableSidebarHandle();
-    this.ensureTableCopyImageHandle();
     this.activeTableSidebarContext = context;
     this.renderTableSidebarHandle(context);
-  }
-
-  private ensureTableCopyImageHandle() {
-    if (this.tableCopyImageHandleEl) return;
-
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "mdtp-sidebar-handle mdtp-copy-image-handle";
-    button.textContent = COPY_TABLE_AS_IMAGE_SHORT_LABEL;
-    button.setAttribute("aria-label", COPY_TABLE_AS_IMAGE_LABEL);
-    button.title = COPY_TABLE_AS_IMAGE_LABEL;
-    button.style.display = "none";
-    button.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const context = this.activeTableSidebarContext;
-      if (!context) return;
-      void this.copyCurrentTableAsImageStable(context.tableEl);
-    });
-
-    document.body.appendChild(button);
-    this.tableCopyImageHandleEl = button;
   }
 
   private renderTableSidebarHandle(context: TableSidebarContext) {
@@ -4540,21 +4959,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (draggerHandle) {
       const draggerRect = draggerHandle.getBoundingClientRect();
       const top = Math.max(72, draggerRect.top + Math.max(0, (draggerRect.height - 22) / 2));
-      const left = Math.max(8, draggerRect.left - 25);
+      const left = Math.max(8, draggerRect.left - 54);
       positionHandle(this.tableSidebarHandleEl, top, left, true);
-      if (this.tableCopyImageHandleEl) {
-        positionHandle(this.tableCopyImageHandleEl, top + 28, left, true);
-      }
       return;
     }
 
     const rect = context.tableEl.getBoundingClientRect();
     const top = Math.max(72, rect.top + 8);
-    const left = Math.max(12, rect.left - 44);
+    const left = Math.max(12, rect.left - 58);
     positionHandle(this.tableSidebarHandleEl, top, left, false);
-    if (this.tableCopyImageHandleEl) {
-      positionHandle(this.tableCopyImageHandleEl, top + 28, left, false);
-    }
   }
 
   private findDraggerHandleForTableSidebarContext(context: TableSidebarContext) {
@@ -4592,9 +5005,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.hideTableSidebarPopover();
     if (this.tableSidebarHandleEl) {
       this.tableSidebarHandleEl.style.display = "none";
-    }
-    if (this.tableCopyImageHandleEl) {
-      this.tableCopyImageHandleEl.style.display = "none";
     }
     if (force) {
       this.activeTableSidebarContext = null;
@@ -4682,11 +5092,49 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
           }
           continue;
         }
-        if (descriptor.label === COPY_TABLE_AS_IMAGE_LABEL) {
-          addButton(descriptor.label, async () => {
-            await this.copyCurrentTableAsImageStable(context.tableEl);
-            this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
+        if (descriptor.label === NATIVE_LAYOUT_TABLE_STYLE_LABEL || descriptor.label === NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL) {
+          if (nativeLayoutRecord?.mode === "nativeLayout") {
+            addButton(descriptor.label, async () => {
+              await this.setNativeLayoutTableStyle(
+                nativeLayoutTableId,
+                context.file,
+                context.tableEl,
+                descriptor.label === NATIVE_LAYOUT_TABLE_STYLE_LABEL
+              );
+              this.hideTableSidebarPopover();
+            }, { wide: descriptor.wide, experimental: descriptor.experimental });
+          }
+          continue;
+        }
+        const nativeAlignment = this.getNativeLayoutAlignmentForLabel(descriptor.label);
+        if (nativeAlignment !== undefined) {
+          if (nativeLayoutRecord?.mode === "nativeLayout") {
+            addButton(descriptor.label, async () => {
+              await this.setNativeLayoutCellRangeAlignment(
+                nativeLayoutTableId,
+                context.file,
+                context.tableEl,
+                this.normalizeSelection(context.coord, context.coord),
+                context.coord,
+                nativeAlignment
+              );
+              this.hideTableSidebarPopover();
+            }, { wide: descriptor.wide, experimental: descriptor.experimental });
+          }
+          continue;
+        }
+        if (descriptor.label === NATIVE_LAYOUT_FILL_DOWN_LABEL || descriptor.label === NATIVE_LAYOUT_FILL_RIGHT_LABEL) {
+          if (nativeLayoutRecord?.mode === "nativeLayout") {
+            addButton(descriptor.label, async () => {
+              const target = this.getNativeAutoFillSidebarTarget(
+                context.tableEl,
+                context.coord,
+                descriptor.label === NATIVE_LAYOUT_FILL_DOWN_LABEL ? "down" : "right"
+              );
+              if (target) await this.applyNativeAutoFill(nativeLayoutTableId, context.file, context.tableEl, context.coord, target);
+              this.hideTableSidebarPopover();
+            }, { wide: descriptor.wide, experimental: descriptor.experimental });
+          }
           continue;
         }
         if (descriptor.label === "保存当前表格为模板") {
@@ -4705,61 +5153,284 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         }
       }
     } else if (context.mode === "nativeLayout") {
-      addSectionTitle("原生表格布局");
-      for (const descriptor of this.getNativeLayoutSidebarActionDescriptors()) {
-        if (descriptor.label === NATIVE_LAYOUT_CURRENT_TABLE_LABEL) {
-          addButton(descriptor.label, async () => {
-            const didInit = await this.initializeSpecificTableNativeLayout(context.file, context.parsedTable);
-            if (didInit) this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === NATIVE_LAYOUT_PAGE_TABLES_LABEL) {
-          addButton(descriptor.label, async () => {
-            const didInit = await this.initializeVisiblePageTablesNativeLayout(context.file);
-            if (didInit) this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === NATIVE_LAYOUT_ROW_COLOR_LABEL) {
-          addButton(descriptor.label, () => {
-            this.showNativeLayoutRowColorPalette(context.file, context.tableEl, context.tableId, context.selection, context.coord);
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === NATIVE_LAYOUT_ROW_BANDS_LABEL) {
-          addButton(descriptor.label, () => {
-            new NativeRowBandColorModal(this, context.file, context.tableId, context.tableEl).open();
-            this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === COPY_TABLE_AS_IMAGE_LABEL) {
-          addButton(descriptor.label, async () => {
-            await this.copyCurrentTableAsImageStable(context.tableEl);
-            this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === "保存当前表格为模板") {
-          addButton(descriptor.label, async () => {
-            await this.saveManagedTableAsTemplate(context.file, context.parsedTable);
-            this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-          continue;
-        }
-        if (descriptor.label === "插入模板" || descriptor.label === "模板库") {
-          addButton(descriptor.label, () => {
-            this.openTemplateLibraryModal();
-            this.hideTableSidebarPopover();
-          }, { wide: descriptor.wide, experimental: descriptor.experimental });
-        }
-      }
+      void addSectionTitle;
+      void addButton;
+      this.appendNativeLayoutSidebarCategories(root, context);
     }
 
     document.body.appendChild(root);
     this.tableSidebarPopoverEl = root;
     this.positionTableSidebarPopover(context);
+  }
+
+  private appendNativeLayoutSidebarCategories(root: HTMLElement, context: NativeLayoutTableSidebarContext) {
+    root.classList.add("mdtp-sidebar-popover-categorized");
+
+    const categories = this.buildNativeLayoutSidebarCategories(context).filter((category) => category.actions.length > 0 || !!category.render);
+    if (categories.length === 0) return;
+
+    const primary = document.createElement("div");
+    primary.className = "mdtp-sidebar-primary-actions";
+    const primaryButton = document.createElement("button");
+    primaryButton.type = "button";
+    primaryButton.className = "mdtp-sidebar-button is-primary is-wide";
+    primaryButton.textContent = NATIVE_LAYOUT_CURRENT_TABLE_LABEL;
+    primaryButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void (async () => {
+        if (context.parsedTable) {
+          await this.initializeSpecificTableNativeLayout(context.file, context.parsedTable);
+        } else {
+          await this.setNativeLayoutTableStyle(context.tableId, context.file, context.tableEl, true);
+        }
+        this.hideTableSidebarPopover();
+      })();
+    });
+    primary.appendChild(primaryButton);
+    root.appendChild(primary);
+
+    const nav = document.createElement("div");
+    nav.className = "mdtp-sidebar-category-list";
+    const panel = document.createElement("div");
+    panel.className = "mdtp-sidebar-action-panel";
+    root.append(nav, panel);
+
+    let activeId = categories[0].id;
+    const renderCategory = (category: SidebarPopoverCategory) => {
+      activeId = category.id;
+      for (const button of Array.from(nav.querySelectorAll(".mdtp-sidebar-category-button"))) {
+        button.classList.toggle("is-active", (button as HTMLElement).dataset.categoryId === activeId);
+      }
+      panel.replaceChildren();
+      const title = document.createElement("div");
+      title.className = "mdtp-sidebar-section-title";
+      title.textContent = category.label;
+      panel.appendChild(title);
+      category.render?.(panel);
+      for (const action of category.actions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `mdtp-sidebar-button${action.wide ? " is-wide" : ""}`;
+        button.textContent = action.label;
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void action.run();
+        });
+        panel.appendChild(button);
+      }
+    };
+
+    for (const category of categories) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mdtp-sidebar-category-button";
+      button.dataset.categoryId = category.id;
+      button.textContent = category.label;
+      button.addEventListener("pointerenter", () => renderCategory(category));
+      button.addEventListener("focus", () => renderCategory(category));
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        renderCategory(category);
+      });
+      nav.appendChild(button);
+    }
+
+    renderCategory(categories[0]);
+  }
+
+  private buildNativeLayoutSidebarCategories(context: NativeLayoutTableSidebarContext): SidebarPopoverCategory[] {
+    const close = () => this.hideTableSidebarPopover();
+    const beautify: SidebarPopoverAction[] = [
+      {
+        label: NATIVE_LAYOUT_PAGE_TABLES_LABEL,
+        wide: true,
+        run: async () => {
+          const didInit = await this.initializeVisiblePageTablesNativeLayout(context.file);
+          if (didInit) close();
+        },
+      },
+      {
+        label: NATIVE_LAYOUT_TABLE_STYLE_LABEL,
+        wide: true,
+        run: async () => {
+          await this.setNativeLayoutTableStyle(context.tableId, context.file, context.tableEl, true);
+          close();
+        },
+      },
+      {
+        label: NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL,
+        wide: true,
+        run: async () => {
+          await this.setNativeLayoutTableStyle(context.tableId, context.file, context.tableEl, false);
+          close();
+        },
+      },
+    ];
+
+    const size: SidebarPopoverAction[] = [
+      {
+        label: NATIVE_LAYOUT_SCALE_LABEL,
+        wide: true,
+        run: () => this.showNativeLayoutScaleMenu(context.file, context.tableEl, context.tableId),
+      },
+      {
+        label: "列宽 -",
+        run: async () => {
+          await this.adjustNativeLayoutSelectedColumnWidth(context.tableId, context.file, context.tableEl, context.selection, context.coord, -10);
+          close();
+        },
+      },
+      {
+        label: "列宽 +",
+        run: async () => {
+          await this.adjustNativeLayoutSelectedColumnWidth(context.tableId, context.file, context.tableEl, context.selection, context.coord, 10);
+          close();
+        },
+      },
+      {
+        label: "行高 -",
+        run: async () => {
+          await this.adjustNativeLayoutSelectedRowHeight(context.tableId, context.file, context.tableEl, context.selection, context.coord, -4);
+          close();
+        },
+      },
+      {
+        label: "行高 +",
+        run: async () => {
+          await this.adjustNativeLayoutSelectedRowHeight(context.tableId, context.file, context.tableEl, context.selection, context.coord, 4);
+          close();
+        },
+      },
+    ];
+
+    const style: SidebarPopoverAction[] = [
+      {
+        label: NATIVE_LAYOUT_ROW_COLOR_LABEL,
+        wide: true,
+        run: () => this.showNativeLayoutRowColorPalette(context.file, context.tableEl, context.tableId, context.selection, context.coord),
+      },
+      {
+        label: NATIVE_LAYOUT_ROW_BANDS_LABEL,
+        wide: true,
+        run: () => {
+          new NativeRowBandColorModal(this, context.file, context.tableId, context.tableEl).open();
+          close();
+        },
+      },
+      {
+        label: NATIVE_LAYOUT_TEXT_COLOR_LABEL,
+        wide: true,
+        run: () => this.showNativeLayoutTextColorPalette(context.file, context.tableEl, context.tableId, context.selection, context.coord),
+      },
+      {
+        label: NATIVE_LAYOUT_CLEAR_TEXT_COLOR_LABEL,
+        wide: true,
+        run: async () => {
+          await this.setNativeLayoutCellRangeTextColor(context.tableId, context.file, context.tableEl, context.selection, context.coord, null);
+          close();
+        },
+      },
+    ];
+
+    const alignments: SidebarPopoverAction[] = [
+      { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL, alignment: "left" as const },
+      { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL, alignment: "center" as const },
+      { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL, alignment: "right" as const },
+      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL, alignment: null },
+    ].map(({ label, alignment }) => ({
+      label,
+      run: async () => {
+        await this.setNativeLayoutCellRangeAlignment(
+          context.tableId,
+          context.file,
+          context.tableEl,
+          context.selection,
+          context.coord,
+          alignment
+        );
+        close();
+      },
+    }));
+
+    const fillActions: SidebarPopoverAction[] = [];
+    const downTarget = this.getNativeAutoFillSidebarTarget(context.tableEl, context.coord, "down");
+    if (downTarget) {
+      fillActions.push({
+        label: NATIVE_LAYOUT_FILL_DOWN_LABEL,
+        run: async () => {
+          await this.applyNativeAutoFill(context.tableId, context.file, context.tableEl, context.coord, downTarget);
+          close();
+        },
+      });
+    }
+    const rightTarget = this.getNativeAutoFillSidebarTarget(context.tableEl, context.coord, "right");
+    if (rightTarget) {
+      fillActions.push({
+        label: NATIVE_LAYOUT_FILL_RIGHT_LABEL,
+        run: async () => {
+          await this.applyNativeAutoFill(context.tableId, context.file, context.tableEl, context.coord, rightTarget);
+          close();
+        },
+      });
+    }
+
+    const output: SidebarPopoverAction[] = [
+      {
+        label: "保存当前表格为模板",
+        wide: true,
+        run: async () => {
+          await this.saveManagedTableAsTemplate(context.file, context.parsedTable);
+          close();
+        },
+      },
+      {
+        label: "模板库",
+        wide: true,
+        run: () => {
+          this.openTemplateLibraryModal();
+          close();
+        },
+      },
+    ];
+
+    return [
+      { id: "beautify", label: "美化", actions: beautify },
+      { id: "size", label: NATIVE_LAYOUT_SIZE_LABEL, actions: size },
+      { id: "style", label: "颜色字体", actions: style },
+      { id: "align", label: "对齐", actions: alignments },
+      { id: "fill", label: "填充", actions: fillActions },
+      { id: "formula", label: NATIVE_LAYOUT_FORMULA_HELP_LABEL, actions: [], render: (panel) => this.appendNativeFormulaHelp(panel) },
+      { id: "output", label: "模板导出", actions: output },
+    ];
+  }
+
+  private appendNativeFormulaHelp(panel: HTMLElement) {
+    const table = document.createElement("table");
+    table.className = "mdtp-formula-help-table";
+    const rows = [
+      ["输入", "效果"],
+      ["=sum", "自动汇总当前列上方数字"],
+      ["=sum(C2:C4)", "汇总指定范围"],
+      ["=avg(C2:C4)", "平均值；也支持 =average(...)"],
+      ["=min(C2:C4)", "最小值"],
+      ["=max(C2:C4)", "最大值"],
+      ["A1 / C2:C4", "支持单元格与范围引用"],
+      ["$a^2+b^2=c^2$", "轻量 LaTeX 识别显示"],
+      ["拖拽右下小方块", "自动填充数字序列或 A1/A2"],
+    ];
+    for (const [index, row] of rows.entries()) {
+      const tr = document.createElement("tr");
+      const first = document.createElement(index === 0 ? "th" : "td");
+      const second = document.createElement(index === 0 ? "th" : "td");
+      first.textContent = row[0];
+      second.textContent = row[1];
+      tr.append(first, second);
+      table.appendChild(tr);
+    }
+    panel.appendChild(table);
   }
 
   private positionTableSidebarPopover(context: TableSidebarContext) {
@@ -4771,13 +5442,39 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.tableSidebarPopoverEl.style.top = `${Math.max(72, rect.top - 4)}px`;
   }
 
+  private getNativeLayoutAlignmentForLabel(label: string): "left" | "center" | "right" | null | undefined {
+    if (label === NATIVE_LAYOUT_ALIGN_LEFT_LABEL) return "left";
+    if (label === NATIVE_LAYOUT_ALIGN_CENTER_LABEL) return "center";
+    if (label === NATIVE_LAYOUT_ALIGN_RIGHT_LABEL) return "right";
+    if (label === NATIVE_LAYOUT_ALIGN_CLEAR_LABEL) return null;
+    return undefined;
+  }
+
+  private getNativeAutoFillSidebarTarget(tableEl: HTMLTableElement, coord: CellCoord, direction: "down" | "right") {
+    const structure = this.collectTableStructure(tableEl);
+    if (direction === "down") {
+      const maxRow = Math.max(0, structure.rows.length - 1);
+      return coord.row < maxRow ? { row: maxRow, col: coord.col } : null;
+    }
+
+    const maxCol = Math.max(0, ...structure.matrix.map((row) => row.length - 1));
+    return coord.col < maxCol ? { row: coord.row, col: maxCol } : null;
+  }
+
   getNativeSidebarActionDescriptors(): SidebarActionDescriptor[] {
     return [
       { label: NATIVE_LAYOUT_CURRENT_TABLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_PAGE_TABLES_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_TABLE_STYLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_COLOR_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_BANDS_LABEL, wide: true },
-      { label: COPY_TABLE_AS_IMAGE_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_TEXT_COLOR_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_SCALE_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL },
+      { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL },
+      { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL },
+      { label: NATIVE_LAYOUT_FILL_DOWN_LABEL },
+      { label: NATIVE_LAYOUT_FILL_RIGHT_LABEL },
       { label: "保存当前表格为模板", wide: true },
       { label: "插入模板", wide: true },
       { label: "模板库", wide: true },
@@ -4788,24 +5485,23 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return [
       { label: NATIVE_LAYOUT_CURRENT_TABLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_PAGE_TABLES_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_TABLE_STYLE_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_COLOR_LABEL, wide: true },
       { label: NATIVE_LAYOUT_ROW_BANDS_LABEL, wide: true },
-      { label: COPY_TABLE_AS_IMAGE_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_TEXT_COLOR_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_CLEAR_TEXT_COLOR_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_SCALE_LABEL, wide: true },
+      { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL },
+      { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL },
+      { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL },
+      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL },
+      { label: NATIVE_LAYOUT_FILL_DOWN_LABEL },
+      { label: NATIVE_LAYOUT_FILL_RIGHT_LABEL },
       { label: "保存当前表格为模板", wide: true },
       { label: "插入模板", wide: true },
       { label: "模板库", wide: true },
     ];
-  }
-
-  private async copyCurrentTableAsImageStable(tableEl: HTMLTableElement) {
-    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
-      | { copyCurrentTableAsImage?: (tableEl: HTMLTableElement) => Promise<boolean> }
-      | undefined;
-    if (typeof feishu?.copyCurrentTableAsImage === "function") {
-      await feishu.copyCurrentTableAsImage(tableEl);
-      return;
-    }
-    new Notice("请先启用 Obsidian增强体验 中的「右键复制成图」");
   }
 
   getEnhancedSidebarActionDescriptors(): SidebarActionDescriptor[] {
@@ -6805,6 +7501,29 @@ with open(out_path, "wb") as handle:
   }
 
   private handleTablePointerDown(event: PointerEvent, tableEl: HTMLTableElement) {
+    const autoFillHandle = (event.target as HTMLElement | null)?.closest(".mdtp-autofill-handle") as HTMLElement | null;
+    if (autoFillHandle) {
+      const state = this.runtimeState.get(tableEl);
+      const tableId = tableEl.dataset.mdtpTableId || state?.parsedTable?.tableId || "";
+      if (!state || !tableId) return;
+
+      const sourceCell = autoFillHandle.closest("th, td") as HTMLTableCellElement | null;
+      const sourceCoord = sourceCell ? this.getCellCoord(sourceCell) : null;
+      if (!sourceCoord) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      this.activeAutoFill = {
+        tableEl,
+        tableId,
+        file: state.file,
+        sourceCoord,
+        targetCoord: null,
+      };
+      sourceCell.classList.add("mdtp-autofill-source");
+      return;
+    }
+
     const resizeHandle = (event.target as HTMLElement | null)?.closest(".mdtp-resize-handle") as HTMLElement | null;
     if (resizeHandle) {
       const state = this.runtimeState.get(tableEl);
@@ -6817,7 +7536,24 @@ with open(out_path, "wb") as handle:
       const index = Number.parseInt(resizeHandle.dataset.mdtpIndex ?? "-1", 10);
       const kind = resizeHandle.dataset.mdtpResizeKind;
       const structure = this.collectTableStructure(tableEl);
-      if (kind === "column") {
+      if (kind === "scale") {
+        const record = this.dataStore.tables[tableId];
+        const scale = record?.mode === "nativeLayout" ? this.getLayoutTableScale(record.layout) : NATIVE_TABLE_DEFAULT_SCALE;
+        const sizeBase = record?.mode === "nativeLayout"
+          ? this.captureNativeLayoutSizeBase(tableEl, record.layout)
+          : { colWidths: {}, rowHeights: {} };
+        this.activeResize = {
+          kind: "scale",
+          tableEl,
+          tableId,
+          file: state.file,
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          startScale: scale,
+          currentScale: scale,
+          sizeBase,
+        };
+      } else if (kind === "column") {
         const width = this.getColumnWidth(structure, index);
         this.activeResize = {
           kind: "column",
@@ -6988,22 +7724,179 @@ with open(out_path, "wb") as handle:
     origin?: { x: number; y: number }
   ) {
     menu.addItem((item) => {
-      item.setTitle(NATIVE_LAYOUT_ROW_COLOR_LABEL);
-      item.setIcon("paint-bucket");
-      item.onClick(() => this.showNativeLayoutRowColorPalette(file, tableEl, tableId, selection, coord, origin));
+      item.setTitle(NATIVE_LAYOUT_TABLE_STYLE_LABEL);
+      item.setIcon("table-properties");
+      item.onClick(() => void this.setNativeLayoutTableStyle(tableId, file, tableEl, true));
     });
-    menu.addItem((item) => {
-      item.setTitle(NATIVE_LAYOUT_ROW_BANDS_LABEL);
-      item.setIcon("palette");
-      item.onClick(() => new NativeRowBandColorModal(this, file, tableId, tableEl).open());
-    });
-    menu.addItem((item) => {
-      item.setTitle("恢复选中行默认色");
-      item.setIcon("eraser");
-      item.onClick(() => {
-        const range = this.getSelectedRowRange(selection, coord);
-        void this.setNativeLayoutRowRangeColor(tableId, file, tableEl, range.startRow, range.endRow, null);
+    (menu as any).addSeparator?.();
+    this.addNativeLayoutStyleSubmenu(menu, file, tableId, tableEl, selection, coord, origin);
+    this.addNativeLayoutAlignmentSubmenu(menu, file, tableId, tableEl, selection, coord, origin);
+    this.addNativeLayoutAutoFillSubmenu(menu, file, tableId, tableEl, coord, origin);
+  }
+
+  private addNativeLayoutStyleSubmenu(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
+    this.addMenuSubmenu(menu, "颜色与样式", "palette", (submenu) => {
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL);
+        item.setIcon("eraser");
+        item.onClick(() => void this.setNativeLayoutTableStyle(tableId, file, tableEl, false));
       });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_ROW_COLOR_LABEL);
+        item.setIcon("paint-bucket");
+        item.onClick(() => this.showNativeLayoutRowColorPalette(file, tableEl, tableId, selection, coord, origin));
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_ROW_BANDS_LABEL);
+        item.setIcon("palette");
+        item.onClick(() => new NativeRowBandColorModal(this, file, tableId, tableEl).open());
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_TEXT_COLOR_LABEL);
+        item.setIcon("type");
+        item.onClick(() => this.showNativeLayoutTextColorPalette(file, tableEl, tableId, selection, coord, origin));
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_CLEAR_TEXT_COLOR_LABEL);
+        item.setIcon("eraser");
+        item.onClick(() =>
+          void this.setNativeLayoutCellRangeTextColor(tableId, file, tableEl, selection, coord, null)
+        );
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_SCALE_LABEL);
+        item.setIcon("zoom-in");
+        item.onClick(() => this.showNativeLayoutScaleMenu(file, tableEl, tableId, origin));
+      });
+      submenu.addItem((item) => {
+        item.setTitle("恢复选中行默认色");
+        item.setIcon("eraser");
+        item.onClick(() => {
+          const range = this.getSelectedRowRange(selection, coord);
+          void this.setNativeLayoutRowRangeColor(tableId, file, tableEl, range.startRow, range.endRow, null);
+        });
+      });
+    }, origin);
+  }
+
+  private addNativeLayoutAlignmentSubmenu(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
+    this.addMenuSubmenu(
+      menu,
+      "对齐",
+      "align-center",
+      (submenu) => this.addNativeLayoutAlignmentMenuItems(submenu, file, tableId, tableEl, selection, coord),
+      origin
+    );
+  }
+
+  private addNativeLayoutAutoFillSubmenu(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
+    this.addMenuSubmenu(
+      menu,
+      "自动填充",
+      "square-mouse-pointer",
+      (submenu) => this.addNativeLayoutAutoFillMenuItems(submenu, file, tableId, tableEl, coord),
+      origin
+    );
+  }
+
+  private addMenuSubmenu(
+    menu: Menu,
+    title: string,
+    icon: string,
+    build: (submenu: Menu) => void,
+    origin?: { x: number; y: number }
+  ) {
+    const menuAny = menu as any;
+    if (typeof menuAny.addSubmenu === "function") {
+      menuAny.addSubmenu((submenu: Menu & { setTitle?: (value: string) => unknown; setIcon?: (value: string) => unknown }) => {
+        submenu.setTitle?.(title);
+        submenu.setIcon?.(icon);
+        build(submenu);
+      });
+      return;
+    }
+
+    menu.addItem((item) => {
+      item.setTitle(`${title}...`);
+      item.setIcon(icon);
+      item.onClick(() => {
+        const submenu = new Menu();
+        build(submenu);
+        submenu.showAtPosition(origin ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 });
+      });
+    });
+  }
+
+  private addNativeLayoutAlignmentMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord
+  ) {
+    const options: Array<{ label: string; icon: string; alignment: "left" | "center" | "right" | null }> = [
+      { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL, icon: "align-left", alignment: "left" },
+      { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL, icon: "align-center", alignment: "center" },
+      { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL, icon: "align-right", alignment: "right" },
+      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL, icon: "eraser", alignment: null },
+    ];
+    for (const option of options) {
+      menu.addItem((item) => {
+        item.setTitle(option.label);
+        item.setIcon(option.icon);
+        item.onClick(() =>
+          void this.setNativeLayoutCellRangeAlignment(tableId, file, tableEl, selection, coord, option.alignment)
+        );
+      });
+    }
+  }
+
+  private addNativeLayoutAutoFillMenuItems(
+    menu: Menu,
+    file: TFile,
+    tableId: string,
+    tableEl: HTMLTableElement,
+    coord: CellCoord
+  ) {
+    const structure = this.collectTableStructure(tableEl);
+    const maxRow = Math.max(0, structure.rows.length - 1);
+    const maxCol = Math.max(0, ...structure.matrix.map((row) => row.length - 1));
+
+    menu.addItem((item) => {
+      item.setTitle(NATIVE_LAYOUT_FILL_DOWN_LABEL);
+      item.setIcon("arrow-down-to-line");
+      item.setDisabled(coord.row >= maxRow);
+      item.onClick(() => void this.applyNativeAutoFill(tableId, file, tableEl, coord, { row: maxRow, col: coord.col }));
+    });
+    menu.addItem((item) => {
+      item.setTitle(NATIVE_LAYOUT_FILL_RIGHT_LABEL);
+      item.setIcon("arrow-right-to-line");
+      item.setDisabled(coord.col >= maxCol);
+      item.onClick(() => void this.applyNativeAutoFill(tableId, file, tableEl, coord, { row: coord.row, col: maxCol }));
     });
   }
 
@@ -7253,6 +8146,60 @@ with open(out_path, "wb") as handle:
     menu.showAtPosition(origin ?? { x: rect.left + 24, y: rect.top + 24 });
   }
 
+  private showNativeLayoutTextColorPalette(
+    file: TFile,
+    tableEl: HTMLTableElement,
+    tableId: string,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    origin?: { x: number; y: number }
+  ) {
+    const menu = new Menu();
+    const defaultTextColor = this.getNativeTableDefaultTextColor();
+    const choices = [
+      { label: "默认文字色", value: defaultTextColor },
+      ...TEXT_COLOR_PALETTE.filter((item) => !this.colorsMatch(item.value, defaultTextColor)),
+    ];
+    for (const palette of choices) {
+      menu.addItem((item) => {
+        item.setTitle(palette.label);
+        item.setIcon("type");
+        item.onClick(() =>
+          void this.setNativeLayoutCellRangeTextColor(tableId, file, tableEl, selection, coord, palette.value)
+        );
+      });
+    }
+    (menu as any).addSeparator?.();
+    menu.addItem((item) => {
+      item.setTitle(NATIVE_LAYOUT_CLEAR_TEXT_COLOR_LABEL);
+      item.setIcon("eraser");
+      item.onClick(() => void this.setNativeLayoutCellRangeTextColor(tableId, file, tableEl, selection, coord, null));
+    });
+    const rect = tableEl.getBoundingClientRect();
+    menu.showAtPosition(origin ?? { x: rect.left + 24, y: rect.top + 24 });
+  }
+
+  private showNativeLayoutScaleMenu(
+    file: TFile,
+    tableEl: HTMLTableElement,
+    tableId: string,
+    origin?: { x: number; y: number }
+  ) {
+    const menu = new Menu();
+    const choices = Array.from(new Set([this.getNativeTableDefaultScale(), 0.75, 0.85, 1, 1.15, 1.3, 1.5])).sort(
+      (left, right) => left - right
+    );
+    for (const scale of choices) {
+      menu.addItem((item) => {
+        item.setTitle(`${Math.round(scale * 100)}%`);
+        item.setIcon(scale === 1 ? "zoom-in" : scale > 1 ? "plus" : "minus");
+        item.onClick(() => void this.setNativeLayoutTableScale(tableId, file, tableEl, scale));
+      });
+    }
+    const rect = tableEl.getBoundingClientRect();
+    menu.showAtPosition(origin ?? { x: rect.left + 24, y: rect.top + 24 });
+  }
+
   async setNativeLayoutRowRangeColor(
     tableId: string,
     file: TFile,
@@ -7291,6 +8238,220 @@ with open(out_path, "wb") as handle:
       after,
     });
     new Notice(normalizedColor ? "已设置选中行颜色" : "已恢复选中行默认色");
+  }
+
+  async setNativeLayoutCellRangeTextColor(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    color: string | null
+  ) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const before = await this.captureHistoryState(file, [tableId]);
+    const normalizedColor = color ? this.normalizeHexColor(color, this.getNativeTableDefaultTextColor()) : null;
+    for (let row = range.startRow; row <= range.endRow; row += 1) {
+      if (row === 0) continue;
+      for (let col = range.startCol; col <= range.endCol; col += 1) {
+        const key = this.getCellKey({ row, col });
+        if (normalizedColor) {
+          record.layout.cellTextColors[key] = normalizedColor;
+        } else {
+          delete record.layout.cellTextColors[key];
+        }
+      }
+    }
+
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: normalizedColor ? "设置文字颜色" : "恢复文字颜色",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(normalizedColor ? "已设置文字颜色" : "已恢复文字颜色");
+  }
+
+  async setNativeLayoutTableScale(tableId: string, file: TFile, tableEl: HTMLTableElement, scale: number) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const before = await this.captureHistoryState(file, [tableId]);
+    this.materializeNativeLayoutSizeBase(record.layout, this.captureNativeLayoutSizeBase(tableEl, record.layout));
+    record.layout.tableScale = this.normalizeNativeTableScale(scale, this.getNativeTableDefaultScale());
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: "调整整体比例",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(`已调整整体比例为 ${Math.round(record.layout.tableScale * 100)}%`);
+  }
+
+  private async adjustNativeLayoutSelectedColumnWidth(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    delta: number
+  ) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const structure = this.collectTableStructure(tableEl);
+    const scale = this.getLayoutTableScale(record.layout);
+    const before = await this.captureHistoryState(file, [tableId]);
+    for (let col = range.startCol; col <= range.endCol; col += 1) {
+      const key = String(col);
+      const current = record.layout.colWidths[key] ?? Math.round(this.getColumnWidth(structure, col) / scale);
+      record.layout.colWidths[key] = this.normalizeNativeTableDefaultSize(current + delta, current, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH);
+    }
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: "调整列宽",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice("已调整列宽");
+  }
+
+  private async adjustNativeLayoutSelectedRowHeight(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    delta: number
+  ) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const structure = this.collectTableStructure(tableEl);
+    const scale = this.getLayoutTableScale(record.layout);
+    const before = await this.captureHistoryState(file, [tableId]);
+    for (let row = range.startRow; row <= range.endRow; row += 1) {
+      const key = String(row);
+      const current = record.layout.rowHeights[key] ?? Math.round(this.getRowHeight(structure, row) / scale);
+      record.layout.rowHeights[key] = this.normalizeNativeTableDefaultSize(current + delta, current, MIN_ROW_HEIGHT, MAX_ROW_HEIGHT);
+    }
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: "调整行高",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice("已调整行高");
+  }
+
+  async setNativeLayoutTableStyle(tableId: string, file: TFile, tableEl: HTMLTableElement, enabled: boolean) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const before = await this.captureHistoryState(file, [tableId]);
+    if (enabled) {
+      const palette = this.getCurrentNativeColorPalette();
+      record.layout.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
+      record.layout.nativeColorPalette = palette;
+      if (!record.layout.rowColors["0"]) {
+        record.layout.rowColors["0"] = palette.header;
+      }
+    } else {
+      delete record.layout.nativeColorPreset;
+      delete record.layout.nativeColorPalette;
+    }
+
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: enabled ? "套用表格样式" : "取消表格样式",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(enabled ? "已套用表格样式" : "已取消斑马样式");
+  }
+
+  async setNativeLayoutCellRangeAlignment(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    alignment: "left" | "center" | "right" | null
+  ) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const before = await this.captureHistoryState(file, [tableId]);
+    for (let row = range.startRow; row <= range.endRow; row += 1) {
+      for (let col = range.startCol; col <= range.endCol; col += 1) {
+        const key = this.getCellKey({ row, col });
+        if (alignment) {
+          record.layout.cellAlignments[key] = alignment;
+        } else {
+          delete record.layout.cellAlignments[key];
+        }
+      }
+    }
+
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: alignment ? "设置单元格对齐" : "恢复单元格对齐",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(alignment ? "已设置对齐" : "已恢复默认对齐");
+  }
+
+  private getSelectedCellRange(selection: SelectionRect | null, coord: CellCoord, tableEl: HTMLTableElement) {
+    const structure = this.collectTableStructure(tableEl);
+    const maxRow = Math.max(0, structure.rows.length - 1);
+    const maxCol = Math.max(0, ...structure.matrix.map((row) => row.length - 1));
+    const startRow = Math.max(0, Math.min(maxRow, selection?.startRow ?? coord.row));
+    const endRow = Math.max(0, Math.min(maxRow, selection?.endRow ?? coord.row));
+    const startCol = Math.max(0, Math.min(maxCol, selection?.startCol ?? coord.col));
+    const endCol = Math.max(0, Math.min(maxCol, selection?.endCol ?? coord.col));
+    return {
+      startRow: Math.min(startRow, endRow),
+      endRow: Math.max(startRow, endRow),
+      startCol: Math.min(startCol, endCol),
+      endCol: Math.max(startCol, endCol),
+    };
   }
 
   private async setColor(
@@ -7895,8 +9056,28 @@ with open(out_path, "wb") as handle:
       return;
     }
 
+    if (this.activeAutoFill) {
+      event.preventDefault();
+      this.updateNativeAutoFillTarget(event);
+      return;
+    }
+
     if (this.activeResize) {
       event.preventDefault();
+      if (this.activeResize.kind === "scale") {
+        const deltaX = event.clientX - this.activeResize.startClientX;
+        const deltaY = event.clientY - this.activeResize.startClientY;
+        const nextScale = this.normalizeNativeTableScale(
+          this.activeResize.startScale + (deltaX + deltaY) / 520,
+          this.activeResize.startScale
+        );
+        this.activeResize.currentScale = nextScale;
+        const record = this.dataStore.tables[this.activeResize.tableId];
+        if (record?.mode === "nativeLayout") {
+          this.previewNativeLayoutTableScale(this.activeResize.tableEl, record.layout, nextScale, this.activeResize.sizeBase);
+        }
+        return;
+      }
       const delta = (this.activeResize.kind === "column" ? event.clientX : event.clientY) - this.activeResize.startClient;
       const nextSize = Math.max(
         this.activeResize.kind === "column" ? MIN_COLUMN_WIDTH : MIN_ROW_HEIGHT,
@@ -7942,6 +9123,17 @@ with open(out_path, "wb") as handle:
       return;
     }
 
+    if (this.activeAutoFill) {
+      const fill = this.activeAutoFill;
+      this.activeAutoFill = null;
+      const targetCoord = fill.targetCoord;
+      this.clearNativeAutoFillPreview(fill.tableEl);
+      if (targetCoord) {
+        await this.applyNativeAutoFill(fill.tableId, fill.file, fill.tableEl, fill.sourceCoord, targetCoord);
+      }
+      return;
+    }
+
     if (this.activeResize) {
       const resize = this.activeResize;
       this.activeResize = null;
@@ -7949,17 +9141,21 @@ with open(out_path, "wb") as handle:
       if (record) {
         const before = await this.captureHistoryState(resize.file, [resize.tableId]);
         const structure = this.collectTableStructure(resize.tableEl);
-        if (resize.kind === "column") {
-          record.layout.colWidths[String(resize.index)] = this.getColumnWidth(structure, resize.index);
+        const scale = this.getLayoutTableScale(record.layout);
+        if (resize.kind === "scale") {
+          record.layout.tableScale = resize.currentScale;
+          this.materializeNativeLayoutSizeBase(record.layout, resize.sizeBase);
+        } else if (resize.kind === "column") {
+          record.layout.colWidths[String(resize.index)] = Math.round(this.getColumnWidth(structure, resize.index) / scale);
         } else {
-          record.layout.rowHeights[String(resize.index)] = this.getRowHeight(structure, resize.index);
+          record.layout.rowHeights[String(resize.index)] = Math.round(this.getRowHeight(structure, resize.index) / scale);
         }
         record.updatedAt = Date.now();
         await this.savePluginData();
         this.refreshEnhancedTable(resize.tableEl, resize.tableId);
         const after = await this.captureHistoryState(resize.file, [resize.tableId]);
         this.pushHistoryEntry({
-          label: resize.kind === "column" ? "调整列宽" : "调整行高",
+          label: resize.kind === "scale" ? "调整整体比例" : resize.kind === "column" ? "调整列宽" : "调整行高",
           filePath: resize.file.path,
           tableIds: [resize.tableId],
           before,
@@ -7969,6 +9165,106 @@ with open(out_path, "wb") as handle:
     }
 
     this.activeSelectionDrag = null;
+  }
+
+  private updateNativeAutoFillTarget(event: PointerEvent) {
+    const fill = this.activeAutoFill;
+    if (!fill) return;
+
+    const hovered = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = hovered?.closest?.("th, td") as HTMLTableCellElement | null;
+    const coord = cell && fill.tableEl.contains(cell) ? this.getCellCoord(cell) : null;
+    const target = coord && this.isAutoFillTarget(fill.sourceCoord, coord) ? coord : null;
+    fill.targetCoord = target;
+    this.renderNativeAutoFillPreview(fill.tableEl, fill.sourceCoord, target);
+  }
+
+  private isAutoFillTarget(source: CellCoord, target: CellCoord) {
+    if (source.row === target.row && source.col === target.col) return false;
+    return source.row === target.row || source.col === target.col;
+  }
+
+  private renderNativeAutoFillPreview(tableEl: HTMLTableElement, source: CellCoord, target: CellCoord | null) {
+    this.clearNativeAutoFillPreview(tableEl);
+    const structure = this.collectTableStructure(tableEl);
+    const sourceCell = structure.matrix[source.row]?.[source.col];
+    if (sourceCell) sourceCell.classList.add("mdtp-autofill-source");
+    if (!target) return;
+
+    for (const coord of this.getAutoFillTargetCoords(source, target)) {
+      const cell = structure.matrix[coord.row]?.[coord.col];
+      if (cell) cell.classList.add("mdtp-autofill-preview");
+    }
+  }
+
+  private clearNativeAutoFillPreview(tableEl: HTMLTableElement) {
+    for (const cell of Array.from(tableEl.querySelectorAll(".mdtp-autofill-source, .mdtp-autofill-preview")) as HTMLElement[]) {
+      cell.classList.remove("mdtp-autofill-source", "mdtp-autofill-preview");
+    }
+  }
+
+  private getAutoFillTargetCoords(source: CellCoord, target: CellCoord) {
+    const coords: CellCoord[] = [];
+    if (source.col === target.col) {
+      const step = target.row > source.row ? 1 : -1;
+      for (let row = source.row + step; step > 0 ? row <= target.row : row >= target.row; row += step) {
+        coords.push({ row, col: source.col });
+      }
+      return coords;
+    }
+
+    if (source.row === target.row) {
+      const step = target.col > source.col ? 1 : -1;
+      for (let col = source.col + step; step > 0 ? col <= target.col : col >= target.col; col += step) {
+        coords.push({ row: source.row, col });
+      }
+    }
+    return coords;
+  }
+
+  private async applyNativeAutoFill(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    sourceCoord: CellCoord,
+    targetCoord: CellCoord
+  ) {
+    void tableEl;
+    if (!this.isAutoFillTarget(sourceCoord, targetCoord)) return false;
+
+    const direction: 1 | -1 = targetCoord.row > sourceCoord.row || targetCoord.col > sourceCoord.col ? 1 : -1;
+    const targetCoords = this.getAutoFillTargetCoords(sourceCoord, targetCoord);
+    if (targetCoords.length === 0) return false;
+
+    const handled = await this.mutateTableSource(
+      file,
+      tableId,
+      "before-native-autofill",
+      "自动填充",
+      (rawTable) => {
+        const seed = this.getCellValue(rawTable, sourceCoord);
+        if (seed === null) return false;
+        const values = buildNativeAutoFillValues([seed], targetCoords.length, direction);
+        if (values.length === 0) return false;
+
+        let changed = false;
+        for (let index = 0; index < targetCoords.length; index += 1) {
+          const coord = targetCoords[index];
+          if (!coord) continue;
+          const current = this.getCellValue(rawTable, coord);
+          const nextValue = values[index];
+          if (nextValue === undefined) continue;
+          if (current === nextValue) continue;
+          changed = this.setCellValue(rawTable, coord, nextValue) || changed;
+        }
+        return changed;
+      }
+    );
+
+    if (handled) {
+      new Notice("已自动填充");
+    }
+    return handled;
   }
 
   private getColumnWidth(structure: TableStructure, colIndex: number) {
@@ -7997,8 +9293,12 @@ with open(out_path, "wb") as handle:
       tableEl.classList.remove("mdtp-table-enhanced");
       tableEl.classList.add("mdtp-table-native-layout");
       this.applyNativeLayout(tableEl, record.layout);
-      this.injectResizeHandles(tableEl, record.layout);
       const runtime = this.runtimeState.get(tableEl);
+      if (runtime?.parsedTable) {
+        this.renderNativeTableComputedCells(tableEl, runtime.parsedTable);
+      }
+      this.injectResizeHandles(tableEl, record.layout);
+      this.injectAutoFillHandles(tableEl);
       if (runtime) {
         runtime.selection = null;
         runtime.anchor = null;
@@ -9228,7 +10528,6 @@ with open(out_path, "wb") as handle:
   private hideExportOnlyChrome() {
     const selectors = [
       ".mdtp-sidebar-handle",
-      ".mdtp-copy-image-handle",
       ".mdtp-sidebar-popover",
       ".mdtp-image-manipulator",
       ".mdtp-inline-editor",
@@ -9325,6 +10624,10 @@ with open(out_path, "wb") as handle:
       divider,
       body,
     };
+  }
+
+  private buildRawTableMatrix(table: ParsedRawTable) {
+    return [table.header, ...table.body];
   }
 
   private parseDividerRowLine(line: string, expectedLength: number) {
@@ -9509,6 +10812,7 @@ with open(out_path, "wb") as handle:
     layout.rowHeights = this.shiftIndexedMapForInsert(layout.rowHeights, rowIndex);
     layout.rowColors = this.shiftIndexedMapForInsert(layout.rowColors, rowIndex);
     layout.cellColors = this.shiftCellColorMapForRowInsert(layout.cellColors, rowIndex);
+    layout.cellTextColors = this.shiftCellColorMapForRowInsert(layout.cellTextColors, rowIndex);
     layout.cellAlignments = this.shiftCellAlignmentMapForRowInsert(layout.cellAlignments, rowIndex);
     layout.cellImageWidths = this.shiftCellWidthMapForRowInsert(layout.cellImageWidths, rowIndex);
     layout.merges = this.shiftMergesForInsertedRow(layout.merges, rowIndex);
@@ -9518,6 +10822,7 @@ with open(out_path, "wb") as handle:
     layout.rowHeights = this.shiftIndexedMapForDelete(layout.rowHeights, rowIndex);
     layout.rowColors = this.shiftIndexedMapForDelete(layout.rowColors, rowIndex);
     layout.cellColors = this.shiftCellColorMapForRowDelete(layout.cellColors, rowIndex);
+    layout.cellTextColors = this.shiftCellColorMapForRowDelete(layout.cellTextColors, rowIndex);
     layout.cellAlignments = this.shiftCellAlignmentMapForRowDelete(layout.cellAlignments, rowIndex);
     layout.cellImageWidths = this.shiftCellWidthMapForRowDelete(layout.cellImageWidths, rowIndex);
     layout.merges = this.shiftMergesForDeletedRow(layout.merges, rowIndex);
@@ -9527,6 +10832,7 @@ with open(out_path, "wb") as handle:
     layout.colWidths = this.shiftIndexedMapForInsert(layout.colWidths, colIndex);
     layout.colColors = this.shiftIndexedMapForInsert(layout.colColors, colIndex);
     layout.cellColors = this.shiftCellColorMapForColumnInsert(layout.cellColors, colIndex);
+    layout.cellTextColors = this.shiftCellColorMapForColumnInsert(layout.cellTextColors, colIndex);
     layout.cellAlignments = this.shiftCellAlignmentMapForColumnInsert(layout.cellAlignments, colIndex);
     layout.cellImageWidths = this.shiftCellWidthMapForColumnInsert(layout.cellImageWidths, colIndex);
     layout.merges = this.shiftMergesForInsertedColumn(layout.merges, colIndex);
@@ -9536,6 +10842,7 @@ with open(out_path, "wb") as handle:
     layout.colWidths = this.shiftIndexedMapForDelete(layout.colWidths, colIndex);
     layout.colColors = this.shiftIndexedMapForDelete(layout.colColors, colIndex);
     layout.cellColors = this.shiftCellColorMapForColumnDelete(layout.cellColors, colIndex);
+    layout.cellTextColors = this.shiftCellColorMapForColumnDelete(layout.cellTextColors, colIndex);
     layout.cellAlignments = this.shiftCellAlignmentMapForColumnDelete(layout.cellAlignments, colIndex);
     layout.cellImageWidths = this.shiftCellWidthMapForColumnDelete(layout.cellImageWidths, colIndex);
     layout.merges = this.shiftMergesForDeletedColumn(layout.merges, colIndex);
@@ -10054,10 +11361,14 @@ with open(out_path, "wb") as handle:
       cellColors: { ...(layout?.cellColors ?? {}) },
       rowColors: { ...(layout?.rowColors ?? {}) },
       colColors: { ...(layout?.colColors ?? {}) },
+      cellTextColors: { ...(layout?.cellTextColors ?? {}) },
       cellAlignments: { ...(layout?.cellAlignments ?? {}) },
       cellImageWidths: { ...(layout?.cellImageWidths ?? {}) },
       merges: Array.isArray(layout?.merges) ? layout.merges.map((merge) => ({ ...merge })) : [],
     };
+    if (layout?.tableScale !== undefined) {
+      normalized.tableScale = this.normalizeNativeTableScale(layout.tableScale, NATIVE_TABLE_DEFAULT_SCALE);
+    }
     if (layout?.nativeColorPreset === NATIVE_COLOR_PRESET_BLUE_ZEBRA) {
       normalized.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
       normalized.nativeColorPalette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
@@ -10229,6 +11540,7 @@ with open(out_path, "wb") as handle:
       cellColors: {},
       rowColors: {},
       colColors: {},
+      cellTextColors: {},
       cellAlignments: {},
       cellImageWidths: {},
       merges: [],

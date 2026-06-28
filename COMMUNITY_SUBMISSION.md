@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.13.0）
+# Obsidian 社区插件提交清单（目标版本 1.14.11）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,12 +8,14 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.13.0`（与 Release tag 一致） |
+| `version` | `1.14.11`（与 Release tag 一致） |
 
-## 本版重点（1.13.0）
+## 本版重点（1.14.11）
 
-- 1.12.0：原生表格增强完整内置，单插件即用，**无需** companion `markdown-table-enhancer`；修复非原生增强表格乱自动开启
-- 1.13.0：修复内置后普通表格右键「美化 / 启用配色 + 长宽高」失效；表格数据迁移到主插件托管
+- 1.14.0：CSS 低风险官方提醒处理 + `audit:css`
+- 1.14.1–1.14.2：移除目标进展状态栏按钮；模板库展示本地图片库路径
+- 1.14.3–1.14.11：原生表格大幅增强（拖拽缩放、美化面板、点击态修复、公式/LaTeX、普通表入口兜底）
+- 延续 1.12/1.13：内置原生表格、右键修复、数据迁移、enhanced 锁定关闭
 
 ## 官方审查对照
 
@@ -37,9 +39,9 @@
 
 ## 提交步骤（由开发者操作）
 
-1. 推 GitHub Release **1.12.0**（已自动化完成）
-2. https://obsidian.md/plugins → Manage plugins → 确认仓库最新 Release 为 1.12.0
-3. https://community.obsidian.md/account/plugins/feishu-doc-toolbar → 等待 Review branch 对 **1.12.0** 重新扫描
+1. 推 GitHub Release **1.14.11**
+2. https://obsidian.md/plugins → Manage plugins → 确认仓库最新 Release 为 1.14.11
+3. https://community.obsidian.md/account/plugins/feishu-doc-toolbar → 等待 Review branch 对 **1.14.11** 重新扫描
 
 ## 禁止
 

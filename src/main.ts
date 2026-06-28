@@ -67,6 +67,12 @@ function formatEmbeddedModuleError(error: unknown): string {
 
 type EmbeddedModuleSettingsRenderer = (containerEl: HTMLElement, onRefresh: () => void) => void;
 
+type ClaudianAgentBridgeScriptResult = {
+  ok: boolean;
+  output: string;
+  code?: number | string;
+};
+
 const EMBEDDED_MODULE_SETTINGS_RENDERERS: Record<string, EmbeddedModuleSettingsRenderer> = {
   "file-auto-localizer": (containerEl) => renderFileAutoLocalizerSettings(containerEl),
   "claudian-chat-archive": (containerEl, onRefresh) =>
@@ -76,7 +82,101 @@ const EMBEDDED_MODULE_SETTINGS_RENDERERS: Record<string, EmbeddedModuleSettingsR
 type ExternalModuleSettingsRendererFactory = (app: App) => EmbeddedModuleSettingsRenderer;
 
 const EXTERNAL_MODULE_SETTINGS_RENDERER_FACTORIES: Record<string, ExternalModuleSettingsRendererFactory> =
-  {};
+  {
+    "imagen-image-manager": (app) => (containerEl) => {
+      const runImageCommand = async (commandId: string) => {
+        const ok = await app.commands?.executeCommandById?.(commandId);
+        if (!ok) new Notice("未找到图片管理命令，请确认 Image Converter 已启用");
+      };
+      const hint = document.createElement("p");
+      hint.className = "fdtb-settings-page-desc";
+      hint.textContent =
+        "测试版先托管成熟插件 Image Converter：右键图片可做注释/标注/裁剪/删除链接，粘贴或拖入图片时可按规则重命名，命令面板可批量处理当前笔记或整个库。云端上传和孤立图片清理先不自动执行，避免误删或外传。";
+      containerEl.appendChild(hint);
+
+      new Setting(containerEl)
+        .setName("打开 Image Converter 设置")
+        .setDesc("配置粘贴重命名、输出文件夹、图片格式、压缩、注释工具、对齐和批量处理规则。")
+        .addButton((button) =>
+          button.setButtonText("打开").onClick(async () => {
+            await runImageCommand("image-converter:open-image-converter-settings");
+          })
+        );
+
+      new Setting(containerEl)
+        .setName("批量处理当前笔记图片")
+        .setDesc("对当前笔记中的图片执行 Image Converter 的批量处理流程。执行前请先在设置里确认规则。")
+        .addButton((button) =>
+          button.setButtonText("执行").onClick(async () => {
+            await runImageCommand("image-converter:process-all-images-current-note");
+          })
+        );
+
+      new Setting(containerEl)
+        .setName("批量处理整个 vault 图片")
+        .setDesc("范围很大，建议只在规则确认无误后使用；首次使用前先在单篇笔记试跑。")
+        .addButton((button) =>
+          button.setButtonText("执行").onClick(async () => {
+            if (!confirmUserAction("将调用 Image Converter 批量处理整个 vault 的图片。请确认已先在单篇笔记试跑，继续吗？")) return;
+            await runImageCommand("image-converter:process-all-vault-images");
+          })
+        );
+
+      const previewHint = document.createElement("p");
+      previewHint.className = "setting-item-description";
+      previewHint.textContent =
+        "双击打开图片：已接入笔记内图片预览；关闭「图片管理测试版」时，双击预览会同步停用。";
+      containerEl.appendChild(previewHint);
+
+      const todo = document.createElement("p");
+      todo.className = "setting-item-description";
+      todo.textContent =
+        "云端上传和孤立图片清理已拆到下方测试功能；上传、删除、全库批量处理均需手动确认，不做后台自动执行。";
+      containerEl.appendChild(todo);
+    },
+    "image-cloud-upload": (app) => (containerEl) => {
+      const runUploadCommand = async () => {
+        const ok = await app.commands?.executeCommandById?.("image-upload-toolkit:publish-page");
+        if (!ok) new Notice("未找到云端上传命令，请确认 Image Upload Toolkit 已启用并配置完成");
+      };
+      const hint = document.createElement("p");
+      hint.className = "fdtb-settings-page-desc";
+      hint.textContent =
+        "云端上传测试版托管 Image Upload Toolkit。它支持 Imgur、GitHub、Cloudflare R2、AWS S3、阿里云 OSS、腾讯云 COS、七牛、ImageKit、Backblaze B2、Gyazo 等。首次使用请先打开该插件设置并配置图床；未配置前不要执行上传。";
+      containerEl.appendChild(hint);
+
+      new Setting(containerEl)
+        .setName("上传当前笔记图片")
+        .setDesc("会把当前笔记里的本地图片上传到你配置的云端存储，并按插件设置复制/替换链接。")
+        .addButton((button) =>
+          button.setButtonText("执行").onClick(async () => {
+            if (!confirmUserAction("将调用 Image Upload Toolkit 上传当前笔记图片到已配置的云端存储。确认继续吗？")) return;
+            await runUploadCommand();
+          })
+        );
+    },
+    "image-orphan-cleanup": (app) => (containerEl) => {
+      const runCleanupCommand = async () => {
+        const ok = await app.commands?.executeCommandById?.("oz-clear-unused-images:clear-images-obsidian");
+        if (!ok) new Notice("未找到孤立图片清理命令，请确认 Clear Unused Images 已启用");
+      };
+      const hint = document.createElement("p");
+      hint.className = "fdtb-settings-page-desc";
+      hint.textContent =
+        "孤立图片清理测试版托管 Clear Unused Images。建议先在该插件设置里把删除目标设为 Obsidian Trash 或 System Trash，并排除不希望扫描的附件目录。";
+      containerEl.appendChild(hint);
+
+      new Setting(containerEl)
+        .setName("清理未引用图片")
+        .setDesc("会扫描整个 vault 的图片引用并清理未使用图片。此动作有删除风险，执行前请确认插件设置。")
+        .addButton((button) =>
+          button.setButtonText("执行").onClick(async () => {
+            if (!confirmUserAction("将调用 Clear Unused Images 清理未引用图片。请确认删除目标不是永久删除，继续吗？")) return;
+            await runCleanupCommand();
+          })
+        );
+    },
+  };
 
 const HANDLE_SIZE = 28;
 const HANDLE_OFFSET = 42;
@@ -289,6 +389,30 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     status: "merged",
   },
   {
+    moduleId: "imagen-image-manager",
+    displayName: "图片管理测试版",
+    externalPluginId: "image-converter",
+    description:
+      "对标 Imagen 的测试入口：托管 Image Converter，提供图片注释/标注、裁剪、对齐、拖拽缩放、粘贴重命名、批量处理等能力；云端上传与孤立图片清理后续继续桥接。",
+    status: "external",
+  },
+  {
+    moduleId: "image-cloud-upload",
+    displayName: "图片云端上传测试版",
+    externalPluginId: "image-upload-toolkit",
+    description:
+      "托管 Image Upload Toolkit，支持 Imgur、GitHub、Cloudflare R2、AWS S3、阿里云 OSS、腾讯云 COS、七牛、ImageKit、Backblaze B2、Gyazo 等图片上传。",
+    status: "external",
+  },
+  {
+    moduleId: "image-orphan-cleanup",
+    displayName: "孤立图片清理测试版",
+    externalPluginId: "oz-clear-unused-images",
+    description:
+      "托管 Clear Unused Images，用于扫描并清理未被 Markdown/Canvas 引用的图片；删除前必须用户主动确认。",
+    status: "external",
+  },
+  {
     moduleId: "global-wide-page",
     displayName: "全局宽页面",
     externalPluginId: "global-wide-page",
@@ -308,6 +432,14 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     externalPluginId: "claudian",
     description:
       "轻量同步 Claudian 会话到 vault；换电脑后从 Claudian 原历史入口打开，并创建本机新线程继续聊天。需保持 Claudian 插件启用",
+    status: "merged",
+  },
+  {
+    moduleId: "claudian-agent-bridge",
+    displayName: "Claudian Agent 接入修复",
+    externalPluginId: "realclaudian",
+    description:
+      "Claudian 官方更新后，一键检测并重新接入本机 Cursor Agent 与 Codex CLI；脚本会先备份，失败时生成 Agent 修复提示。",
     status: "merged",
   },
   {
@@ -338,6 +470,10 @@ type NativeColorPalette = {
 
 type NativeColorSettings = {
   defaultPresetId: string;
+  defaultScale?: number;
+  defaultColumnWidth?: number;
+  defaultRowHeight?: number;
+  defaultTextColor?: string;
   presets: Array<{
     id: string;
     label: string;
@@ -368,6 +504,9 @@ const HOSTED_PLUGIN_DESCRIPTIONS: Record<string, string> = {
   "canvas-copy-as-image": "右键复制卡片、表格、选区或页面成图",
   "global-wide-page": "全局宽页面和一键切换",
   "image-localizer": "文件自动本地化：远程图片落地 + OneNote/OneDrive 链接转换",
+  "image-converter": "图片管理测试版底座：注释、标注、裁剪、对齐、拖拽缩放、粘贴重命名、批量处理",
+  "image-upload-toolkit": "图片云端上传测试版：多图床/对象存储上传",
+  "oz-clear-unused-images": "孤立图片清理测试版：扫描并清理未引用图片",
   "obsidian-html-plugin": "HTML Reader",
   univer: "表格工具",
   "obsidian-excel-to-markdown-table": "Excel 转 Markdown 表格",
@@ -512,6 +651,17 @@ const TEMPLATE_TRASH_FOLDER = ".回收站";
 const TEMPLATE_MENU_LIMIT = 8;
 const TEMPLATE_FRONTMATTER_ORDER_RE = /^menuOrder:\s*(\d+)\s*$/m;
 const TEMPLATE_SYSTEM_LINE_RE = /^\s*%%\s*mdtp(?:-template)?\s*:/i;
+const LOCAL_IMAGE_LIBRARY_PATH = "_attachments";
+const HIDDEN_IMAGE_LIBRARY_PATH = ".assets/attachments";
+const PROTECTED_LOCAL_LIBRARY_PATHS = [
+  "_attachments",
+  ".assets/attachments",
+  ".模板库",
+  ".obsidian",
+  ".dev-git",
+  ".claudian",
+  ".claudian-sync",
+];
 const TABLE_PICKER_ROWS = 8;
 const TABLE_PICKER_COLS = 8;
 const MARKDOWN_TABLE_PLUGIN_ID = "markdown-table-enhancer";
@@ -860,7 +1010,119 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     containerEl.appendChild(card);
   }
 
+  private appendClaudianAgentBridgeOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
+    const card = document.createElement("details");
+    card.className = "fdtb-own-module-card";
+
+    const summary = document.createElement("summary");
+    summary.className = "fdtb-own-module-card-summary";
+    const summaryRow = document.createElement("div");
+    summaryRow.className = "fdtb-plugin-manager-row";
+
+    const main = document.createElement("div");
+    main.className = "fdtb-plugin-manager-main";
+    const title = document.createElement("div");
+    title.className = "fdtb-plugin-manager-title";
+    title.textContent = descriptor.displayName;
+    const meta = document.createElement("div");
+    meta.className = "fdtb-plugin-manager-meta";
+    meta.textContent = "手动修复工具（只在点击按钮时运行）";
+    const desc = document.createElement("div");
+    desc.className = "fdtb-plugin-manager-desc";
+    desc.textContent = descriptor.description;
+    main.append(title, meta, desc);
+
+    const controls = document.createElement("div");
+    controls.className = "fdtb-plugin-manager-controls";
+    const stateLabel = document.createElement("span");
+    stateLabel.className = "fdtb-plugin-manager-meta";
+    stateLabel.textContent = "按需执行";
+    controls.appendChild(stateLabel);
+
+    summaryRow.append(main, controls);
+    summary.appendChild(summaryRow);
+
+    const body = document.createElement("div");
+    body.className = "fdtb-own-module-card-body";
+    const hint = document.createElement("p");
+    hint.className = "fdtb-settings-page-desc";
+    hint.textContent =
+      "检测会读取当前状态；一键修复会先备份 Claudian，再尝试重新接入 Cursor Agent 与 Codex CLI。若官方更新导致脚本失败，请复制 Agent 修复提示继续处理。";
+    body.appendChild(hint);
+
+    const actions = document.createElement("div");
+    actions.className = "fdtb-plugin-manager-controls";
+    body.appendChild(actions);
+
+    const output = document.createElement("pre");
+    output.className = "setting-item-description";
+    output.style.whiteSpace = "pre-wrap";
+    output.style.maxHeight = "220px";
+    output.style.overflow = "auto";
+    output.textContent = "尚未检测。";
+    body.appendChild(output);
+
+    const setButtonsDisabled = (disabled: boolean) => {
+      actions.querySelectorAll("button").forEach((button) => {
+        (button as HTMLButtonElement).disabled = disabled;
+      });
+    };
+    const renderResult = (label: string, result: ClaudianAgentBridgeScriptResult) => {
+      output.textContent = `${label}${result.ok ? "通过" : "失败"}\n\n${result.output.trim() || "无输出"}`;
+      new Notice(result.ok ? `${label}通过` : `${label}失败，请查看输出`, result.ok ? 4000 : 8000);
+    };
+
+    this.appendBridgeActionButton(actions, "检测状态", async () => {
+      setButtonsDisabled(true);
+      output.textContent = "正在检测...";
+      try {
+        renderResult("检测", await this.plugin.runClaudianAgentBridgeScript("verify.sh"));
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+    this.appendBridgeActionButton(actions, "一键修复", async () => {
+      if (!confirmAction("将备份并重建 Claudian 接入文件。确认继续？")) return;
+      setButtonsDisabled(true);
+      output.textContent = "正在修复，可能需要几分钟...";
+      try {
+        renderResult("修复", await this.plugin.runClaudianAgentBridgeScript("repair.sh"));
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+    this.appendBridgeActionButton(actions, "打开日志", async () => {
+      await this.plugin.openClaudianAgentBridgeFile("logs/latest.log");
+    });
+    this.appendBridgeActionButton(actions, "复制 Agent 修复提示", async () => {
+      const prompt = await this.plugin.readClaudianAgentBridgeFile("agent-repair-prompt.md");
+      await this.plugin.copyTextToClipboard(prompt);
+      new Notice("已复制 Agent 修复提示");
+    });
+
+    card.append(summary, body);
+    containerEl.appendChild(card);
+  }
+
+  private appendBridgeActionButton(containerEl: HTMLElement, label: string, onClick: () => Promise<void>) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void onClick().catch((error) => {
+        new Notice(`执行失败：${error instanceof Error ? error.message : String(error)}`, 8000);
+      });
+    });
+    containerEl.appendChild(button);
+  }
+
   private appendOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
+    if (descriptor.moduleId === "claudian-agent-bridge") {
+      this.appendClaudianAgentBridgeOwnModuleRow(containerEl, descriptor);
+      return;
+    }
     if (descriptor.moduleId === "onenote-rich-paste") {
       this.appendOneNoteRichPasteOwnModuleRow(containerEl, descriptor);
       return;
@@ -1211,6 +1473,8 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       "模板统一保存在隐藏目录 .templates/，可按子文件夹分组。点击模板名可展开预览内容，再点「插入到当前笔记」写入光标处；与 T 工具栏「模板库」联动。";
     containerEl.appendChild(intro);
 
+    this.renderLocalLibraryPathsSection(containerEl);
+
     new Setting(containerEl)
       .setName("模板目录")
       .setDesc("默认 .templates；留空也会回退到该目录")
@@ -1271,6 +1535,48 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     }
 
     await this.renderTemplateTrashSection(containerEl);
+  }
+
+  private renderLocalLibraryPathsSection(containerEl: HTMLElement) {
+    const card = containerEl.createDiv({ cls: "fdtb-local-library-card" });
+    card.createDiv({ cls: "fdtb-local-library-title", text: "本地图片库位置" });
+
+    const desc = card.createDiv({ cls: "fdtb-local-library-desc" });
+    desc.textContent = "这里仅展示路径，方便复制和确认；不会移动、删除或改写这些文件夹。";
+
+    this.appendCopyableLocalPath(card, "图片存放位置", LOCAL_IMAGE_LIBRARY_PATH);
+    this.appendCopyableLocalPath(card, "隐藏图片库", HIDDEN_IMAGE_LIBRARY_PATH);
+
+    const protectedWrap = card.createDiv({ cls: "fdtb-local-library-protected" });
+    protectedWrap.createDiv({ cls: "fdtb-local-library-label", text: "不敢删除的部分" });
+    const list = protectedWrap.createEl("ul", { cls: "fdtb-local-library-protected-list" });
+    for (const path of PROTECTED_LOCAL_LIBRARY_PATHS) {
+      const item = list.createEl("li");
+      item.createEl("code", { text: this.plugin.getVaultChildSystemPath(path) });
+    }
+  }
+
+  private appendCopyableLocalPath(parent: HTMLElement, label: string, relativePath: string) {
+    const fullPath = this.plugin.getVaultChildSystemPath(relativePath);
+    const row = parent.createDiv({ cls: "fdtb-local-library-row" });
+    const main = row.createDiv({ cls: "fdtb-local-library-main" });
+    main.createDiv({ cls: "fdtb-local-library-label", text: label });
+    main.createEl("code", { cls: "fdtb-local-library-path", text: fullPath });
+
+    const button = row.createEl("button", {
+      cls: "mod-cta fdtb-local-library-copy",
+      text: "复制",
+    });
+    button.type = "button";
+    button.addEventListener("click", async () => {
+      try {
+        await this.plugin.copyTextToClipboard(fullPath);
+        new Notice(`已复制：${label}`);
+      } catch (error) {
+        console.error("[fdtb] copy local library path failed", error);
+        new Notice("复制失败，请手动选中路径复制");
+      }
+    });
   }
 
   private async renderTemplateTrashSection(containerEl: HTMLElement) {
@@ -1771,10 +2077,11 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
     intro.textContent =
-      "原生表格颜色、长宽高与模板库已内置在 Obsidian增强体验中。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
+      "原生表格颜色、长宽高、对齐、轻量公式、自动填充与模板库已内置在 Obsidian增强体验中。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
     containerEl.appendChild(intro);
 
     this.appendStatusRow(containerEl, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
+    this.appendStatusRow(containerEl, "公式 / 自动填充", "已内置", "支持 LaTeX 显示、SUM/AVG/MIN/MAX 和拖拽自动填充");
 
     this.renderNativeTableColorSettings(containerEl);
   }
@@ -1796,9 +2103,10 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     title.textContent = "默认原生表格配色";
     const hint = document.createElement("div");
     hint.className = "fdtb-native-color-hint";
-    hint.textContent = "新建彩色表格、右键对当前表格美化，都会使用这里的默认方案。";
+    hint.textContent = "新建彩色表格、右键对当前表格美化，只应用配色；长宽高保持原生表格尺寸，手动调节后才生效。";
     header.append(title, hint);
     card.appendChild(header);
+    card.appendChild(this.createNativeTableDefaultControls(settings));
 
     const presetList = document.createElement("div");
     presetList.className = "fdtb-native-color-presets";
@@ -1963,6 +2271,74 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     }
 
     containerEl.appendChild(card);
+  }
+
+  private createNativeTableDefaultControls(settings: NativeColorSettings) {
+    const wrap = document.createElement("div");
+    wrap.className = "fdtb-native-table-defaults";
+    wrap.appendChild(this.createTextSpan("fdtb-native-color-editor-title", "文字默认色"));
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = String(settings.defaultTextColor ?? "#ED7D31");
+    colorInput.addEventListener("change", async () => {
+      await this.plugin.updateNativeTableDefaultsFromManager({ defaultTextColor: colorInput.value });
+      this.display();
+    });
+    wrap.appendChild(
+      this.createNativeTableSettingRow({
+        label: "默认文字色",
+        valueText: String(settings.defaultTextColor ?? "#ED7D31").toUpperCase(),
+        input: colorInput,
+      })
+    );
+
+    return wrap;
+  }
+
+  private createNativeTableSettingRow(options: { label: string; valueText: string; input: HTMLElement }) {
+    const row = document.createElement("label");
+    row.className = "fdtb-native-table-default-row";
+    row.append(
+      this.createTextSpan("fdtb-native-table-default-label", options.label),
+      this.createTextSpan("fdtb-native-table-default-value", options.valueText),
+      options.input
+    );
+    return row;
+  }
+
+  private createNativeTableRangeInput(options: {
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    onChange: (value: number) => Promise<void>;
+  }) {
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = String(options.min);
+    input.max = String(options.max);
+    input.step = String(options.step);
+    input.value = String(options.value);
+    input.addEventListener("change", () => void options.onChange(Number(input.value)));
+    return input;
+  }
+
+  private createNativeTableNumberInput(options: {
+    value: number;
+    min: number;
+    max: number;
+    step: number;
+    onChange: (value: number) => Promise<void>;
+  }) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(options.min);
+    input.max = String(options.max);
+    input.step = String(options.step);
+    input.value = String(options.value);
+    input.addEventListener("change", () => void options.onChange(Number(input.value)));
+    return input;
   }
 
   private createPalettePreview(palette: NativeColorPalette) {
@@ -2411,7 +2787,6 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private embeddedNativeTableEnhancer: EmbeddedNativeTableEnhancerPlugin | null = null;
   claudianArchiveRunner: ClaudianChatArchiveRunner | null = null;
   private autoUpdateInFlight: Promise<void> | null = null;
-  private goalProgressStatusBarEl: HTMLElement | null = null;
 
   async onload() {
     ensureObsidianRequireBinding();
@@ -2419,9 +2794,6 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.dataStore.showTableEnhancerEntrances = false;
     this.ensureHandle();
     this.registerCommands();
-    if (!__OSS_RELEASE__) {
-      this.registerGoalProgressStatusBarButton();
-    }
     this.addSettingTab(new FeishuDocExperienceSettingTab(this.app, this));
     await this.startEmbeddedNativeTableEnhancer();
     await this.startEnabledEmbeddedModules();
@@ -2542,7 +2914,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       name: "原生表格增强",
       version: this.manifest?.version ?? "1.0.0",
       minAppVersion: this.manifest?.minAppVersion ?? "1.5.0",
-      description: "内置于 Obsidian增强体验的原生表格颜色、长宽高、模板库与 OneNote 粘贴能力",
+      description: "内置于 Obsidian增强体验的原生表格颜色、长宽高、对齐、公式、自动填充、模板库与 OneNote 粘贴能力",
       author: this.manifest?.author ?? "lishu",
       isDesktopOnly: false,
     };
@@ -2774,29 +3146,6 @@ export default class FeishuDocToolbarPlugin extends Plugin {
         },
       });
     }
-  }
-
-  private registerGoalProgressStatusBarButton() {
-    this.goalProgressStatusBarEl = this.addStatusBarItem();
-    const buttonEl = this.goalProgressStatusBarEl as HTMLElement & {
-      addClass?: (className: string) => void;
-      setText?: (text: string) => void;
-    };
-    if (typeof buttonEl.addClass === "function") {
-      buttonEl.addClass("fdtb-goal-progress-status-button");
-    } else {
-      buttonEl.classList?.add("fdtb-goal-progress-status-button");
-    }
-    if (typeof buttonEl.setText === "function") {
-      buttonEl.setText("更新目标进展");
-    } else {
-      buttonEl.textContent = "更新目标进展";
-    }
-    buttonEl.title = "从周复盘查漏补缺到年度目标页";
-    buttonEl.setAttribute?.("aria-label", "更新目标进展");
-    buttonEl.addEventListener?.("click", () => {
-      void this.updateGoalProgressOverview();
-    });
   }
 
   private async updateGoalProgressOverview() {
@@ -3763,6 +4112,20 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return result as NativeColorSettings;
   }
 
+  async updateNativeTableDefaultsFromManager(input: {
+    defaultScale?: number;
+    defaultColumnWidth?: number;
+    defaultRowHeight?: number;
+    defaultTextColor?: string;
+  }) {
+    const enhancer = this.getTableEnhancerPlugin();
+    if (typeof enhancer?.updateNativeTableDefaultsFromManager !== "function") {
+      new Notice("原生表格增强插件未接通");
+      return null;
+    }
+    return (await enhancer.updateNativeTableDefaultsFromManager(input)) as NativeColorSettings;
+  }
+
   async saveCurrentNativeColorPaletteAsManager(label: string) {
     const enhancer = this.getTableEnhancerPlugin();
     if (typeof enhancer?.saveCurrentNativeColorPaletteAsManager !== "function") {
@@ -3798,6 +4161,116 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   async runManagedCommand(commandId: string) {
     return this.executeCommandById(commandId);
+  }
+
+  getClaudianAgentBridgePaths() {
+    const vaultPath = this.getVaultBasePath();
+    const dir = this.joinSystemPath(
+      vaultPath,
+      "开发插件（Obsidian优化）",
+      "_tooling",
+      "claudian-agent-bridge"
+    );
+    return {
+      dir,
+      verify: this.joinSystemPath(dir, "verify.sh"),
+      repair: this.joinSystemPath(dir, "repair.sh"),
+    };
+  }
+
+  async runClaudianAgentBridgeScript(scriptName: "verify.sh" | "repair.sh"): Promise<ClaudianAgentBridgeScriptResult> {
+    const nodeRequire = this.getNodeRequire();
+    const childProcess = nodeRequire?.("child_process");
+    const processModule = nodeRequire?.("process");
+    if (!childProcess || typeof childProcess.execFile !== "function") {
+      return {
+        ok: false,
+        output: "当前 Obsidian 环境不能调用本机脚本，请确认正在桌面端使用。",
+      };
+    }
+
+    const paths = this.getClaudianAgentBridgePaths();
+    const scriptPath = this.joinSystemPath(paths.dir, scriptName);
+    const timeout = scriptName === "repair.sh" ? 10 * 60 * 1000 : 2 * 60 * 1000;
+    const env = {
+      ...(processModule?.env ?? {}),
+      PATH: `${processModule?.env?.HOME ?? ""}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${processModule?.env?.PATH ?? ""}`,
+      CLAUDIAN_BRIDGE_VAULT: this.getVaultBasePath(),
+    };
+
+    return new Promise((resolve) => {
+      childProcess.execFile(
+        "/bin/bash",
+        [scriptPath],
+        {
+          cwd: paths.dir,
+          env,
+          timeout,
+          maxBuffer: 4 * 1024 * 1024,
+        },
+        (error: Error & { code?: number | string } | null, stdout: string, stderr: string) => {
+          const output = [stdout, stderr, error?.message].filter(Boolean).join("\n").trim();
+          resolve({
+            ok: !error,
+            output,
+            code: error?.code,
+          });
+        }
+      );
+    });
+  }
+
+  async readClaudianAgentBridgeFile(relativePath: string) {
+    const nodeRequire = this.getNodeRequire();
+    const fs = nodeRequire?.("fs");
+    if (!fs || typeof fs.readFileSync !== "function") {
+      throw new Error("当前环境不能读取本机文件");
+    }
+    return fs.readFileSync(this.joinSystemPath(this.getClaudianAgentBridgePaths().dir, relativePath), "utf8");
+  }
+
+  async openClaudianAgentBridgeFile(relativePath: string) {
+    const nodeRequire = this.getNodeRequire();
+    const childProcess = nodeRequire?.("child_process");
+    if (!childProcess || typeof childProcess.execFile !== "function") {
+      throw new Error("当前环境不能打开本机文件");
+    }
+    const targetPath = this.joinSystemPath(this.getClaudianAgentBridgePaths().dir, relativePath);
+    childProcess.execFile("/usr/bin/open", [targetPath], (error: Error | null) => {
+      if (error) new Notice(`打开失败：${error.message}`, 8000);
+    });
+  }
+
+  async copyTextToClipboard(text: string) {
+    await this.writeTextToClipboard(text);
+  }
+
+  private getVaultBasePath() {
+    const adapter = this.app.vault.adapter as unknown as {
+      getBasePath?: () => string;
+      basePath?: string;
+    };
+    const basePath = typeof adapter.getBasePath === "function" ? adapter.getBasePath() : adapter.basePath;
+    if (!basePath) throw new Error("无法识别当前 vault 路径");
+    return basePath;
+  }
+
+  getVaultChildSystemPath(relativePath: string) {
+    return this.joinSystemPath(this.getVaultBasePath(), relativePath);
+  }
+
+  private getNodeRequire(): ((id: string) => any) | null {
+    const fromWindow = (window as any)?.require;
+    if (typeof fromWindow === "function") return fromWindow;
+    const fromGlobal = (globalThis as any)?.require;
+    return typeof fromGlobal === "function" ? fromGlobal : null;
+  }
+
+  private joinSystemPath(...parts: string[]) {
+    return parts
+      .filter(Boolean)
+      .map((part, index) => (index === 0 ? part.replace(/\/+$/g, "") : part.replace(/^\/+|\/+$/g, "")))
+      .join("/");
   }
 
   private ensureHandle() {
@@ -3928,13 +4401,19 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   private handleDocumentKeydown(event: KeyboardEvent) {
-    if (event.key !== "Escape" || !this.popoverEl) return;
+    if (event.key !== "Escape") return;
+    if (this.imagePreviewEl) {
+      event.preventDefault();
+      this.closeImagePreview();
+      return;
+    }
+    if (!this.popoverEl) return;
     this.hideToolbar(true);
   }
 
   private handleDocumentDoubleClick(event: MouseEvent) {
     const target = event.target as HTMLElement | null;
-    const image = this.getNativeTableImageFromTarget(target);
+    const image = this.getPreviewableImageFromTarget(target);
     if (!image) return;
 
     event.preventDefault();
@@ -3942,12 +4421,19 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.showNativeTableImagePreview(image);
   }
 
-  private getNativeTableImageFromTarget(target: HTMLElement | null) {
+  private getPreviewableImageFromTarget(target: HTMLElement | null) {
     const image = target?.closest?.("img") as HTMLImageElement | null;
     if (!image) return null;
+    if (image.closest(".fdtb-image-preview")) return null;
+
     const table = image.closest("table") as HTMLTableElement | null;
-    if (!table) return null;
-    if (table.classList.contains("mdtp-table-enhanced")) return null;
+    if (table) {
+      if (table.classList.contains("mdtp-table-enhanced")) return null;
+      return image;
+    }
+
+    if (!this.getManagedPluginStatus("image-converter").enabled) return null;
+    if (!image.closest(".markdown-preview-view, .markdown-source-view")) return null;
     return image;
   }
 
@@ -3955,19 +4441,19 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     const source = sourceImage.currentSrc || sourceImage.src;
     if (!source) return;
 
-    this.closeNativeTableImagePreview();
+    this.closeImagePreview();
     const overlay = document.createElement("div");
     overlay.className = "fdtb-image-preview";
     overlay.tabIndex = -1;
     overlay.addEventListener("click", (event) => {
       if (event.target === overlay) {
-        this.closeNativeTableImagePreview();
+        this.closeImagePreview();
       }
     });
     overlay.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        this.closeNativeTableImagePreview();
+        this.closeImagePreview();
       }
     });
 
@@ -3976,7 +4462,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     closeButton.className = "fdtb-image-preview-close";
     closeButton.setAttribute("aria-label", "关闭图片预览");
     closeButton.textContent = "×";
-    closeButton.addEventListener("click", () => this.closeNativeTableImagePreview());
+    closeButton.addEventListener("click", () => this.closeImagePreview());
 
     const image = document.createElement("img");
     image.className = "fdtb-image-preview-img";
@@ -3989,9 +4475,13 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     overlay.focus();
   }
 
-  private closeNativeTableImagePreview() {
+  private closeImagePreview() {
     this.imagePreviewEl?.remove();
     this.imagePreviewEl = null;
+  }
+
+  private closeNativeTableImagePreview() {
+    this.closeImagePreview();
   }
 
   private getBlockContext(target: HTMLElement): BlockContext | null {
