@@ -824,9 +824,40 @@
   background: var(--background-secondary);
 }
 
+.fdtb-local-library-card > summary {
+  list-style: none;
+}
+
+.fdtb-local-library-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fdtb-local-library-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
 .fdtb-local-library-title {
   font-weight: 700;
   color: var(--text-normal);
+}
+
+.fdtb-local-library-toggle {
+  color: var(--text-accent);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.fdtb-local-library-card[open] .fdtb-local-library-toggle {
+  font-size: 0;
+}
+
+.fdtb-local-library-card[open] .fdtb-local-library-toggle::after {
+  content: "收起";
+  font-size: 12px;
 }
 
 .fdtb-local-library-desc {
@@ -1235,10 +1266,22 @@
   text-align: right;
 }
 
+.fdtb-native-table-default-hint {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .fdtb-native-table-default-row input[type="range"],
-.fdtb-native-table-default-row input[type="number"] {
+.fdtb-native-table-default-row input[type="number"],
+.fdtb-native-table-default-row select {
   width: 100%;
   min-width: 0;
+}
+
+.fdtb-native-table-default-row input[type="checkbox"] {
+  justify-self: end;
 }
 
 .fdtb-native-table-default-row input[type="color"] {
@@ -3077,6 +3120,31 @@ a.blp-folder-dual-link.internal-link:hover {
 ) {
   background: var(--mdtp-cell-bg, transparent) !important;
   background-color: var(--mdtp-cell-bg, transparent) !important;
+  color: var(--mdtp-cell-text-color, var(--text-normal)) !important;
+  -webkit-text-fill-color: var(--mdtp-cell-text-color, var(--text-normal)) !important;
+}
+
+.mdtp-table-shell.mdtp-table-native-layout :is(
+  th,
+  td,
+  .mdtp-cell-selected,
+  .mdtp-cell-anchor
+) :is(
+  .cm-table-widget-cell,
+  .cm-table-widget-cell-content,
+  .cm-table-widget-cell-inner,
+  .table-cell-wrapper,
+  .table-cell-content,
+  .table-editor-cell,
+  .table-editor-cell-content,
+  .cm-line,
+  .cm-content,
+  textarea,
+  input,
+  [contenteditable="true"]
+) {
+  color: inherit !important;
+  -webkit-text-fill-color: inherit !important;
 }
 
 .mdtp-table-shell.mdtp-table-native-layout :is(
@@ -3151,8 +3219,8 @@ a.blp-folder-dual-link.internal-link:hover {
   text-indent: 0 !important;
 }
 
-.mdtp-table-shell.mdtp-table-colored th,
-.mdtp-table-shell.mdtp-table-colored td {
+.mdtp-table-shell.mdtp-table-bordered th,
+.mdtp-table-shell.mdtp-table-bordered td {
   border-color: var(--mdtp-native-color-border, #9ead93);
 }
 
@@ -3997,5 +4065,35 @@ a.blp-folder-dual-link.internal-link:hover {
 .mdtp-row-band-row span {
   min-width: 72px;
   font-weight: 600;
+}
+
+.mdtp-csv-export-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mdtp-csv-export-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.mdtp-csv-export-textarea {
+  width: 100%;
+  min-height: 240px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.mdtp-csv-export-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
 }
 /* === Embedded native table enhancer styles: END === */

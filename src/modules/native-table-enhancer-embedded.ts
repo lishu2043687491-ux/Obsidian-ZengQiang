@@ -15,6 +15,15 @@ import {
   containsNativeLatex,
   evaluateNativeTableFormula,
 } from "./native-table-video-helpers";
+import {
+  DEFAULT_ADVANCED_TABLE_SETTINGS,
+  exportAdvancedTableCsvFromEditor,
+  normalizeAdvancedTableSettings,
+  runAdvancedTableOperationOnEditor,
+  type AdvancedTableFormatType,
+  type AdvancedTableOperation,
+  type AdvancedTableSettings,
+} from "./native-table-advanced-helpers";
 
 const PLUGIN_ID = "markdown-table-enhancer";
 const TEMPLATE_LIBRARY_FOLDER = ".模板库";
@@ -24,8 +33,10 @@ const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID = "initialize-current-table-nat
 const INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_NAME = "对当前表格美化";
 const INSERT_NATIVE_COLOR_TABLE_COMMAND_ID = "insert-native-color-table-template";
 const INSERT_NATIVE_COLOR_TABLE_COMMAND_NAME = "插入彩色原生空表格";
+const MIGRATE_CURRENT_FILE_TABLE_MARKERS_COMMAND_ID = "migrate-current-file-table-markers-to-markerless";
+const MIGRATE_CURRENT_FILE_TABLE_MARKERS_COMMAND_NAME = "清理当前笔记旧表格标记";
 const SET_NATIVE_ROW_COLOR_COMMAND_ID = "set-current-native-table-row-color";
-const SET_NATIVE_ROW_COLOR_COMMAND_NAME = "设置当前原生表格选中行颜色";
+const SET_NATIVE_ROW_COLOR_COMMAND_NAME = "设置当前原生表格选区填充颜色";
 const OPEN_NATIVE_ROW_BANDS_COMMAND_ID = "open-current-native-table-row-bands";
 const OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "打开当前原生表格行段配色";
 const INSERT_TEMPLATE_COMMAND_NAME = "插入原生表格模板";
@@ -41,6 +52,12 @@ const PASTE_IMAGE_COMMAND_NAME = "将剪贴板图片粘贴到当前原生表格�
 const PASTE_ONENOTE_RICH_TABLE_COMMAND_ID = "paste-onenote-rich-table";
 const PASTE_ONENOTE_RICH_TABLE_COMMAND_NAME = "粘贴OneNote";
 const TOGGLE_EXPERIMENTAL_FEATURE_GATE_COMMAND_NAME = "切换原生表格测试版能力";
+const ADVANCED_TABLE_CONTROL_BAR_COMMAND_ID = "table-control-bar";
+const ADVANCED_TABLE_CONTROL_BAR_COMMAND_NAME = "打开 Advanced Tables 表格控制栏";
+const ADVANCED_TABLE_EXPORT_CSV_WITH_HEADERS_COMMAND_ID = "export-csv";
+const ADVANCED_TABLE_EXPORT_CSV_WITHOUT_HEADERS_COMMAND_ID = "export-csv-without-headers";
+const ADVANCED_TABLE_EXPORT_CSV_WITH_HEADERS_COMMAND_NAME = "导出当前表格 CSV";
+const ADVANCED_TABLE_EXPORT_CSV_WITHOUT_HEADERS_COMMAND_NAME = "导出当前表格 CSV（不含表头）";
 const SNAPSHOT_LIMIT = 60;
 const TABLE_ID_PREFIX = "tbl_";
 const HTML_TABLE_MARKER_RE = /^\s*<!--\s*mdtp:(tbl_[a-z0-9_-]+)\s*-->\s*$/i;
@@ -74,8 +91,10 @@ const NATIVE_LAYOUT_CURRENT_TABLE_LABEL = "对当前表格美化";
 const NATIVE_LAYOUT_PAGE_TABLES_LABEL = "对本页面所有的表格美化";
 const NATIVE_LAYOUT_TABLE_STYLE_LABEL = "套用表格样式";
 const NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL = "取消斑马样式";
-const NATIVE_LAYOUT_ROW_COLOR_LABEL = "设置选中行颜色";
+const NATIVE_LAYOUT_ROW_COLOR_LABEL = "填充颜色";
 const NATIVE_LAYOUT_ROW_BANDS_LABEL = "行段配色";
+const NATIVE_LAYOUT_BORDER_ENABLE_LABEL = "开启边框样式";
+const NATIVE_LAYOUT_BORDER_DISABLE_LABEL = "关闭边框样式";
 const NATIVE_LAYOUT_SCALE_LABEL = "整体比例";
 const NATIVE_LAYOUT_SIZE_LABEL = "尺寸调节";
 const NATIVE_LAYOUT_TEXT_COLOR_LABEL = "文字颜色";
@@ -84,7 +103,6 @@ const NATIVE_LAYOUT_FORMULA_HELP_LABEL = "公式提示";
 const NATIVE_LAYOUT_ALIGN_LEFT_LABEL = "居左";
 const NATIVE_LAYOUT_ALIGN_CENTER_LABEL = "居中";
 const NATIVE_LAYOUT_ALIGN_RIGHT_LABEL = "居右";
-const NATIVE_LAYOUT_ALIGN_CLEAR_LABEL = "恢复默认对齐";
 const NATIVE_LAYOUT_FILL_DOWN_LABEL = "向下自动填充";
 const NATIVE_LAYOUT_FILL_RIGHT_LABEL = "向右自动填充";
 const MIN_COLUMN_WIDTH = 60;
@@ -104,6 +122,33 @@ const DEFAULT_CELL_IMAGE_WIDTH = 220;
 const HIDDEN_MARKER_LINE_DECORATION = Decoration.line({
   class: "mdtp-hidden-marker-line",
 });
+
+const ADVANCED_TABLE_COMMANDS: Array<{
+  id: AdvancedTableOperation;
+  name: string;
+}> = [
+  { id: "next-cell", name: "跳到下一个表格单元格" },
+  { id: "previous-cell", name: "跳到上一个表格单元格" },
+  { id: "next-row", name: "跳到下一行表格单元格" },
+  { id: "format-table", name: "格式化当前表格" },
+  { id: "format-all-tables", name: "格式化当前文件全部表格" },
+  { id: "insert-row", name: "在当前表格插入行" },
+  { id: "insert-column", name: "在当前表格插入列" },
+  { id: "delete-row", name: "删除当前表格行" },
+  { id: "delete-column", name: "删除当前表格列" },
+  { id: "move-row-up", name: "当前表格行上移" },
+  { id: "move-row-down", name: "当前表格行下移" },
+  { id: "move-column-left", name: "当前表格列左移" },
+  { id: "move-column-right", name: "当前表格列右移" },
+  { id: "left-align-column", name: "当前表格列左对齐" },
+  { id: "center-align-column", name: "当前表格列居中对齐" },
+  { id: "right-align-column", name: "当前表格列右对齐" },
+  { id: "sort-rows-ascending", name: "按当前列升序排序表格" },
+  { id: "sort-rows-descending", name: "按当前列降序排序表格" },
+  { id: "transpose", name: "转置当前表格" },
+  { id: "evaluate-formulas", name: "计算当前表格公式" },
+  { id: "escape-table", name: "跳出当前表格" },
+];
 
 type TableMergeMetadata = {
   row: number;
@@ -144,6 +189,18 @@ type TableLayoutMetadata = {
   tableScale?: number;
   nativeColorPreset?: "blueZebra";
   nativeColorPalette?: NativeColorPalette;
+  nativeBorderEnabled?: boolean;
+};
+
+type NativeTableIdentity = {
+  tableIndex: number;
+  tableHash: string;
+  headerHash: string;
+  structureHash: string;
+  rowCount: number;
+  columnCount: number;
+  startLine: number;
+  endLine: number;
 };
 
 type NativeTableSizeBase = {
@@ -156,6 +213,8 @@ type TableRecordMode = "enhanced" | "nativeLayout";
 type TableRecord = {
   tableId: string;
   mode?: TableRecordMode;
+  markerless?: boolean;
+  identity?: NativeTableIdentity;
   filePath: string;
   createdAt: number;
   updatedAt: number;
@@ -189,7 +248,18 @@ type PluginDataShape = {
   nativeTableDefaultColumnWidth?: number;
   nativeTableDefaultRowHeight?: number;
   nativeTableDefaultTextColor?: string;
+  nativeTableDefaultZebraEnabled?: boolean;
+  nativeTableDefaultBorderEnabled?: boolean;
+  nativeTableDefaultHeaderAlignment?: NativeTableAutoAlignment;
+  nativeTableDefaultFirstColumnAlignment?: NativeTableAutoAlignment;
+  advancedTableBindTab?: boolean;
+  advancedTableBindEnter?: boolean;
+  advancedTableFormatType?: AdvancedTableFormatType;
+  advancedTableShowRibbonIcon?: boolean;
 };
+
+type NativeTableAutoAlignment = "off" | "left" | "center" | "right";
+type NativeLayoutRangeMode = "selection" | "row" | "column";
 
 type TemplateRecord = {
   name: string;
@@ -206,6 +276,7 @@ type TemplateTreeNode = {
 
 type TemplateTableMetadata = {
   version: 1;
+  tableOrder?: string[];
   tables: Record<
     string,
     {
@@ -461,6 +532,14 @@ const DEFAULT_DATA: PluginDataShape = {
   nativeTableDefaultColumnWidth: NATIVE_TABLE_DEFAULT_COLUMN_WIDTH,
   nativeTableDefaultRowHeight: NATIVE_TABLE_DEFAULT_ROW_HEIGHT,
   nativeTableDefaultTextColor: NATIVE_TABLE_DEFAULT_TEXT_COLOR,
+  nativeTableDefaultZebraEnabled: true,
+  nativeTableDefaultBorderEnabled: false,
+  nativeTableDefaultHeaderAlignment: "center",
+  nativeTableDefaultFirstColumnAlignment: "left",
+  advancedTableBindTab: DEFAULT_ADVANCED_TABLE_SETTINGS.bindTab,
+  advancedTableBindEnter: DEFAULT_ADVANCED_TABLE_SETTINGS.bindEnter,
+  advancedTableFormatType: DEFAULT_ADVANCED_TABLE_SETTINGS.formatType,
+  advancedTableShowRibbonIcon: DEFAULT_ADVANCED_TABLE_SETTINGS.showRibbonIcon,
 };
 
 type SidebarActionDescriptor = {
@@ -1333,6 +1412,87 @@ class NativeRowBandColorModal extends Modal {
   }
 }
 
+class AdvancedTableCsvExportModal extends Modal {
+  private textarea: HTMLTextAreaElement | null = null;
+  private includeHeadersInput: HTMLInputElement | null = null;
+  private csvText = "";
+
+  constructor(
+    private plugin: MarkdownTableEnhancerPlugin,
+    private exporter: (withHeaders: boolean) => Promise<string | null | undefined> | string | null | undefined,
+    private initialWithHeaders: boolean
+  ) {
+    super(plugin.app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.replaceChildren();
+    contentEl.addClass("mdtp-csv-export-modal");
+
+    const title = document.createElement("h2");
+    title.textContent = "导出 CSV";
+    contentEl.appendChild(title);
+
+    const headerToggleLabel = document.createElement("label");
+    headerToggleLabel.className = "mdtp-csv-export-checkbox";
+    const headerToggle = document.createElement("input");
+    headerToggle.type = "checkbox";
+    headerToggle.checked = this.initialWithHeaders;
+    headerToggle.addEventListener("change", () => void this.refreshCsvText());
+    headerToggleLabel.append(headerToggle, document.createTextNode(" 包含表头"));
+    contentEl.appendChild(headerToggleLabel);
+    this.includeHeadersInput = headerToggle;
+
+    const textarea = document.createElement("textarea");
+    textarea.className = "mdtp-csv-export-textarea";
+    textarea.rows = 12;
+    textarea.readOnly = true;
+    contentEl.appendChild(textarea);
+    this.textarea = textarea;
+
+    const footer = document.createElement("div");
+    footer.className = "mdtp-csv-export-footer";
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.textContent = "复制";
+    copyButton.addEventListener("click", async () => {
+      const copied = await this.plugin.copyTextToSystemClipboard(this.csvText);
+      new Notice(copied ? "已复制 CSV" : "复制失败，请手动选中文本复制");
+    });
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.textContent = "关闭";
+    closeButton.addEventListener("click", () => this.close());
+    footer.append(copyButton, closeButton);
+    contentEl.appendChild(footer);
+
+    void this.refreshCsvText();
+    textarea.focus();
+    textarea.select();
+  }
+
+  onClose() {
+    this.textarea = null;
+    this.includeHeadersInput = null;
+    this.contentEl.replaceChildren();
+  }
+
+  private async refreshCsvText() {
+    const withHeaders = this.includeHeadersInput?.checked ?? this.initialWithHeaders;
+    const nextText = await this.exporter(withHeaders);
+    if (typeof nextText !== "string") {
+      new Notice("没有读到当前表格内容");
+      return;
+    }
+    this.csvText = nextText;
+    if (this.textarea) {
+      this.textarea.value = nextText;
+      this.textarea.select();
+    }
+  }
+}
+
 export default class MarkdownTableEnhancerPlugin extends Plugin {
   private dataStore: PluginDataShape = DEFAULT_DATA;
   private runtimeState = new Map<HTMLTableElement, TableRuntimeState>();
@@ -1363,16 +1523,18 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     await this.installRuntimeStyles();
     this.registerEditorExtension(this.createHiddenMarkerEditorExtension());
     const savedData = await this.loadData();
-    let migratedLegacyEnhancedTables = false;
     const savedTables = Object.fromEntries(
       Object.entries(savedData?.tables ?? {}).map(([tableId, record]) => {
-        if (this.getTableRecordMode(record) === "enhanced") {
-          migratedLegacyEnhancedTables = true;
-        }
         return [tableId, this.normalizeLoadedTableRecord(record)];
       })
     );
     const savedNativeColorPalettes = this.normalizeNativeColorSavedPalettes(savedData?.nativeColorSavedPalettes);
+    const savedAdvancedTableSettings = normalizeAdvancedTableSettings({
+      bindTab: savedData?.advancedTableBindTab,
+      bindEnter: savedData?.advancedTableBindEnter,
+      formatType: savedData?.advancedTableFormatType,
+      showRibbonIcon: savedData?.advancedTableShowRibbonIcon,
+    });
     this.dataStore = {
       ...DEFAULT_DATA,
       ...(savedData ?? {}),
@@ -1399,12 +1561,27 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         MAX_ROW_HEIGHT
       ),
       nativeTableDefaultTextColor: this.normalizeHexColor(savedData?.nativeTableDefaultTextColor, NATIVE_TABLE_DEFAULT_TEXT_COLOR),
+      nativeTableDefaultZebraEnabled:
+        typeof savedData?.nativeTableDefaultZebraEnabled === "boolean"
+          ? savedData.nativeTableDefaultZebraEnabled
+          : DEFAULT_DATA.nativeTableDefaultZebraEnabled,
+      nativeTableDefaultBorderEnabled:
+        typeof savedData?.nativeTableDefaultBorderEnabled === "boolean"
+          ? savedData.nativeTableDefaultBorderEnabled
+          : DEFAULT_DATA.nativeTableDefaultBorderEnabled,
+      nativeTableDefaultHeaderAlignment: this.normalizeNativeTableAutoAlignment(
+        savedData?.nativeTableDefaultHeaderAlignment,
+        DEFAULT_DATA.nativeTableDefaultHeaderAlignment
+      ),
+      nativeTableDefaultFirstColumnAlignment: this.normalizeNativeTableAutoAlignment(
+        savedData?.nativeTableDefaultFirstColumnAlignment,
+        DEFAULT_DATA.nativeTableDefaultFirstColumnAlignment
+      ),
+      advancedTableBindTab: savedAdvancedTableSettings.bindTab,
+      advancedTableBindEnter: savedAdvancedTableSettings.bindEnter,
+      advancedTableFormatType: savedAdvancedTableSettings.formatType,
+      advancedTableShowRibbonIcon: savedAdvancedTableSettings.showRibbonIcon,
     };
-    if (migratedLegacyEnhancedTables) {
-      await this.savePluginData();
-    }
-
-    await this.migrateLegacyMarkersToHtmlComments();
 
     this.addCommand({
       id: INITIALIZE_CURRENT_TABLE_LAYOUT_COMMAND_ID,
@@ -1427,6 +1604,19 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         if (!file) return false;
         if (!checking) {
           void this.insertNativeColorTableTemplate();
+        }
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: MIGRATE_CURRENT_FILE_TABLE_MARKERS_COMMAND_ID,
+      name: MIGRATE_CURRENT_FILE_TABLE_MARKERS_COMMAND_NAME,
+      checkCallback: (checking) => {
+        const file = this.getActiveMarkdownFile(checking);
+        if (!file) return false;
+        if (!checking) {
+          void this.migrateCurrentFileTableMarkersToMarkerless(file);
         }
         return true;
       },
@@ -1489,6 +1679,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         return true;
       },
     });
+
+    this.registerAdvancedTableCommands();
+    this.addAdvancedTableRibbonIconIfEnabled();
 
     this.oneNoteStatusBarGroupEl = this.addStatusBarItem();
     this.oneNoteStatusBarGroupEl.addClass("mdtp-onenote-status-bar-group");
@@ -1559,8 +1752,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         continue;
       }
 
-      const originalEndsWithNewline = /\r?\n$/.test(originalContent);
-      const lines = originalContent.split(/\r?\n/);
+      const { lines, originalEndsWithNewline } = this.splitContentLines(originalContent);
       const markerIds: string[] = [];
       let changed = false;
 
@@ -1590,6 +1782,79 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
   }
 
+  private async migrateCurrentFileTableMarkersToMarkerless(file: TFile) {
+    const originalContent = await this.app.vault.cachedRead(file);
+    const { lines, originalEndsWithNewline } = this.splitContentLines(originalContent);
+    const markerLineIndexes = new Set<number>();
+    const markerIds = new Set<string>();
+
+    lines.forEach((line, index) => {
+      const markerId = this.extractTableMarkerId(line);
+      if (!markerId) return;
+      markerLineIndexes.add(index);
+      markerIds.add(markerId);
+    });
+
+    if (markerLineIndexes.size === 0) {
+      new Notice("当前笔记没有旧表格标记需要清理");
+      return false;
+    }
+
+    const sourceTables = this.parseMarkdownTables(originalContent);
+    const tableIdsByOrder = new Map<number, string>();
+    sourceTables.forEach((table, index) => {
+      if (table.tableId) tableIdsByOrder.set(index, table.tableId);
+    });
+
+    await this.createSnapshot(file, "before-markerless-migration", [...markerIds]);
+
+    const updatedContent = this.joinLines(
+      lines.filter((_line, index) => !markerLineIndexes.has(index)),
+      originalEndsWithNewline
+    );
+    if (updatedContent !== originalContent) {
+      await this.app.vault.modify(file, updatedContent);
+    }
+
+    const updatedTables = this.parseMarkdownTables(updatedContent);
+    const now = Date.now();
+    let changedRecords = false;
+
+    for (const [tableIndex, tableId] of tableIdsByOrder) {
+      const updatedTable = updatedTables[tableIndex];
+      if (!updatedTable) continue;
+
+      const existing = this.dataStore.tables[tableId];
+      const record: TableRecord = existing
+        ? this.cloneTableRecord(existing)
+        : {
+            tableId,
+            mode: "nativeLayout",
+            markerless: true,
+            filePath: file.path,
+            createdAt: now,
+            updatedAt: now,
+            lastKnownHash: "",
+            lastKnownRange: { startLine: 0, endLine: 0 },
+            layout: this.createEmptyLayout(),
+          };
+
+      record.mode = "nativeLayout";
+      this.updateTableRecordSource(record, file, updatedTable, tableIndex, true);
+      record.updatedAt = now;
+      this.dataStore.tables[tableId] = record;
+      changedRecords = true;
+    }
+
+    if (changedRecords) {
+      await this.savePluginData();
+    }
+
+    this.queueRefreshBurst();
+    new Notice(`已清理 ${markerLineIndexes.size} 个旧表格标记，样式已转为非入侵记录`);
+    return true;
+  }
+
   onunload() {
     void this.closeActiveEditor("cancel");
     this.hideImageToolbar();
@@ -1608,6 +1873,211 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return null;
     }
     return file;
+  }
+
+  private registerAdvancedTableCommands() {
+    this.addCommand({
+      id: ADVANCED_TABLE_CONTROL_BAR_COMMAND_ID,
+      name: ADVANCED_TABLE_CONTROL_BAR_COMMAND_NAME,
+      checkCallback: (checking) => {
+        const hasContext = !!this.activeTableSidebarContext || !!this.getActiveNativeLayoutCommandContext(true);
+        const editor = this.getActiveMarkdownEditor();
+        if (!hasContext && !editor) return false;
+        if (!checking) void this.openAdvancedTableControlBar();
+        return true;
+      },
+    });
+
+    for (const command of ADVANCED_TABLE_COMMANDS) {
+      this.addCommand({
+        id: command.id,
+        name: command.name,
+        checkCallback: (checking) => {
+          const hasNativeContext = !!this.getActiveNativeLayoutCommandContext(true);
+          const editor = this.getActiveMarkdownEditor();
+          if (!hasNativeContext && !editor) return false;
+          if (!checking) {
+            void this.runAdvancedTableCommand(command.id, command.name);
+          }
+          return true;
+        },
+      });
+    }
+
+    this.addCommand({
+      id: ADVANCED_TABLE_EXPORT_CSV_WITH_HEADERS_COMMAND_ID,
+      name: ADVANCED_TABLE_EXPORT_CSV_WITH_HEADERS_COMMAND_NAME,
+      checkCallback: (checking) => {
+        const hasNativeContext = !!this.getActiveNativeLayoutCommandContext(true);
+        const editor = this.getActiveMarkdownEditor();
+        if (!hasNativeContext && !editor) return false;
+        if (!checking) void this.showAdvancedTableCsvExport(true);
+        return true;
+      },
+    });
+
+    this.addCommand({
+      id: ADVANCED_TABLE_EXPORT_CSV_WITHOUT_HEADERS_COMMAND_ID,
+      name: ADVANCED_TABLE_EXPORT_CSV_WITHOUT_HEADERS_COMMAND_NAME,
+      checkCallback: (checking) => {
+        const hasNativeContext = !!this.getActiveNativeLayoutCommandContext(true);
+        const editor = this.getActiveMarkdownEditor();
+        if (!hasNativeContext && !editor) return false;
+        if (!checking) void this.showAdvancedTableCsvExport(false);
+        return true;
+      },
+    });
+  }
+
+  private getAdvancedTableSettings(): AdvancedTableSettings {
+    return normalizeAdvancedTableSettings({
+      bindTab: this.dataStore.advancedTableBindTab,
+      bindEnter: this.dataStore.advancedTableBindEnter,
+      formatType: this.dataStore.advancedTableFormatType,
+      showRibbonIcon: this.dataStore.advancedTableShowRibbonIcon,
+    });
+  }
+
+  getAdvancedTableSettingsForManager() {
+    return this.getAdvancedTableSettings();
+  }
+
+  async updateAdvancedTableSettingsFromManager(input: Partial<AdvancedTableSettings>) {
+    const current = this.getAdvancedTableSettings();
+    const next = normalizeAdvancedTableSettings({
+      ...current,
+      ...input,
+    });
+    this.dataStore.advancedTableBindTab = next.bindTab;
+    this.dataStore.advancedTableBindEnter = next.bindEnter;
+    this.dataStore.advancedTableFormatType = next.formatType;
+    this.dataStore.advancedTableShowRibbonIcon = next.showRibbonIcon;
+    await this.savePluginData();
+    return this.getAdvancedTableSettings();
+  }
+
+  private addAdvancedTableRibbonIconIfEnabled() {
+    if (!this.getAdvancedTableSettings().showRibbonIcon) return;
+    this.addRibbonIcon("spreadsheet", "Advanced Tables Toolbar", () => {
+      void this.openAdvancedTableControlBar();
+    });
+  }
+
+  private getActiveMarkdownEditor() {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const editor = (view as any)?.editor;
+    if (editor && typeof editor.getCursor === "function") {
+      return editor;
+    }
+    return null;
+  }
+
+  private async runAdvancedTableCommand(operation: AdvancedTableOperation, label: string) {
+    const nativeContext = this.getActiveNativeLayoutCommandContext(true);
+    if (nativeContext && (await this.runNativeLayoutAdvancedTableOperation(nativeContext, operation))) {
+      return true;
+    }
+
+    const editor = this.getActiveMarkdownEditor();
+    if (!editor) {
+      new Notice("请先把光标放到 Markdown 表格里");
+      return false;
+    }
+
+    try {
+      const handled = runAdvancedTableOperationOnEditor(editor, operation, this.getAdvancedTableSettings());
+      if (!handled) {
+        new Notice("请先把光标放到 Markdown 表格里");
+        return false;
+      }
+      if (operation !== "next-cell" && operation !== "previous-cell" && operation !== "next-row") {
+        new Notice(`已执行：${label}`);
+      }
+      return true;
+    } catch (error) {
+      console.error("[mdtp] advanced table command failed", error);
+      new Notice("表格操作失败，请检查当前表格格式");
+      return false;
+    }
+  }
+
+  private async openAdvancedTableControlBar() {
+    const context = await this.resolveAdvancedTableControlBarContext();
+    if (!context) {
+      new Notice("请先把光标放到 Markdown 表格里");
+      return false;
+    }
+
+    this.showTableSidebar(context);
+    this.showTableSidebarPopover(context);
+    return true;
+  }
+
+  private async resolveAdvancedTableControlBarContext(): Promise<TableSidebarContext | null> {
+    if (this.activeTableSidebarContext?.tableEl && document.body.contains(this.activeTableSidebarContext.tableEl)) {
+      return this.activeTableSidebarContext;
+    }
+
+    const nativeLayoutContext = this.getActiveNativeLayoutCommandContext(true);
+    if (nativeLayoutContext) {
+      return {
+        mode: "nativeLayout",
+        file: nativeLayoutContext.file,
+        tableId: nativeLayoutContext.tableId,
+        parsedTable: nativeLayoutContext.parsedTable,
+        selection: nativeLayoutContext.selection,
+        coord: nativeLayoutContext.anchor,
+        tableEl: nativeLayoutContext.tableEl,
+      };
+    }
+
+    const nativeContext = await this.getActiveUninitializedTableContext();
+    if (nativeContext?.tableEl) {
+      return {
+        mode: "native",
+        file: nativeContext.file,
+        parsedTable: nativeContext.parsedTable,
+        coord: nativeContext.coord,
+        tableEl: nativeContext.tableEl,
+      };
+    }
+
+    return null;
+  }
+
+  private async showAdvancedTableCsvExport(initialWithHeaders: boolean) {
+    const canExport = !!this.getActiveNativeLayoutCommandContext(true) || !!this.getActiveMarkdownEditor();
+    if (!canExport) {
+      new Notice("请先把光标放到 Markdown 表格里");
+      return;
+    }
+
+    new AdvancedTableCsvExportModal(
+      this,
+      (withHeaders) => this.createAdvancedTableCsvText(withHeaders),
+      initialWithHeaders
+    ).open();
+  }
+
+  private async createAdvancedTableCsvText(withHeaders: boolean) {
+    const nativeContext = this.getActiveNativeLayoutCommandContext(true);
+    if (nativeContext) {
+      const csv = await this.exportNativeLayoutTableCsv(nativeContext.file, nativeContext.tableId, withHeaders);
+      return csv;
+    }
+
+    const editor = this.getActiveMarkdownEditor();
+    if (!editor) {
+      return null;
+    }
+
+    try {
+      return exportAdvancedTableCsvFromEditor(editor, withHeaders, this.getAdvancedTableSettings());
+    } catch (error) {
+      console.error("[mdtp] advanced table csv export failed", error);
+      new Notice("CSV 导出失败，请检查当前表格格式");
+      return null;
+    }
   }
 
   private getActiveInteractionContext(silent = false) {
@@ -1873,6 +2343,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return {
       ...context,
       tableId,
+      coord: context.anchor,
     };
   }
 
@@ -1885,48 +2356,42 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return;
     }
 
-    const missingTables = parsedTables.filter((table) => !table.tableId);
-    const originalEndsWithNewline = /\r?\n$/.test(originalContent);
-    const lines = originalContent.split(/\r?\n/);
-    let didNormalizeSpacing = false;
-
-    for (const table of [...parsedTables].sort((left, right) => right.startLine - left.startLine)) {
-      if (!table.tableId) continue;
-      const normalized = this.normalizeMarkerSpacing(lines, table.startLine);
-      if (normalized) {
-        didNormalizeSpacing = true;
-      }
-    }
-
-    if (missingTables.length === 0 && !didNormalizeSpacing) {
-      await this.syncTableRecords(file, parsedTables, { forceMode: "nativeLayout" });
-      new Notice(`当前文件 ${parsedTables.length} 张表格已具备原生表格增强标识`);
-      return;
-    }
-
-    await this.createSnapshot(file, "before-anchor", []);
-
-    for (const table of [...missingTables].sort((left, right) => right.startLine - left.startLine)) {
+    await this.syncTableRecords(file, parsedTables, { forceMode: "nativeLayout" });
+    let createdCount = 0;
+    for (let index = 0; index < parsedTables.length; index += 1) {
+      const table = parsedTables[index];
+      if (this.resolveTableRecordIdForParsedTable(file, table, parsedTables)) continue;
       const tableId = this.generateTableId();
-      lines.splice(table.startLine, 0, this.formatTableMarker(tableId), "");
+      const now = Date.now();
+      const record: TableRecord = {
+        tableId,
+        mode: "nativeLayout",
+        markerless: true,
+        filePath: file.path,
+        createdAt: now,
+        updatedAt: now,
+        lastKnownHash: this.hashString(table.raw),
+        lastKnownRange: {
+          startLine: table.startLine,
+          endLine: table.endLine,
+        },
+        identity: this.createNativeTableIdentity(table, index),
+        layout: this.createEmptyLayout(),
+      };
+      this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(table.raw));
+      this.dataStore.tables[tableId] = record;
+      createdCount += 1;
     }
 
-    const updatedContent = this.joinLines(lines, originalEndsWithNewline);
-    await this.app.vault.modify(file, updatedContent);
-    const updatedTables = this.parseMarkdownTables(updatedContent);
-    await this.syncTableRecords(file, updatedTables, { forceMode: "nativeLayout" });
+    if (createdCount > 0) {
+      await this.savePluginData();
+    }
     this.scheduleVisibleTableRefresh();
-    if (missingTables.length > 0) {
-      new Notice(`已为当前文件 ${missingTables.length} 张表格建立原生表格增强标识`);
-      return;
-    }
-
-    if (didNormalizeSpacing) {
-      new Notice("已修复当前文件原生表格增强标识的安全间距");
-      return;
-    }
-
-    new Notice(`当前文件 ${parsedTables.length} 张表格已具备增强标识`);
+    new Notice(
+      createdCount > 0
+        ? `已为当前文件 ${createdCount} 张表格启用非入侵增强`
+        : `当前文件 ${parsedTables.length} 张表格已具备原生表格增强`
+    );
   }
 
   private async initializeCurrentTable() {
@@ -1972,9 +2437,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return false;
     }
 
-    if (targetTable.tableId) {
+    const existingTableId = this.resolveTableRecordIdForParsedTable(file, targetTable, currentTables);
+    if (existingTableId) {
       await this.syncTableRecords(file, currentTables);
-      const record = this.dataStore.tables[targetTable.tableId];
+      const record = this.dataStore.tables[existingTableId];
       if (record?.mode === "enhanced") {
         if (this.canConvertEnhancedRecordToNativeLayout(record)) {
           this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(targetTable.raw));
@@ -1995,26 +2461,29 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       return true;
     }
 
-    await this.createSnapshot(file, "before-native-layout-color-anchor", []);
-
-    const lines = originalContent.split(/\r?\n/);
-    const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const tableId = this.generateTableId();
-    lines.splice(targetTable.startLine, 0, this.formatTableMarker(tableId), "");
-
-    const updatedContent = this.joinLines(lines, originalEndsWithNewline);
-    await this.app.vault.modify(file, updatedContent);
-    const updatedTables = this.parseMarkdownTables(updatedContent);
-    await this.syncTableRecords(file, updatedTables, { modeOverrides: { [tableId]: "nativeLayout" } });
-    const record = this.dataStore.tables[tableId];
-    if (record) {
-      this.applyNativeColorPresetToLayout(record.layout);
-      this.applyNativeTableDefaultLayoutSettings(record.layout, this.parseRawTable(targetTable.raw));
-      record.updatedAt = Date.now();
-      await this.savePluginData();
-    }
+    const tableIndex = Math.max(0, currentTables.indexOf(targetTable));
+    const now = Date.now();
+    const record: TableRecord = {
+      tableId,
+      mode: "nativeLayout",
+      markerless: true,
+      filePath: file.path,
+      createdAt: now,
+      updatedAt: now,
+      lastKnownHash: this.hashString(targetTable.raw),
+      lastKnownRange: {
+        startLine: targetTable.startLine,
+        endLine: targetTable.endLine,
+      },
+      identity: this.createNativeTableIdentity(targetTable, tableIndex),
+      layout: this.createEmptyLayout(),
+    };
+    this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(targetTable.raw));
+    this.dataStore.tables[tableId] = record;
+    await this.savePluginData();
     this.scheduleVisibleTableRefresh();
-    new Notice("已对当前表格美化");
+    new Notice("已对当前表格美化（无正文标记）");
     return true;
   }
 
@@ -2030,15 +2499,172 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     );
   }
 
+  private getParsedTableIndex(parsedTables: ParsedTableBlock[] | null | undefined, parsedTable: ParsedTableBlock | null | undefined) {
+    if (!parsedTables || !parsedTable) return -1;
+    const index = parsedTables.indexOf(parsedTable);
+    if (index >= 0) return index;
+    return parsedTables.findIndex(
+      (table) =>
+        table.startLine === parsedTable.startLine &&
+        table.endLine === parsedTable.endLine &&
+        table.raw === parsedTable.raw
+    );
+  }
+
+  private createNativeTableIdentity(parsedTable: ParsedTableBlock, tableIndex: number): NativeTableIdentity {
+    const rawTable = this.parseRawTable(parsedTable.raw);
+    const columnCount = rawTable?.header.length ?? this.estimateTableColumnCount(parsedTable.raw);
+    const rowCount = rawTable ? rawTable.body.length + 1 : Math.max(0, parsedTable.endLine - parsedTable.startLine);
+    const headerText = rawTable ? rawTable.header.join("|").trim() : parsedTable.raw.split(/\r?\n/)[0]?.trim() ?? "";
+    return {
+      tableIndex,
+      tableHash: this.hashString(parsedTable.raw),
+      headerHash: this.hashString(headerText),
+      structureHash: this.hashString(`${columnCount}:${rowCount}`),
+      rowCount,
+      columnCount,
+      startLine: parsedTable.startLine,
+      endLine: parsedTable.endLine,
+    };
+  }
+
+  private estimateTableColumnCount(raw: string) {
+    const firstLine = raw.split(/\r?\n/)[0] ?? "";
+    const trimmed = firstLine.trim();
+    if (!trimmed) return 0;
+    return trimmed.replace(/^\|/, "").replace(/\|$/, "").split("|").length;
+  }
+
+  private updateTableRecordSource(
+    record: TableRecord,
+    file: TFile,
+    parsedTable: ParsedTableBlock,
+    tableIndex: number,
+    markerless = record.markerless === true || !parsedTable.tableId
+  ) {
+    const identity = this.createNativeTableIdentity(parsedTable, tableIndex);
+    record.filePath = file.path;
+    record.markerless = markerless;
+    record.identity = identity;
+    record.lastKnownHash = identity.tableHash;
+    record.lastKnownRange = {
+      startLine: parsedTable.startLine,
+      endLine: parsedTable.endLine,
+    };
+  }
+
+  private findBestMarkerlessRecordIdForParsedTable(
+    file: TFile,
+    parsedTable: ParsedTableBlock,
+    tableIndex: number,
+    reservedIds: Set<string> = new Set()
+  ) {
+    const identity = this.createNativeTableIdentity(parsedTable, tableIndex);
+    let best: { tableId: string; score: number } | null = null;
+    let secondBestScore = -1;
+
+    for (const record of Object.values(this.dataStore.tables)) {
+      if (!record || record.markerless !== true) continue;
+      if (record.filePath !== file.path) continue;
+      if (reservedIds.has(record.tableId)) continue;
+
+      const score = this.scoreMarkerlessTableMatch(record, identity);
+      if (!best || score > best.score) {
+        secondBestScore = best?.score ?? -1;
+        best = { tableId: record.tableId, score };
+      } else if (score > secondBestScore) {
+        secondBestScore = score;
+      }
+    }
+
+    if (!best) return null;
+    if (best.score < 80) return null;
+    if (best.score === secondBestScore) return null;
+    return best.tableId;
+  }
+
+  private scoreMarkerlessTableMatch(record: TableRecord, identity: NativeTableIdentity) {
+    const saved = record.identity;
+    let score = 0;
+
+    if (record.lastKnownHash === identity.tableHash || saved?.tableHash === identity.tableHash) score += 120;
+    if (saved?.tableIndex === identity.tableIndex) score += 26;
+    if (saved?.headerHash === identity.headerHash) score += 36;
+    if (saved?.structureHash === identity.structureHash) score += 28;
+    if (saved?.columnCount === identity.columnCount) score += 10;
+    if (saved?.rowCount === identity.rowCount) score += 8;
+
+    const savedStart = saved?.startLine ?? record.lastKnownRange?.startLine;
+    const savedEnd = saved?.endLine ?? record.lastKnownRange?.endLine;
+    if (Number.isFinite(savedStart)) {
+      const distance = Math.abs(Number(savedStart) - identity.startLine);
+      if (distance === 0) score += 20;
+      else if (distance <= 3) score += 12;
+      else if (distance <= 10) score += 4;
+    }
+    if (Number.isFinite(savedEnd) && Math.abs(Number(savedEnd) - identity.endLine) <= 3) {
+      score += 6;
+    }
+
+    return score;
+  }
+
+  private resolveTableRecordIdForParsedTable(
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    parsedTables?: ParsedTableBlock[],
+    reservedIds: Set<string> = new Set()
+  ) {
+    if (!parsedTable) return null;
+    if (parsedTable.tableId && this.dataStore.tables[parsedTable.tableId]) return parsedTable.tableId;
+    const tableIndex = Math.max(0, this.getParsedTableIndex(parsedTables, parsedTable));
+    return this.findBestMarkerlessRecordIdForParsedTable(file, parsedTable, tableIndex, reservedIds);
+  }
+
+  private findParsedTableForRecordId(content: string, file: TFile, tableId: string) {
+    const parsedTables = this.parseMarkdownTables(content);
+    const markedTable = parsedTables.find((table) => table.tableId === tableId);
+    if (markedTable) return markedTable;
+
+    const record = this.dataStore.tables[tableId];
+    if (!record) return null;
+    if (record.markerless !== true) return null;
+
+    const tableIndex = record.identity?.tableIndex ?? -1;
+    const indexedTable = tableIndex >= 0 ? parsedTables[tableIndex] ?? null : null;
+    if (indexedTable && this.findBestMarkerlessRecordIdForParsedTable(file, indexedTable, tableIndex) === tableId) {
+      return indexedTable;
+    }
+
+    const reserved = new Set<string>();
+    for (let index = 0; index < parsedTables.length; index += 1) {
+      const table = parsedTables[index];
+      if (this.findBestMarkerlessRecordIdForParsedTable(file, table, index, reserved) === tableId) {
+        return table;
+      }
+      const matched = this.findBestMarkerlessRecordIdForParsedTable(file, table, index, reserved);
+      if (matched) reserved.add(matched);
+    }
+
+    return null;
+  }
+
+  private findInsertedParsedTable(parsedTables: ParsedTableBlock[], tableRaw: string, preferredStartLine: number) {
+    const exactMatches = parsedTables.filter((table) => table.raw.trim() === tableRaw.trim());
+    if (exactMatches.length === 0) return parsedTables[parsedTables.length - 1] ?? null;
+    const afterCursor = exactMatches.find((table) => table.startLine >= preferredStartLine);
+    return afterCursor ?? exactMatches[exactMatches.length - 1] ?? null;
+  }
+
   private isTableNativeLayoutBeautified(tableId: string | null | undefined) {
     return !!tableId && this.getTableRecordMode(this.dataStore.tables[tableId]) === "nativeLayout";
   }
 
   private canBeautifyParsedTableAsNativeLayout(parsedTable: ParsedTableBlock, record: TableRecord | null | undefined) {
-    if (!parsedTable.tableId) return true;
     if (!record) return true;
     if (record.mode === "nativeLayout") return false;
     if (record.mode === "enhanced") return this.canConvertEnhancedRecordToNativeLayout(record);
+    if (!parsedTable.tableId) return true;
     return true;
   }
 
@@ -2089,18 +2715,20 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     let currentTables = this.parseMarkdownTables(originalContent);
     await this.syncTableRecords(file, currentTables);
 
-    const tablesToAnchor: ParsedTableBlock[] = [];
+    const tablesToCreate: ParsedTableBlock[] = [];
     const tableIdsToConvert: string[] = [];
+    const rawTablesById = new Map<string, ParsedRawTable | null>();
 
     for (const parsedTable of visibleTables) {
       const targetTable = this.resolveParsedTableInContent(parsedTable, currentTables);
       if (!targetTable) continue;
 
-      const record = targetTable.tableId ? this.dataStore.tables[targetTable.tableId] : null;
+      const tableId = this.resolveTableRecordIdForParsedTable(file, targetTable, currentTables);
+      const record = tableId ? this.dataStore.tables[tableId] : null;
       if (!this.canBeautifyParsedTableAsNativeLayout(targetTable, record)) continue;
 
-      if (!targetTable.tableId) {
-        tablesToAnchor.push(targetTable);
+      if (!tableId) {
+        tablesToCreate.push(targetTable);
         continue;
       }
 
@@ -2108,35 +2736,38 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         continue;
       }
 
-      tableIdsToConvert.push(targetTable.tableId);
+      tableIdsToConvert.push(tableId);
+      rawTablesById.set(tableId, this.parseRawTable(targetTable.raw));
     }
 
-    if (tablesToAnchor.length === 0 && tableIdsToConvert.length === 0) {
+    if (tablesToCreate.length === 0 && tableIdsToConvert.length === 0) {
       new Notice("当前页面可见表格都已美化");
       return true;
     }
 
-    if (tablesToAnchor.length > 0) {
-      await this.createSnapshot(file, "before-native-layout-color-anchor", []);
-    }
-
-    let updatedContent = originalContent;
-    const modeOverrides: Record<string, TableRecordMode> = {};
-
-    if (tablesToAnchor.length > 0) {
-      const lines = originalContent.split(/\r?\n/);
-      const originalEndsWithNewline = /\r?\n$/.test(originalContent);
-
-      for (const table of [...tablesToAnchor].sort((left, right) => right.startLine - left.startLine)) {
-        const tableId = this.generateTableId();
-        lines.splice(table.startLine, 0, this.formatTableMarker(tableId), "");
-        modeOverrides[tableId] = "nativeLayout";
-      }
-
-      updatedContent = this.joinLines(lines, originalEndsWithNewline);
-      await this.app.vault.modify(file, updatedContent);
-      currentTables = this.parseMarkdownTables(updatedContent);
-      await this.syncTableRecords(file, currentTables, { modeOverrides });
+    let createdCount = 0;
+    for (const table of tablesToCreate) {
+      const tableId = this.generateTableId();
+      const tableIndex = Math.max(0, currentTables.indexOf(table));
+      const now = Date.now();
+      const record: TableRecord = {
+        tableId,
+        mode: "nativeLayout",
+        markerless: true,
+        filePath: file.path,
+        createdAt: now,
+        updatedAt: now,
+        lastKnownHash: this.hashString(table.raw),
+        lastKnownRange: {
+          startLine: table.startLine,
+          endLine: table.endLine,
+        },
+        identity: this.createNativeTableIdentity(table, tableIndex),
+        layout: this.createEmptyLayout(),
+      };
+      this.applyNativeLayoutBeautifyToRecord(record, this.parseRawTable(table.raw));
+      this.dataStore.tables[tableId] = record;
+      createdCount += 1;
     }
 
     let convertedCount = 0;
@@ -2144,24 +2775,17 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const record = this.dataStore.tables[tableId];
       if (!record || record.mode === "nativeLayout") continue;
       if (record.mode === "enhanced" && !this.canConvertEnhancedRecordToNativeLayout(record)) continue;
-      this.applyNativeLayoutBeautifyToRecord(record);
+      this.applyNativeLayoutBeautifyToRecord(record, rawTablesById.get(tableId) ?? null);
       convertedCount += 1;
     }
 
-    for (const tableId of Object.keys(modeOverrides)) {
-      const record = this.dataStore.tables[tableId];
-      if (record) {
-        this.applyNativeLayoutBeautifyToRecord(record);
-      }
-    }
-
-    if (convertedCount > 0 || Object.keys(modeOverrides).length > 0) {
+    if (convertedCount > 0 || createdCount > 0) {
       await this.savePluginData();
     }
 
-    const beautifiedCount = Object.keys(modeOverrides).length + convertedCount;
+    const beautifiedCount = createdCount + convertedCount;
     this.scheduleVisibleTableRefresh();
-    new Notice(`已对本页 ${beautifiedCount} 张表格美化`);
+    new Notice(`已对本页 ${beautifiedCount} 张表格美化（无正文标记）`);
     return beautifiedCount > 0;
   }
 
@@ -2179,19 +2803,26 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const rawTable = this.buildNativeColorRawTable();
     const tableLines = this.buildRawTable(rawTable);
     const tableRaw = tableLines.join("\n");
-    const template = [this.formatTableMarker(tableId), "", tableRaw, ""].join("\n");
+    const template = [tableRaw, ""].join("\n");
     const record = this.createNativeColorTableRecord(file, tableId, tableRaw);
-
-    this.dataStore.tables[tableId] = record;
-    await this.savePluginData();
 
     if (editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() ? "\n\n" : "";
+      const preferredStartLine = cursor.line + (prefix ? 2 : 0);
       editor.replaceRange(`${prefix}${template}\n`, cursor);
+      const nextContent =
+        typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : await this.app.vault.cachedRead(file);
+      const parsedTables = this.parseMarkdownTables(nextContent);
+      const insertedTable = this.findInsertedParsedTable(parsedTables, tableRaw, preferredStartLine);
+      if (insertedTable) {
+        this.updateTableRecordSource(record, file, insertedTable, Math.max(0, parsedTables.indexOf(insertedTable)), true);
+      }
+      this.dataStore.tables[tableId] = record;
+      await this.savePluginData();
       window.setTimeout(() => this.queueRefreshBurst(), 120);
-      new Notice("已插入彩色原生空表格");
+      new Notice("已插入彩色原生空表格（无正文标记）");
       return true;
     }
 
@@ -2201,15 +2832,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const updatedContent = `${originalContent}${separator}${template}\n`;
     await this.app.vault.modify(file, updatedContent);
     const parsedTables = this.parseMarkdownTables(updatedContent);
-    await this.syncTableRecords(file, parsedTables, { modeOverrides: { [tableId]: "nativeLayout" } });
-    this.dataStore.tables[tableId] = {
-      ...(this.dataStore.tables[tableId] ?? record),
-      mode: "nativeLayout",
-      layout: record.layout,
-    };
+    const insertedTable = this.findInsertedParsedTable(parsedTables, tableRaw, parsedTables.length > 0 ? parsedTables[parsedTables.length - 1].startLine : 0);
+    if (insertedTable) {
+      this.updateTableRecordSource(record, file, insertedTable, Math.max(0, parsedTables.indexOf(insertedTable)), true);
+    }
+    this.dataStore.tables[tableId] = record;
     await this.savePluginData();
     this.queueRefreshBurst();
-    new Notice("已插入彩色原生空表格");
+    new Notice("已插入彩色原生空表格（无正文标记）");
     return true;
   }
 
@@ -2232,6 +2862,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return {
       tableId,
       mode: "nativeLayout",
+      markerless: true,
       filePath: file.path,
       createdAt: now,
       updatedAt: now,
@@ -2247,6 +2878,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private createNativeColorTableLayout() {
     const layout = this.createEmptyLayout();
     this.applyNativeColorPresetToLayout(layout);
+    this.applyNativeTableDefaultLayoutSettings(layout, this.buildNativeColorRawTable());
     return layout;
   }
 
@@ -2255,22 +2887,28 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     layout.cellColors = {};
     layout.rowColors = {};
     layout.colColors = {};
-    layout.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
     layout.nativeColorPalette = palette;
     layout.rowColors["0"] = palette.header;
+    layout.nativeBorderEnabled = this.getNativeTableDefaultBorderEnabled();
+    if (this.getNativeTableDefaultZebraEnabled()) {
+      layout.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
+    } else {
+      delete layout.nativeColorPreset;
+    }
   }
 
   private applyNativeTableDefaultLayoutSettings(_layout: TableLayoutMetadata, _rawTable?: ParsedRawTable | null) {
     // Size metadata is created only after manual adjustment, so beautify keeps the native table dimensions.
+    // Header and first-column alignment are runtime defaults, not persisted cell overrides.
   }
 
   private normalizeNativeColorPresetLayout(layout: TableLayoutMetadata) {
-    if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return;
     const palette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
     layout.nativeColorPalette = palette;
     if (!layout.rowColors["0"] || this.isLegacyNativeColorTableHeaderColor(layout.rowColors["0"])) {
       layout.rowColors["0"] = palette.header;
     }
+    if (layout.nativeColorPreset !== NATIVE_COLOR_PRESET_BLUE_ZEBRA) return;
   }
 
   private canConvertEnhancedRecordToNativeLayout(record: TableRecord | null | undefined) {
@@ -2311,6 +2949,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       defaultColumnWidth: this.getNativeTableDefaultColumnWidth(),
       defaultRowHeight: this.getNativeTableDefaultRowHeight(),
       defaultTextColor: this.getNativeTableDefaultTextColor(),
+      defaultZebraEnabled: this.getNativeTableDefaultZebraEnabled(),
+      defaultBorderEnabled: this.getNativeTableDefaultBorderEnabled(),
+      defaultHeaderAlignment: this.getNativeTableDefaultHeaderAlignment(),
+      defaultFirstColumnAlignment: this.getNativeTableDefaultFirstColumnAlignment(),
     };
   }
 
@@ -2336,7 +2978,16 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     defaultColumnWidth?: number;
     defaultRowHeight?: number;
     defaultTextColor?: string;
+    defaultZebraEnabled?: boolean;
+    defaultBorderEnabled?: boolean;
+    defaultHeaderAlignment?: NativeTableAutoAlignment;
+    defaultFirstColumnAlignment?: NativeTableAutoAlignment;
   }) {
+    const previousHeaderAlignment = this.getNativeTableDefaultHeaderAlignment();
+    const previousFirstColumnAlignment = this.getNativeTableDefaultFirstColumnAlignment();
+    const shouldRefreshAutoAlignment =
+      input.defaultHeaderAlignment !== undefined || input.defaultFirstColumnAlignment !== undefined;
+
     if (input.defaultScale !== undefined) {
       this.dataStore.nativeTableDefaultScale = this.normalizeNativeTableScale(input.defaultScale, this.getNativeTableDefaultScale());
     }
@@ -2359,7 +3010,29 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (input.defaultTextColor !== undefined) {
       this.dataStore.nativeTableDefaultTextColor = this.normalizeHexColor(input.defaultTextColor, this.getNativeTableDefaultTextColor());
     }
+    if (input.defaultZebraEnabled !== undefined) {
+      this.dataStore.nativeTableDefaultZebraEnabled = input.defaultZebraEnabled !== false;
+    }
+    if (input.defaultBorderEnabled !== undefined) {
+      this.dataStore.nativeTableDefaultBorderEnabled = input.defaultBorderEnabled === true;
+    }
+    if (input.defaultHeaderAlignment !== undefined) {
+      this.dataStore.nativeTableDefaultHeaderAlignment = this.normalizeNativeTableAutoAlignment(
+        input.defaultHeaderAlignment,
+        this.getNativeTableDefaultHeaderAlignment()
+      );
+    }
+    if (input.defaultFirstColumnAlignment !== undefined) {
+      this.dataStore.nativeTableDefaultFirstColumnAlignment = this.normalizeNativeTableAutoAlignment(
+        input.defaultFirstColumnAlignment,
+        this.getNativeTableDefaultFirstColumnAlignment()
+      );
+    }
+    if (shouldRefreshAutoAlignment) {
+      this.clearPersistedNativeAutoAlignment(previousHeaderAlignment, previousFirstColumnAlignment);
+    }
     await this.savePluginData();
+    this.scheduleVisibleTableRefresh();
     new Notice("已更新原生表格设置");
     return this.getNativeColorSettingsForManager();
   }
@@ -2517,6 +3190,48 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private getNativeTableDefaultTextColor() {
     return this.normalizeHexColor(this.dataStore.nativeTableDefaultTextColor, NATIVE_TABLE_DEFAULT_TEXT_COLOR);
+  }
+
+  private getNativeTableDefaultZebraEnabled() {
+    return this.dataStore.nativeTableDefaultZebraEnabled !== false;
+  }
+
+  private getNativeTableDefaultBorderEnabled() {
+    return this.dataStore.nativeTableDefaultBorderEnabled === true;
+  }
+
+  private getNativeTableDefaultHeaderAlignment() {
+    return this.normalizeNativeTableAutoAlignment(this.dataStore.nativeTableDefaultHeaderAlignment, "center");
+  }
+
+  private getNativeTableDefaultFirstColumnAlignment() {
+    return this.normalizeNativeTableAutoAlignment(this.dataStore.nativeTableDefaultFirstColumnAlignment, "left");
+  }
+
+  private normalizeNativeTableAutoAlignment(value: unknown, fallback: NativeTableAutoAlignment = "off"): NativeTableAutoAlignment {
+    return value === "left" || value === "center" || value === "right" || value === "off" ? value : fallback;
+  }
+
+  private clearPersistedNativeAutoAlignment(
+    previousHeaderAlignment: NativeTableAutoAlignment,
+    previousFirstColumnAlignment: NativeTableAutoAlignment
+  ) {
+    for (const record of Object.values(this.dataStore.tables)) {
+      if (!record || record.mode !== "nativeLayout") continue;
+      for (const [key, alignment] of Object.entries(record.layout.cellAlignments)) {
+        const coord = this.parseCellKey(key);
+        if (!coord) continue;
+        if (coord.row === 0 && previousHeaderAlignment !== "off" && alignment === previousHeaderAlignment) {
+          delete record.layout.cellAlignments[key];
+          record.updatedAt = Date.now();
+          continue;
+        }
+        if (coord.row > 0 && coord.col === 0 && previousFirstColumnAlignment !== "off" && alignment === previousFirstColumnAlignment) {
+          delete record.layout.cellAlignments[key];
+          record.updatedAt = Date.now();
+        }
+      }
+    }
   }
 
   private colorsMatch(left: string, right: string) {
@@ -2803,20 +3518,17 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       new Notice("模板内容为空");
       return false;
     }
-    for (const record of prepared.tableRecords) {
-      this.dataStore.tables[record.tableId] = record;
-    }
-    if (prepared.tableRecords.length > 0) {
-      await this.savePluginData();
-    }
-
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     const editor = (view as any)?.editor;
     if (editor && typeof editor.getCursor === "function" && typeof editor.replaceRange === "function") {
       const cursor = position ?? editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() && !prepared.content.startsWith("\n") ? "\n\n" : "";
+      const preferredStartLine = cursor.line + (prefix ? 2 : 0);
       editor.replaceRange(`${prefix}${prepared.content}`, cursor);
+      const nextContent =
+        typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : await this.app.vault.cachedRead(file);
+      await this.savePreparedTemplateTableRecords(file, prepared.tableRecords, nextContent, preferredStartLine);
       window.setTimeout(() => this.queueRefreshBurst(), 120);
       return true;
     }
@@ -2824,9 +3536,37 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const originalContent = await this.app.vault.cachedRead(file);
     const originalEndsWithNewline = /\r?\n$/.test(originalContent);
     const separator = originalContent.trim().length === 0 ? "" : originalEndsWithNewline ? "\n" : "\n\n";
-    await this.app.vault.modify(file, `${originalContent}${separator}${prepared.content}`);
+    const nextContent = `${originalContent}${separator}${prepared.content}`;
+    await this.app.vault.modify(file, nextContent);
+    await this.savePreparedTemplateTableRecords(
+      file,
+      prepared.tableRecords,
+      nextContent,
+      originalContent.split(/\r?\n/).length
+    );
     this.queueRefreshBurst();
     return true;
+  }
+
+  private async savePreparedTemplateTableRecords(
+    file: TFile,
+    records: TableRecord[],
+    content: string,
+    preferredStartLine: number
+  ) {
+    if (records.length === 0) return;
+    const parsedTables = this.parseMarkdownTables(content);
+    const candidates = parsedTables.filter((table) => table.startLine >= preferredStartLine);
+    const targetTables = candidates.length >= records.length ? candidates : parsedTables.slice(-records.length);
+    for (let index = 0; index < records.length; index += 1) {
+      const record = records[index];
+      const parsedTable = targetTables[index];
+      if (record && parsedTable) {
+        this.updateTableRecordSource(record, file, parsedTable, Math.max(0, parsedTables.indexOf(parsedTable)), true);
+        this.dataStore.tables[record.tableId] = record;
+      }
+    }
+    await this.savePluginData();
   }
 
   private async saveEnhancedTableSelectionAsTemplate(
@@ -2842,7 +3582,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private async buildEnhancedTableTemplateContent(file: TFile, tableId: string, selection: SelectionRect) {
     const content = await this.app.vault.cachedRead(file);
-    const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId) ?? null;
+    const parsedTable = this.findParsedTableForRecordId(content, file, tableId);
     if (!parsedTable) {
       new Notice("没有读到当前表格");
       return null;
@@ -2861,7 +3601,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
           layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout(),
         },
       });
-      return `${metadata}\n${this.formatTableMarker(tableId)}\n\n${parsedTable.raw}\n`;
+      return `${metadata}\n\n${parsedTable.raw}\n`;
     }
 
     const matrix = await this.readSelectionSourceMatrix(file, tableId, selection, { preserveRaw: true });
@@ -2884,7 +3624,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
           layout,
         },
       });
-    return `${metadata}\n${this.formatTableMarker(nextTableId)}\n\n${tableMarkdown}\n`;
+    return `${metadata}\n\n${tableMarkdown}\n`;
   }
 
   private async savePlainTableSelectionAsTemplate(context: UninitializedTableContext) {
@@ -2917,12 +3657,12 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return true;
   }
 
-  private async saveManagedTableAsTemplate(file: TFile, parsedTable: ParsedTableBlock | null) {
+  private async saveManagedTableAsTemplate(file: TFile, parsedTable: ParsedTableBlock | null, tableId?: string | null) {
     if (!parsedTable) {
       new Notice("没有读到当前表格内容");
       return false;
     }
-    const content = this.buildManagedWholeTableTemplateContent(parsedTable);
+    const content = this.buildManagedWholeTableTemplateContent(parsedTable, tableId ?? parsedTable.tableId);
     if (!content.trim()) {
       new Notice("没有读到当前表格内容");
       return false;
@@ -2932,21 +3672,22 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return true;
   }
 
-  private buildManagedWholeTableTemplateContent(parsedTable: ParsedTableBlock) {
-    if (!parsedTable.tableId) {
+  private buildManagedWholeTableTemplateContent(parsedTable: ParsedTableBlock, tableId?: string | null) {
+    const effectiveTableId = tableId ?? parsedTable.tableId;
+    if (!effectiveTableId) {
       return this.normalizeTemplateTableContent(parsedTable.raw);
     }
-    const record = this.dataStore.tables[parsedTable.tableId];
+    const record = this.dataStore.tables[effectiveTableId];
     if (this.getTableRecordMode(record) !== "nativeLayout") {
       return this.normalizeTemplateTableContent(parsedTable.raw);
     }
     const metadata = this.serializeTemplateTableMetadata({
-      [parsedTable.tableId]: {
+      [effectiveTableId]: {
         mode: "nativeLayout",
         layout: record?.layout ? this.cloneLayout(record.layout) : this.createEmptyLayout(),
       },
     });
-    return `${metadata}\n${this.formatTableMarker(parsedTable.tableId)}\n\n${this.normalizeTemplateTableContent(parsedTable.raw)}`;
+    return `${metadata}\n\n${this.normalizeTemplateTableContent(parsedTable.raw)}`;
   }
 
   private normalizeTemplateTableContent(raw: string) {
@@ -3040,7 +3781,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   }
 
   private serializeTemplateTableMetadata(tables: TemplateTableMetadata["tables"]) {
-    return `%% mdtp-template:${JSON.stringify({ version: 1, tables })} %%`;
+    return `%% mdtp-template:${JSON.stringify({ version: 1, tableOrder: Object.keys(tables), tables })} %%`;
   }
 
   splitTemplateContentForPreview(content: string): { hiddenPrefix: string; visible: string } {
@@ -3049,7 +3790,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     let cursor = 0;
     while (cursor < lines.length) {
       const line = lines[cursor];
-      if (TEMPLATE_TABLE_METADATA_RE.test(line) || OBSIDIAN_TABLE_MARKER_RE.test(line)) {
+      if (TEMPLATE_TABLE_METADATA_RE.test(line) || this.extractTableMarkerId(line)) {
         hiddenLines.push(line);
         cursor += 1;
         continue;
@@ -3096,6 +3837,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         if (parsed?.tables && typeof parsed.tables === "object") {
           metadata.tables = { ...metadata.tables, ...parsed.tables };
         }
+        if (Array.isArray(parsed?.tableOrder)) {
+          metadata.tableOrder = parsed.tableOrder.filter((id) => typeof id === "string");
+        }
       } catch (error) {
         console.warn("[mdtp] invalid template table metadata ignored", error);
       }
@@ -3108,58 +3852,38 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private prepareTemplateContentForInsertion(content: string, file: TFile) {
     const extracted = this.extractTemplateTableMetadata(content);
-    const originalEndsWithNewline = /\r?\n$/.test(extracted.content);
-    const lines = extracted.content.split(/\r?\n/);
-    const parsedTables = this.parseMarkdownTables(extracted.content).filter((table) => !!table.tableId);
-    const idMap = new Map<string, string>();
-    const tableModes = new Map<string, TableRecordMode>();
-
-    for (const table of parsedTables) {
-      if (!table.tableId) continue;
-      const templateRecord = extracted.metadata.tables[table.tableId];
-      const sourceRecord = this.dataStore.tables[table.tableId];
-      tableModes.set(table.tableId, templateRecord?.mode ?? this.getTableRecordMode(sourceRecord));
-    }
-
-    for (const table of parsedTables) {
-      if (!table.tableId || idMap.has(table.tableId)) continue;
-      if (tableModes.get(table.tableId) !== "nativeLayout") continue;
-      idMap.set(table.tableId, this.generateTableId());
-    }
-
-    if (idMap.size === 0) {
-      return { content: this.stripTableMarkersFromContent(extracted.content), tableRecords: [] as TableRecord[] };
-    }
-
-    for (let index = 0; index < lines.length; index += 1) {
-      const tableId = this.extractTableMarkerId(lines[index]);
-      const nextId = tableId ? idMap.get(tableId) : null;
-      if (nextId) {
-        lines[index] = this.formatTableMarker(nextId);
-      } else if (tableId) {
-        lines[index] = "";
-      }
-    }
-
-    this.ensureBlankLineAfterTableMarkers(lines);
-
-    const transformedContent = this.joinLines(lines, originalEndsWithNewline);
-    const transformedTables = this.parseMarkdownTables(transformedContent).filter((table) => !!table.tableId);
+    const markerlessContent = this.stripTableMarkersFromContent(extracted.content);
+    const transformedTables = this.parseMarkdownTables(markerlessContent);
     const now = Date.now();
     const tableRecords: TableRecord[] = [];
+    const sourceTables = this.parseMarkdownTables(extracted.content);
+    const orderedTemplateIds = [
+      ...(extracted.metadata.tableOrder ?? []),
+      ...sourceTables.map((table) => table.tableId).filter((tableId): tableId is string => !!tableId),
+      ...Object.keys(extracted.metadata.tables),
+    ];
+    const seenTemplateIds = new Set<string>();
+    const uniqueTemplateIds = orderedTemplateIds.filter((tableId) => {
+      if (seenTemplateIds.has(tableId)) return false;
+      seenTemplateIds.add(tableId);
+      return true;
+    });
 
-    for (let index = 0; index < parsedTables.length && index < transformedTables.length; index += 1) {
-      const sourceTable = parsedTables[index];
+    for (let index = 0; index < uniqueTemplateIds.length && index < transformedTables.length; index += 1) {
+      const sourceTableId = uniqueTemplateIds[index];
       const targetTable = transformedTables[index];
-      if (!sourceTable.tableId || !targetTable.tableId) continue;
-      const templateRecord = extracted.metadata.tables[sourceTable.tableId];
-      const sourceRecord = this.dataStore.tables[sourceTable.tableId];
+      if (!sourceTableId || !targetTable) continue;
+      const templateRecord = extracted.metadata.tables[sourceTableId];
+      const sourceRecord = this.dataStore.tables[sourceTableId];
       const mode = templateRecord?.mode ?? this.getTableRecordMode(sourceRecord);
       if (mode !== "nativeLayout") continue;
       const layout = this.normalizeLayout(templateRecord?.layout ?? sourceRecord?.layout ?? this.createEmptyLayout());
+      const tableId = this.generateTableId();
       tableRecords.push({
-        tableId: targetTable.tableId,
+        tableId,
         mode: "nativeLayout",
+        markerless: true,
+        identity: this.createNativeTableIdentity(targetTable, index),
         filePath: file.path,
         createdAt: now,
         updatedAt: now,
@@ -3173,17 +3897,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
 
     return {
-      content: transformedContent,
+      content: markerlessContent,
       tableRecords,
     };
   }
 
   private stripTableMarkersFromContent(content: string) {
-    const originalEndsWithNewline = /\r?\n$/.test(content);
-    const lines = content
-      .split(/\r?\n/)
-      .filter((line) => !this.extractTableMarkerId(line));
-    return this.joinLines(lines, originalEndsWithNewline);
+    const { lines, originalEndsWithNewline } = this.splitContentLines(content);
+    const markerlessLines = lines.filter((line) => !this.extractTableMarkerId(line));
+    return this.joinLines(markerlessLines, originalEndsWithNewline);
   }
 
   private extractLayoutForSelection(layout: TableLayoutMetadata, selection: SelectionRect): TableLayoutMetadata {
@@ -3468,7 +4190,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     for (let index = 0; index < renderedTables.length && index < parsedTables.length; index += 1) {
       const tableEl = renderedTables[index];
       const parsedTable = parsedTables[index] ?? null;
-      await this.enhanceRenderedTable(tableEl, file, parsedTable);
+      await this.enhanceRenderedTable(tableEl, file, parsedTable, parsedTables);
     }
   }
 
@@ -3515,7 +4237,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       if (parsedTables.length === 0) continue;
 
       for (let index = 0; index < tables.length && index < parsedTables.length; index += 1) {
-        await this.enhanceRenderedTable(tables[index], file, parsedTables[index] ?? null);
+        await this.enhanceRenderedTable(tables[index], file, parsedTables[index] ?? null, parsedTables);
       }
     }
   }
@@ -3628,8 +4350,13 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     return parsedTables.filter((table) => table.endLine >= sectionInfo.lineStart && table.startLine <= sectionInfo.lineEnd);
   }
 
-  private async enhanceRenderedTable(tableEl: HTMLTableElement, file: TFile, parsedTable: ParsedTableBlock | null) {
-    const tableId = parsedTable?.tableId ?? null;
+  private async enhanceRenderedTable(
+    tableEl: HTMLTableElement,
+    file: TFile,
+    parsedTable: ParsedTableBlock | null,
+    parsedTables: ParsedTableBlock[] = parsedTable ? [parsedTable] : []
+  ) {
+    const tableId = this.resolveTableRecordIdForParsedTable(file, parsedTable, parsedTables);
     if (!tableId || !parsedTable) {
       this.runtimeState.delete(tableEl);
       this.restoreNativeTable(tableEl);
@@ -3758,6 +4485,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       for (const cell of cells) {
         cell.style.removeProperty("--mdtp-col-width");
         cell.style.removeProperty("--mdtp-cell-bg");
+        cell.style.removeProperty("--mdtp-cell-text-color");
         cell.style.removeProperty("--mdtp-col-bg");
         cell.style.removeProperty("--mdtp-row-bg");
         cell.style.width = "";
@@ -3805,7 +4533,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private restoreNativeTable(tableEl: HTMLTableElement) {
     this.clearInjectedTableArtifacts(tableEl);
-    tableEl.classList.remove("mdtp-table-shell", "mdtp-table-enhanced", "mdtp-table-native-layout", "mdtp-table-uninitialized", "mdtp-table-colored");
+    tableEl.classList.remove(
+      "mdtp-table-shell",
+      "mdtp-table-enhanced",
+      "mdtp-table-native-layout",
+      "mdtp-table-uninitialized",
+      "mdtp-table-colored",
+      "mdtp-table-bordered"
+    );
     tableEl.style.tableLayout = "";
     tableEl.style.removeProperty("--mdtp-native-color-border");
     tableEl.style.removeProperty("--mdtp-table-scale");
@@ -3837,14 +4572,16 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private applyNativeLayout(tableEl: HTMLTableElement, layout: TableLayoutMetadata) {
     this.normalizeNativeColorPresetLayout(layout);
     const nativePalette = this.getLayoutNativeColorPalette(layout);
-    if (nativePalette) {
-      tableEl.style.setProperty("--mdtp-native-color-border", nativePalette.border);
+    const borderPalette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
+    if (layout.nativeBorderEnabled) {
+      tableEl.style.setProperty("--mdtp-native-color-border", (nativePalette ?? borderPalette).border);
     } else {
       tableEl.style.removeProperty("--mdtp-native-color-border");
     }
     tableEl.style.tableLayout = Object.keys(layout.colWidths).length > 0 ? "fixed" : "auto";
     tableEl.style.setProperty("--mdtp-table-scale", String(this.getLayoutTableScale(layout)));
     tableEl.classList.toggle("mdtp-table-colored", this.hasLayoutColors(layout));
+    tableEl.classList.toggle("mdtp-table-bordered", layout.nativeBorderEnabled === true);
     this.applySizeLayout(tableEl, layout);
     this.applyColors(this.collectTableStructure(tableEl), layout);
   }
@@ -4024,15 +4761,35 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         const cellTextColor = this.resolveCellTextColor(layout, rowIndex, cellKey);
         const effectiveTextColor = cellTextColor || headerTextColor;
         if (effectiveTextColor) {
+          cell.style.setProperty("--mdtp-cell-text-color", effectiveTextColor);
           cell.style.color = effectiveTextColor;
           cell.classList.add(cellTextColor ? "mdtp-cell-text-colored" : "mdtp-cell-dark-header");
+        } else {
+          cell.style.removeProperty("--mdtp-cell-text-color");
         }
 
-        const alignment = layout.cellAlignments[cellKey] ?? "";
+        const alignment = this.resolveNativeCellAlignment(layout, rowIndex, colIndex, cellKey);
         cell.style.textAlign = alignment;
         this.applyImagePresentationToCell(cell, layout.cellImageWidths[cellKey]);
       }
     }
+  }
+
+  private resolveNativeCellAlignment(layout: TableLayoutMetadata, rowIndex: number, colIndex: number, cellKey: string) {
+    const manualAlignment = layout.cellAlignments[cellKey];
+    if (manualAlignment) return manualAlignment;
+
+    if (rowIndex === 0) {
+      const headerAlignment = this.getNativeTableDefaultHeaderAlignment();
+      return headerAlignment === "off" ? "" : headerAlignment;
+    }
+
+    if (colIndex === 0) {
+      const firstColumnAlignment = this.getNativeTableDefaultFirstColumnAlignment();
+      return firstColumnAlignment === "off" ? "" : firstColumnAlignment;
+    }
+
+    return "";
   }
 
   private isNativeColorTableHeaderColor(color: string) {
@@ -4847,15 +5604,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     }
     if (options?.file && options.tableId) {
       const content = await this.app.vault.cachedRead(options.file);
-      const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === options.tableId) ?? null;
-      return this.saveManagedTableAsTemplate(options.file, parsedTable);
+      const parsedTable = this.findParsedTableForRecordId(content, options.file, options.tableId);
+      return this.saveManagedTableAsTemplate(options.file, parsedTable, options.tableId);
     }
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (view?.file) {
       const parsedTableAtCursor = this.getParsedTableAtEditorLine(view);
       if (parsedTableAtCursor?.tableId && this.dataStore.tables[parsedTableAtCursor.tableId]) {
-        return this.saveManagedTableAsTemplate(view.file, parsedTableAtCursor);
+        return this.saveManagedTableAsTemplate(view.file, parsedTableAtCursor, parsedTableAtCursor.tableId);
       }
       if (parsedTableAtCursor) {
         return this.savePlainTableAsTemplate({
@@ -5114,7 +5871,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
                 nativeLayoutTableId,
                 context.file,
                 context.tableEl,
-                this.normalizeSelection(context.coord, context.coord),
+                null,
                 context.coord,
                 nativeAlignment
               );
@@ -5155,7 +5912,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     } else if (context.mode === "nativeLayout") {
       void addSectionTitle;
       void addButton;
-      this.appendNativeLayoutSidebarCategories(root, context);
+      this.appendNativeLayoutSidebarCategories(root, this.refreshNativeLayoutSidebarContext(context));
     }
 
     document.body.appendChild(root);
@@ -5241,6 +5998,22 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     renderCategory(categories[0]);
   }
 
+  private refreshNativeLayoutSidebarContext(context: NativeLayoutTableSidebarContext): NativeLayoutTableSidebarContext {
+    const latestSelection = this.resolveLatestNativeLayoutSelection(context.tableEl, context.selection);
+    if (!latestSelection) return context;
+
+    const runtime = this.runtimeState.get(context.tableEl);
+    if (runtime) {
+      runtime.selection = latestSelection;
+      runtime.anchor = runtime.anchor ?? context.coord;
+    }
+
+    return {
+      ...context,
+      selection: latestSelection,
+    };
+  }
+
   private buildNativeLayoutSidebarCategories(context: NativeLayoutTableSidebarContext): SidebarPopoverCategory[] {
     const close = () => this.hideTableSidebarPopover();
     const beautify: SidebarPopoverAction[] = [
@@ -5265,6 +6038,22 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
         wide: true,
         run: async () => {
           await this.setNativeLayoutTableStyle(context.tableId, context.file, context.tableEl, false);
+          close();
+        },
+      },
+      {
+        label: NATIVE_LAYOUT_BORDER_ENABLE_LABEL,
+        wide: true,
+        run: async () => {
+          await this.setNativeLayoutTableBorderStyle(context.tableId, context.file, context.tableEl, true);
+          close();
+        },
+      },
+      {
+        label: NATIVE_LAYOUT_BORDER_DISABLE_LABEL,
+        wide: true,
+        run: async () => {
+          await this.setNativeLayoutTableBorderStyle(context.tableId, context.file, context.tableEl, false);
           close();
         },
       },
@@ -5339,7 +6128,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL, alignment: "left" as const },
       { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL, alignment: "center" as const },
       { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL, alignment: "right" as const },
-      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL, alignment: null },
     ].map(({ label, alignment }) => ({
       label,
       run: async () => {
@@ -5377,12 +6165,114 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       });
     }
 
+    const editActions: SidebarPopoverAction[] = [
+      {
+        label: "格式化表格",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "format-table");
+          close();
+        },
+      },
+      {
+        label: "插入行",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "insert-row");
+          close();
+        },
+      },
+      {
+        label: "插入列",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "insert-column");
+          close();
+        },
+      },
+      {
+        label: "删除行",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "delete-row");
+          close();
+        },
+      },
+      {
+        label: "删除列",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "delete-column");
+          close();
+        },
+      },
+      {
+        label: "行上移",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "move-row-up");
+          close();
+        },
+      },
+      {
+        label: "行下移",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "move-row-down");
+          close();
+        },
+      },
+      {
+        label: "列左移",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "move-column-left");
+          close();
+        },
+      },
+      {
+        label: "列右移",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "move-column-right");
+          close();
+        },
+      },
+      {
+        label: "升序排序",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "sort-rows-ascending");
+          close();
+        },
+      },
+      {
+        label: "降序排序",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "sort-rows-descending");
+          close();
+        },
+      },
+      {
+        label: "转置",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "transpose");
+          close();
+        },
+      },
+      {
+        label: "计算公式",
+        run: async () => {
+          await this.runNativeLayoutAdvancedTableOperation(context as any, "evaluate-formulas");
+          close();
+        },
+      },
+    ];
+
     const output: SidebarPopoverAction[] = [
       {
         label: "保存当前表格为模板",
         wide: true,
         run: async () => {
-          await this.saveManagedTableAsTemplate(context.file, context.parsedTable);
+          await this.saveManagedTableAsTemplate(context.file, context.parsedTable, context.tableId);
+          close();
+        },
+      },
+      {
+        label: "导出 CSV",
+        wide: true,
+        run: async () => {
+          await this.showAdvancedTableCsvExport(true);
           close();
         },
       },
@@ -5402,6 +6292,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       { id: "style", label: "颜色字体", actions: style },
       { id: "align", label: "对齐", actions: alignments },
       { id: "fill", label: "填充", actions: fillActions },
+      { id: "edit", label: "编辑排序", actions: editActions },
       { id: "formula", label: NATIVE_LAYOUT_FORMULA_HELP_LABEL, actions: [], render: (panel) => this.appendNativeFormulaHelp(panel) },
       { id: "output", label: "模板导出", actions: output },
     ];
@@ -5442,11 +6333,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.tableSidebarPopoverEl.style.top = `${Math.max(72, rect.top - 4)}px`;
   }
 
-  private getNativeLayoutAlignmentForLabel(label: string): "left" | "center" | "right" | null | undefined {
+  private getNativeLayoutAlignmentForLabel(label: string): "left" | "center" | "right" | undefined {
     if (label === NATIVE_LAYOUT_ALIGN_LEFT_LABEL) return "left";
     if (label === NATIVE_LAYOUT_ALIGN_CENTER_LABEL) return "center";
     if (label === NATIVE_LAYOUT_ALIGN_RIGHT_LABEL) return "right";
-    if (label === NATIVE_LAYOUT_ALIGN_CLEAR_LABEL) return null;
     return undefined;
   }
 
@@ -5475,6 +6365,15 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL },
       { label: NATIVE_LAYOUT_FILL_DOWN_LABEL },
       { label: NATIVE_LAYOUT_FILL_RIGHT_LABEL },
+      { label: "格式化表格" },
+      { label: "插入行" },
+      { label: "插入列" },
+      { label: "删除行" },
+      { label: "删除列" },
+      { label: "升序排序" },
+      { label: "降序排序" },
+      { label: "转置" },
+      { label: "导出 CSV（含表头）", wide: true },
       { label: "保存当前表格为模板", wide: true },
       { label: "插入模板", wide: true },
       { label: "模板库", wide: true },
@@ -5495,9 +6394,23 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL },
       { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL },
       { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL },
-      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL },
       { label: NATIVE_LAYOUT_FILL_DOWN_LABEL },
       { label: NATIVE_LAYOUT_FILL_RIGHT_LABEL },
+      { label: "格式化表格" },
+      { label: "插入行" },
+      { label: "插入列" },
+      { label: "删除行" },
+      { label: "删除列" },
+      { label: "行上移" },
+      { label: "行下移" },
+      { label: "列左移" },
+      { label: "列右移" },
+      { label: "升序排序" },
+      { label: "降序排序" },
+      { label: "转置" },
+      { label: "计算公式" },
+      { label: "导出 CSV（含表头）", wide: true },
+      { label: "导出 CSV（不含表头）", wide: true },
       { label: "保存当前表格为模板", wide: true },
       { label: "插入模板", wide: true },
       { label: "模板库", wide: true },
@@ -5518,8 +6431,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const runtime = this.runtimeState.get(freshContext.tableEl);
       const cell = freshContext.target.closest("th, td") as HTMLTableCellElement | null;
       const coord = cell ? this.getCellCoord(cell) : null;
+      const datasetTableId = freshContext.tableEl.dataset.mdtpTableId || "";
       const parsedTableId = runtime?.parsedTable?.tableId ?? "";
       const tableId =
+        (datasetTableId && this.dataStore.tables[datasetTableId] ? datasetTableId : "") ||
         this.getInitializedTableId(freshContext.tableEl) ||
         (parsedTableId && this.dataStore.tables[parsedTableId]
           ? parsedTableId
@@ -5553,6 +6468,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       cell: anchorCell,
       coord: activeContext.anchor,
       tableId:
+        (activeContext.tableEl.dataset.mdtpTableId && this.dataStore.tables[activeContext.tableEl.dataset.mdtpTableId]
+          ? activeContext.tableEl.dataset.mdtpTableId
+          : "") ||
         activeContext.tableId ||
         (runtime.parsedTable?.tableId && this.dataStore.tables[runtime.parsedTable.tableId]
           ? runtime.parsedTable.tableId
@@ -5630,6 +6548,10 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const isDirectFormTypingTarget = !!target?.closest("input, textarea, select, .mdtp-inline-editor, .mdtp-onenote-paste-zone");
     const isForeignEditableTarget =
       !!target?.closest("[contenteditable='true']") && !target?.closest(".cm-content") && !target?.closest(".mdtp-onenote-paste-zone");
+
+    if (this.handleAdvancedTableSourceKeyDown(event, target)) {
+      return;
+    }
 
     if (
       this.isExperimentalFeatureEnabled() &&
@@ -5747,6 +6669,36 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     if (key !== "c" && key !== "v") return;
 
     return;
+  }
+
+  private handleAdvancedTableSourceKeyDown(event: KeyboardEvent, target: HTMLElement | null) {
+    if (event.defaultPrevented || event.isComposing) return false;
+    if (event.metaKey || event.ctrlKey || event.altKey) return false;
+    if (!target?.closest(".cm-content")) return false;
+
+    const settings = this.getAdvancedTableSettings();
+    let operation: AdvancedTableOperation | null = null;
+    if (event.key === "Tab" && settings.bindTab) {
+      operation = event.shiftKey ? "previous-cell" : "next-cell";
+    } else if (event.key === "Enter" && !event.shiftKey && settings.bindEnter) {
+      operation = "next-row";
+    }
+    if (!operation) return false;
+
+    const view = this.getContainingMarkdownView(target);
+    const editor = (view as any)?.editor ?? this.getActiveMarkdownEditor();
+    if (!editor) return false;
+
+    try {
+      const handled = runAdvancedTableOperationOnEditor(editor, operation, settings);
+      if (!handled) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    } catch (error) {
+      console.error("[mdtp] advanced table key binding failed", error);
+      return false;
+    }
   }
 
   private async handleDocumentPaste(event: ClipboardEvent) {
@@ -5987,14 +6939,6 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   private async insertOneNoteConvertedContentAtCursor(file: TFile, converted: OneNoteConvertedContent) {
     const normalizedContent = converted.content.endsWith("\n") ? converted.content : `${converted.content}\n`;
-    const modeOverrides = Object.fromEntries(converted.tableRecords.map((record) => [record.tableId, "nativeLayout"] as const));
-
-    for (const record of converted.tableRecords) {
-      this.dataStore.tables[record.tableId] = this.cloneTableRecord(record);
-    }
-    if (converted.tableRecords.length > 0) {
-      await this.savePluginData();
-    }
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     const editor = (view as any)?.editor;
@@ -6002,11 +6946,11 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const cursor = editor.getCursor();
       const currentLine = typeof editor.getLine === "function" ? String(editor.getLine(cursor.line) ?? "") : "";
       const prefix = currentLine.trim() ? "\n\n" : "";
+      const preferredStartLine = cursor.line + (prefix ? 2 : 0);
       editor.replaceRange(`${prefix}${normalizedContent}`, cursor);
       const nextContent =
         typeof editor.getValue === "function" ? String(editor.getValue() ?? "") : await this.app.vault.cachedRead(file);
-      const parsedTables = this.parseMarkdownTables(nextContent);
-      await this.syncTableRecords(file, parsedTables, { modeOverrides });
+      await this.savePreparedTemplateTableRecords(file, converted.tableRecords, nextContent, preferredStartLine);
       return;
     }
 
@@ -6014,8 +6958,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const separator = originalContent.trim().length === 0 ? "" : /\r?\n$/.test(originalContent) ? "\n" : "\n\n";
     const nextContent = `${originalContent}${separator}${normalizedContent}`;
     await this.app.vault.modify(file, nextContent);
-    const parsedTables = this.parseMarkdownTables(nextContent);
-    await this.syncTableRecords(file, parsedTables, { modeOverrides });
+    await this.savePreparedTemplateTableRecords(file, converted.tableRecords, nextContent, originalContent.split(/\r?\n/).length);
   }
 
   private async buildOneNoteEnhancedMarkdownContent(file: TFile, html: string, clipboardImages: File[] = []) {
@@ -6528,13 +7471,14 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     };
 
     const tableId = this.generateTableId();
-    const markdown = [this.formatTableMarker(tableId), "", ...this.buildOneNoteRawTable(rawTable)].join("\n");
+    const markdown = this.buildOneNoteRawTable(rawTable).join("\n");
     const now = Date.now();
     return {
       markdown,
       record: {
         tableId,
         mode: "nativeLayout",
+        markerless: true,
         filePath: file.path,
         createdAt: now,
         updatedAt: now,
@@ -7579,7 +8523,9 @@ with open(out_path, "wb") as handle:
       return;
     }
 
-    if (!this.isInitializedEnhancedTable(tableEl)) return;
+    const isEnhancedTable = this.isInitializedEnhancedTable(tableEl);
+    const isNativeLayoutTable = this.isNativeLayoutTable(tableEl);
+    if (!isEnhancedTable && !isNativeLayoutTable) return;
 
     if (event.button !== 0) return;
 
@@ -7588,6 +8534,11 @@ with open(out_path, "wb") as handle:
 
     const coord = this.getCellCoord(cell);
     if (!coord) return;
+
+    if (isNativeLayoutTable && !isEnhancedTable && !this.shouldCaptureNativeLayoutSelectionPointer(event)) {
+      this.updatePassiveNativeLayoutCellContext(tableEl, coord);
+      return;
+    }
 
     event.preventDefault();
     this.clearAllEnhancedSelections(tableEl);
@@ -7604,6 +8555,20 @@ with open(out_path, "wb") as handle:
     cell.tabIndex = -1;
     cell.focus({ preventScroll: true });
     this.renderSelection(tableEl, runtime.selection, runtime.anchor);
+  }
+
+  private shouldCaptureNativeLayoutSelectionPointer(event: PointerEvent) {
+    // Native tables must stay zero-intrusion: normal click/double-click belongs to Obsidian editing.
+    // Plugin-owned range selection is opt-in so styling tools can still target a visible range.
+    return event.shiftKey || event.altKey;
+  }
+
+  private updatePassiveNativeLayoutCellContext(tableEl: HTMLTableElement, coord: CellCoord) {
+    const runtime = this.runtimeState.get(tableEl);
+    if (!runtime) return;
+    runtime.anchor = coord;
+    runtime.selection = this.normalizeSelection(coord, coord);
+    this.renderSelection(tableEl, null, null);
   }
 
   private handleTableContextMenu(event: MouseEvent, tableEl: HTMLTableElement) {
@@ -7695,7 +8660,7 @@ with open(out_path, "wb") as handle:
     parsedTable: ParsedTableBlock | null,
     tableId?: string | null
   ) {
-    const effectiveTableId = tableId ?? parsedTable?.tableId ?? null;
+    const effectiveTableId = tableId ?? (parsedTable ? this.resolveTableRecordIdForParsedTable(file, parsedTable) : null);
     const currentTableBeautified = this.isTableNativeLayoutBeautified(effectiveTableId);
 
     menu.addItem((item) => {
@@ -7748,6 +8713,16 @@ with open(out_path, "wb") as handle:
         item.setTitle(NATIVE_LAYOUT_CLEAR_TABLE_STYLE_LABEL);
         item.setIcon("eraser");
         item.onClick(() => void this.setNativeLayoutTableStyle(tableId, file, tableEl, false));
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_BORDER_ENABLE_LABEL);
+        item.setIcon("grid-2x2");
+        item.onClick(() => void this.setNativeLayoutTableBorderStyle(tableId, file, tableEl, true));
+      });
+      submenu.addItem((item) => {
+        item.setTitle(NATIVE_LAYOUT_BORDER_DISABLE_LABEL);
+        item.setIcon("eraser");
+        item.onClick(() => void this.setNativeLayoutTableBorderStyle(tableId, file, tableEl, false));
       });
       submenu.addItem((item) => {
         item.setTitle(NATIVE_LAYOUT_ROW_COLOR_LABEL);
@@ -7858,11 +8833,10 @@ with open(out_path, "wb") as handle:
     selection: SelectionRect | null,
     coord: CellCoord
   ) {
-    const options: Array<{ label: string; icon: string; alignment: "left" | "center" | "right" | null }> = [
+    const options: Array<{ label: string; icon: string; alignment: "left" | "center" | "right" }> = [
       { label: NATIVE_LAYOUT_ALIGN_LEFT_LABEL, icon: "align-left", alignment: "left" },
       { label: NATIVE_LAYOUT_ALIGN_CENTER_LABEL, icon: "align-center", alignment: "center" },
       { label: NATIVE_LAYOUT_ALIGN_RIGHT_LABEL, icon: "align-right", alignment: "right" },
-      { label: NATIVE_LAYOUT_ALIGN_CLEAR_LABEL, icon: "eraser", alignment: null },
     ];
     for (const option of options) {
       menu.addItem((item) => {
@@ -8125,17 +9099,21 @@ with open(out_path, "wb") as handle:
     coord: CellCoord,
     origin?: { x: number; y: number }
   ) {
-    const range = this.getSelectedRowRange(selection, coord);
     const menu = new Menu();
     for (const palette of this.getNativeRowColorChoicesForTable(tableId)) {
       menu.addItem((item) => {
         item.setTitle(palette.label);
         item.setIcon("paint-bucket");
         item.onClick(() =>
-          void this.setNativeLayoutRowRangeColor(tableId, file, tableEl, range.startRow, range.endRow, palette.value)
+          void this.setNativeLayoutCellRangeBackgroundColor(tableId, file, tableEl, selection, coord, palette.value)
         );
       });
     }
+    menu.addItem((item) => {
+      item.setTitle("清除选区填充");
+      item.setIcon("eraser");
+      item.onClick(() => void this.setNativeLayoutCellRangeBackgroundColor(tableId, file, tableEl, selection, coord, null));
+    });
     (menu as any).addSeparator?.();
     menu.addItem((item) => {
       item.setTitle("更多行段设置");
@@ -8240,6 +9218,46 @@ with open(out_path, "wb") as handle:
     new Notice(normalizedColor ? "已设置选中行颜色" : "已恢复选中行默认色");
   }
 
+  async setNativeLayoutCellRangeBackgroundColor(
+    tableId: string,
+    file: TFile,
+    tableEl: HTMLTableElement,
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    color: string | null
+  ) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const before = await this.captureHistoryState(file, [tableId]);
+    const normalizedColor = color ? this.normalizeHexColor(color, this.getNativeLayoutResolvedRowColor(tableId, range.startRow)) : null;
+
+    for (let row = range.startRow; row <= range.endRow; row += 1) {
+      for (let col = range.startCol; col <= range.endCol; col += 1) {
+        const key = this.getCellKey({ row, col });
+        if (normalizedColor) {
+          record.layout.cellColors[key] = normalizedColor;
+        } else {
+          delete record.layout.cellColors[key];
+        }
+      }
+    }
+
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: normalizedColor ? "设置选区填充" : "清除选区填充",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(normalizedColor ? "已设置选区填充颜色" : "已清除选区填充颜色");
+  }
+
   async setNativeLayoutCellRangeTextColor(
     tableId: string,
     file: TFile,
@@ -8255,7 +9273,6 @@ with open(out_path, "wb") as handle:
     const before = await this.captureHistoryState(file, [tableId]);
     const normalizedColor = color ? this.normalizeHexColor(color, this.getNativeTableDefaultTextColor()) : null;
     for (let row = range.startRow; row <= range.endRow; row += 1) {
-      if (row === 0) continue;
       for (let col = range.startCol; col <= range.endCol; col += 1) {
         const key = this.getCellKey({ row, col });
         if (normalizedColor) {
@@ -8400,27 +9417,48 @@ with open(out_path, "wb") as handle:
     new Notice(enabled ? "已套用表格样式" : "已取消斑马样式");
   }
 
+  async setNativeLayoutTableBorderStyle(tableId: string, file: TFile, tableEl: HTMLTableElement, enabled: boolean) {
+    const record = this.dataStore.tables[tableId];
+    if (!record || record.mode !== "nativeLayout") return;
+
+    const before = await this.captureHistoryState(file, [tableId]);
+    record.layout.nativeBorderEnabled = enabled === true;
+    if (record.layout.nativeBorderEnabled && !record.layout.nativeColorPalette) {
+      record.layout.nativeColorPalette = this.getCurrentNativeColorPalette();
+    }
+
+    record.updatedAt = Date.now();
+    await this.savePluginData();
+    this.refreshEnhancedTable(tableEl, tableId);
+    const after = await this.captureHistoryState(file, [tableId]);
+    this.pushHistoryEntry({
+      label: enabled ? "开启边框样式" : "关闭边框样式",
+      filePath: file.path,
+      tableIds: [tableId],
+      before,
+      after,
+    });
+    new Notice(enabled ? "已开启边框样式" : "已关闭边框样式");
+  }
+
   async setNativeLayoutCellRangeAlignment(
     tableId: string,
     file: TFile,
     tableEl: HTMLTableElement,
     selection: SelectionRect | null,
     coord: CellCoord,
-    alignment: "left" | "center" | "right" | null
+    alignment: "left" | "center" | "right",
+    rangeMode: NativeLayoutRangeMode = "selection"
   ) {
     const record = this.dataStore.tables[tableId];
     if (!record || record.mode !== "nativeLayout") return;
 
-    const range = this.getSelectedCellRange(selection, coord, tableEl);
+    const range = this.getSelectedCellRange(selection, coord, tableEl, rangeMode);
     const before = await this.captureHistoryState(file, [tableId]);
     for (let row = range.startRow; row <= range.endRow; row += 1) {
       for (let col = range.startCol; col <= range.endCol; col += 1) {
         const key = this.getCellKey({ row, col });
-        if (alignment) {
-          record.layout.cellAlignments[key] = alignment;
-        } else {
-          delete record.layout.cellAlignments[key];
-        }
+        record.layout.cellAlignments[key] = alignment;
       }
     }
 
@@ -8429,29 +9467,86 @@ with open(out_path, "wb") as handle:
     this.refreshEnhancedTable(tableEl, tableId);
     const after = await this.captureHistoryState(file, [tableId]);
     this.pushHistoryEntry({
-      label: alignment ? "设置单元格对齐" : "恢复单元格对齐",
+      label: "设置单元格对齐",
       filePath: file.path,
       tableIds: [tableId],
       before,
       after,
     });
-    new Notice(alignment ? "已设置对齐" : "已恢复默认对齐");
+    new Notice("已设置对齐");
   }
 
-  private getSelectedCellRange(selection: SelectionRect | null, coord: CellCoord, tableEl: HTMLTableElement) {
+  private getSelectedCellRange(
+    selection: SelectionRect | null,
+    coord: CellCoord,
+    tableEl: HTMLTableElement,
+    rangeMode: NativeLayoutRangeMode = "selection"
+  ) {
     const structure = this.collectTableStructure(tableEl);
     const maxRow = Math.max(0, structure.rows.length - 1);
     const maxCol = Math.max(0, ...structure.matrix.map((row) => row.length - 1));
-    const startRow = Math.max(0, Math.min(maxRow, selection?.startRow ?? coord.row));
-    const endRow = Math.max(0, Math.min(maxRow, selection?.endRow ?? coord.row));
-    const startCol = Math.max(0, Math.min(maxCol, selection?.startCol ?? coord.col));
-    const endCol = Math.max(0, Math.min(maxCol, selection?.endCol ?? coord.col));
-    return {
+    const latestSelection = this.resolveLatestNativeLayoutSelection(tableEl, selection);
+    const startRow = Math.max(0, Math.min(maxRow, latestSelection?.startRow ?? coord.row));
+    const endRow = Math.max(0, Math.min(maxRow, latestSelection?.endRow ?? coord.row));
+    const startCol = Math.max(0, Math.min(maxCol, latestSelection?.startCol ?? coord.col));
+    const endCol = Math.max(0, Math.min(maxCol, latestSelection?.endCol ?? coord.col));
+    const normalized = {
       startRow: Math.min(startRow, endRow),
       endRow: Math.max(startRow, endRow),
       startCol: Math.min(startCol, endCol),
       endCol: Math.max(startCol, endCol),
     };
+    if (rangeMode === "row") {
+      return {
+        startRow: normalized.startRow,
+        endRow: normalized.endRow,
+        startCol: 0,
+        endCol: maxCol,
+      };
+    }
+    if (rangeMode === "column") {
+      return {
+        startRow: 0,
+        endRow: maxRow,
+        startCol: normalized.startCol,
+        endCol: normalized.endCol,
+      };
+    }
+    return {
+      ...normalized,
+    };
+  }
+
+  private resolveLatestNativeLayoutSelection(tableEl: HTMLTableElement, fallback: SelectionRect | null) {
+    const runtime = this.runtimeState.get(tableEl);
+    const runtimeSelection = runtime?.selection ?? null;
+    const domSelection = this.getDomSelectedCellRange(tableEl);
+    if (domSelection && (!runtimeSelection || this.getSelectionArea(domSelection) >= this.getSelectionArea(runtimeSelection))) {
+      return domSelection;
+    }
+    return runtimeSelection ?? fallback;
+  }
+
+  private getDomSelectedCellRange(tableEl: HTMLTableElement): SelectionRect | null {
+    const browserSelection = window.getSelection?.() ?? null;
+    const coords = Array.from(tableEl.querySelectorAll("th, td"))
+      .filter((cell) => {
+        const htmlCell = cell as HTMLTableCellElement;
+        return htmlCell.classList.contains("mdtp-cell-selected") || this.isPlainTableCellSelected(htmlCell, browserSelection);
+      })
+      .map((cell) => this.getCellCoord(cell as HTMLTableCellElement))
+      .filter((coord): coord is CellCoord => !!coord);
+    if (coords.length === 0) return null;
+    return {
+      startRow: Math.min(...coords.map((coord) => coord.row)),
+      endRow: Math.max(...coords.map((coord) => coord.row)),
+      startCol: Math.min(...coords.map((coord) => coord.col)),
+      endCol: Math.max(...coords.map((coord) => coord.col)),
+    };
+  }
+
+  private getSelectionArea(selection: SelectionRect) {
+    return (selection.endRow - selection.startRow + 1) * (selection.endCol - selection.startCol + 1);
   }
 
   private async setColor(
@@ -9622,7 +10717,7 @@ with open(out_path, "wb") as handle:
     coord: CellCoord
   ) {
     const sourceTable = tableId
-      ? this.parseMarkdownTables(await this.app.vault.cachedRead(file)).find((table) => table.tableId === tableId) ?? null
+      ? this.findParsedTableForRecordId(await this.app.vault.cachedRead(file), file, tableId)
       : parsedTable;
     if (!sourceTable) return null;
     const rawTable = this.parseRawTable(sourceTable.raw);
@@ -9768,6 +10863,230 @@ with open(out_path, "wb") as handle:
         return true;
       }
     );
+  }
+
+  private async runNativeLayoutAdvancedTableOperation(
+    context: ReturnType<MarkdownTableEnhancerPlugin["getActiveNativeLayoutCommandContext"]>,
+    operation: AdvancedTableOperation
+  ) {
+    if (!context) return false;
+    const row = context.coord.row;
+    const col = context.coord.col;
+
+    switch (operation) {
+      case "format-table":
+        return this.formatNativeLayoutTable(context.file, context.tableId);
+      case "insert-row":
+        return this.insertRows(context.file, context.tableId, Math.max(1, row), 1);
+      case "insert-column":
+        return this.insertColumns(context.file, context.tableId, col, 1);
+      case "delete-row":
+        if (row <= 0) {
+          new Notice("表头行不能删除");
+          return true;
+        }
+        return this.deleteRows(context.file, context.tableId, row, 1);
+      case "delete-column":
+        return this.deleteColumns(context.file, context.tableId, col, 1);
+      case "move-row-up":
+        return this.moveNativeLayoutRow(context.file, context.tableId, row, -1);
+      case "move-row-down":
+        return this.moveNativeLayoutRow(context.file, context.tableId, row, 1);
+      case "move-column-left":
+        return this.moveNativeLayoutColumn(context.file, context.tableId, col, -1);
+      case "move-column-right":
+        return this.moveNativeLayoutColumn(context.file, context.tableId, col, 1);
+      case "sort-rows-ascending":
+        return this.sortNativeLayoutRows(context.file, context.tableId, col, "ascending");
+      case "sort-rows-descending":
+        return this.sortNativeLayoutRows(context.file, context.tableId, col, "descending");
+      case "transpose":
+        return this.transposeNativeLayoutTable(context.file, context.tableId);
+      case "evaluate-formulas":
+        return this.evaluateNativeLayoutInlineFormulas(context.file, context.tableId);
+      case "left-align-column":
+      case "center-align-column":
+      case "right-align-column": {
+        const alignment =
+          operation === "left-align-column" ? "left" : operation === "center-align-column" ? "center" : "right";
+        await this.setNativeLayoutCellRangeAlignment(
+          context.tableId,
+          context.file,
+          context.tableEl,
+          context.selection,
+          context.coord,
+          alignment,
+          "column"
+        );
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
+  private async formatNativeLayoutTable(file: TFile, tableId: string) {
+    return this.mutateTableSource(file, tableId, "before-table-format", "格式化表格", () => true);
+  }
+
+  private async moveNativeLayoutRow(file: TFile, tableId: string, rowIndex: number, offset: -1 | 1) {
+    if (rowIndex <= 0) {
+      new Notice("表头行不能移动");
+      return true;
+    }
+    return this.mutateTableSource(
+      file,
+      tableId,
+      "before-row-move",
+      offset < 0 ? "上移行" : "下移行",
+      (rawTable, layout) => {
+        const fromBodyIndex = rowIndex - 1;
+        const toBodyIndex = fromBodyIndex + offset;
+        if (fromBodyIndex < 0 || fromBodyIndex >= rawTable.body.length) return false;
+        if (toBodyIndex < 0 || toBodyIndex >= rawTable.body.length) return false;
+        const [row] = rawTable.body.splice(fromBodyIndex, 1);
+        rawTable.body.splice(toBodyIndex, 0, row);
+        this.moveNativeLayoutRowMetadata(layout, rowIndex, toBodyIndex + 1);
+        return true;
+      }
+    );
+  }
+
+  private async moveNativeLayoutColumn(file: TFile, tableId: string, colIndex: number, offset: -1 | 1) {
+    return this.mutateTableSource(
+      file,
+      tableId,
+      "before-column-move",
+      offset < 0 ? "左移列" : "右移列",
+      (rawTable, layout) => {
+        const toIndex = colIndex + offset;
+        if (colIndex < 0 || colIndex >= rawTable.header.length) return false;
+        if (toIndex < 0 || toIndex >= rawTable.header.length) return false;
+        this.moveArrayItem(rawTable.header, colIndex, toIndex);
+        this.moveArrayItem(rawTable.divider, colIndex, toIndex);
+        for (const row of rawTable.body) {
+          this.moveArrayItem(row, colIndex, toIndex);
+        }
+        this.moveNativeLayoutColumnMetadata(layout, colIndex, toIndex);
+        return true;
+      }
+    );
+  }
+
+  private async sortNativeLayoutRows(
+    file: TFile,
+    tableId: string,
+    colIndex: number,
+    direction: "ascending" | "descending"
+  ) {
+    return this.mutateTableSource(
+      file,
+      tableId,
+      `before-row-sort-${direction}`,
+      direction === "ascending" ? "升序排序" : "降序排序",
+      (rawTable, layout) => {
+        if (rawTable.body.length <= 1) return false;
+        const indexedRows = rawTable.body.map((row, index) => ({ row, index }));
+        const values = indexedRows.map((item) => this.normalizeSortCellValue(item.row[colIndex] ?? ""));
+        const numeric = values.every((value) => value !== "" && Number.isFinite(Number(value)));
+        indexedRows.sort((a, b) => {
+          const aValue = this.normalizeSortCellValue(a.row[colIndex] ?? "");
+          const bValue = this.normalizeSortCellValue(b.row[colIndex] ?? "");
+          const base = numeric
+            ? Number(aValue) - Number(bValue)
+            : aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: "base" });
+          if (base !== 0) return direction === "ascending" ? base : -base;
+          return a.index - b.index;
+        });
+        const nextOrder = indexedRows.map((item) => item.index);
+        const changed = nextOrder.some((oldIndex, newIndex) => oldIndex !== newIndex);
+        if (!changed) return false;
+        rawTable.body = indexedRows.map((item) => item.row);
+        this.reorderNativeLayoutBodyRowMetadata(layout, nextOrder);
+        return true;
+      }
+    );
+  }
+
+  private async transposeNativeLayoutTable(file: TFile, tableId: string) {
+    return this.mutateTableSource(
+      file,
+      tableId,
+      "before-table-transpose",
+      "转置表格",
+      (rawTable, layout) => {
+        const matrix = [rawTable.header, ...rawTable.body];
+        const colCount = Math.max(1, ...matrix.map((row) => row.length));
+        const normalized = matrix.map((row) => this.normalizeRowCells(row, colCount));
+        const transposed = Array.from({ length: colCount }, (_, col) => normalized.map((row) => row[col] ?? ""));
+        if (transposed.length === 0) return false;
+        rawTable.header = transposed[0] ?? [""];
+        rawTable.divider = Array(rawTable.header.length).fill("---");
+        rawTable.body = transposed.slice(1).map((row) => this.normalizeRowCells(row, rawTable.header.length));
+        this.transposeNativeLayoutMetadata(layout);
+        return true;
+      }
+    );
+  }
+
+  private async evaluateNativeLayoutInlineFormulas(file: TFile, tableId: string) {
+    return this.mutateTableSource(
+      file,
+      tableId,
+      "before-formula-evaluate",
+      "计算公式",
+      (rawTable) => {
+        const matrix = this.buildRawTableMatrix(rawTable);
+        let changed = false;
+        for (let row = 0; row < matrix.length; row += 1) {
+          for (let col = 0; col < (matrix[row]?.length ?? 0); col += 1) {
+            const value = matrix[row]?.[col] ?? "";
+            if (!value.trim().startsWith("=")) continue;
+            const result = evaluateNativeTableFormula(value, matrix, { row, col });
+            if (!result) continue;
+            if (this.setCellValue(rawTable, { row, col }, result.value)) {
+              matrix[row][col] = result.value;
+              changed = true;
+            }
+          }
+        }
+        return changed;
+      }
+    );
+  }
+
+  private async setNativeLayoutColumnAlignment(
+    file: TFile,
+    tableEl: HTMLTableElement,
+    tableId: string,
+    colIndex: number,
+    alignment: "left" | "center" | "right"
+  ) {
+    const structure = this.collectTableStructure(tableEl);
+    const maxRow = Math.max(0, structure.rows.length - 1);
+    await this.setNativeLayoutCellRangeAlignment(
+      tableId,
+      file,
+      tableEl,
+      {
+        startRow: 0,
+        endRow: maxRow,
+        startCol: colIndex,
+        endCol: colIndex,
+      },
+      { row: 0, col: colIndex },
+      alignment
+    );
+  }
+
+  private async exportNativeLayoutTableCsv(file: TFile, tableId: string, withHeaders: boolean) {
+    const content = await this.app.vault.cachedRead(file);
+    const parsedTable = this.findParsedTableForRecordId(content, file, tableId);
+    if (!parsedTable) return null;
+    const rawTable = this.parseRawTable(parsedTable.raw);
+    if (!rawTable) return null;
+    const rows = withHeaders ? [rawTable.header, ...rawTable.body] : rawTable.body;
+    return rows.map((row) => row.map((cell) => String(cell ?? "").replace(/<br\s*\/?>/gi, "\n")).join("\t")).join("\n");
   }
 
   private async appendImageToCell(file: TFile, tableId: string, coord: CellCoord, imageMarkup: string) {
@@ -10222,7 +11541,7 @@ with open(out_path, "wb") as handle:
   private async copyWholeTableToClipboard(file: TFile, tableId: string) {
     if (!tableId) return false;
     const content = await this.app.vault.cachedRead(file);
-    const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId);
+    const parsedTable = this.findParsedTableForRecordId(content, file, tableId);
     if (!parsedTable) return false;
     return this.writeTextToClipboard(`\n${parsedTable.raw}\n`);
   }
@@ -10252,7 +11571,7 @@ with open(out_path, "wb") as handle:
     options?: { preserveRaw?: boolean }
   ) {
     const content = await this.app.vault.cachedRead(file);
-    const parsedTable = this.parseMarkdownTables(content).find((table) => table.tableId === tableId);
+    const parsedTable = this.findParsedTableForRecordId(content, file, tableId);
     if (!parsedTable) return null;
     const rawTable = this.parseRawTable(parsedTable.raw);
     if (!rawTable) return null;
@@ -10481,6 +11800,10 @@ with open(out_path, "wb") as handle:
     return false;
   }
 
+  async copyTextToSystemClipboard(text: string) {
+    return this.writeTextToClipboard(text);
+  }
+
   private async copyTableAsImage(tableEl: HTMLTableElement) {
     const execFile = (window as any)?.require?.("child_process")?.execFile;
     if (typeof execFile !== "function") return false;
@@ -10557,7 +11880,7 @@ with open(out_path, "wb") as handle:
 
     const content = await this.app.vault.cachedRead(file);
     const parsedTables = this.parseMarkdownTables(content);
-    const targetTable = parsedTables.find((table) => table.tableId === tableId);
+    const targetTable = this.findParsedTableForRecordId(content, file, tableId);
     if (!targetTable) return false;
 
     const rawTable = this.parseRawTable(targetTable.raw);
@@ -10846,6 +12169,141 @@ with open(out_path, "wb") as handle:
     layout.cellAlignments = this.shiftCellAlignmentMapForColumnDelete(layout.cellAlignments, colIndex);
     layout.cellImageWidths = this.shiftCellWidthMapForColumnDelete(layout.cellImageWidths, colIndex);
     layout.merges = this.shiftMergesForDeletedColumn(layout.merges, colIndex);
+  }
+
+  private moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+    const [item] = items.splice(fromIndex, 1);
+    items.splice(toIndex, 0, item);
+  }
+
+  private normalizeSortCellValue(value: string) {
+    return String(value ?? "")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/\\\|/g, "|")
+      .trim();
+  }
+
+  private moveNativeLayoutRowMetadata(layout: TableLayoutMetadata, fromRow: number, toRow: number) {
+    const transform = (row: number) => this.moveIndex(row, fromRow, toRow);
+    this.remapNativeLayoutRows(layout, transform);
+  }
+
+  private moveNativeLayoutColumnMetadata(layout: TableLayoutMetadata, fromCol: number, toCol: number) {
+    const transform = (col: number) => this.moveIndex(col, fromCol, toCol);
+    this.remapNativeLayoutColumns(layout, transform);
+  }
+
+  private reorderNativeLayoutBodyRowMetadata(layout: TableLayoutMetadata, oldBodyIndexByNewBodyIndex: number[]) {
+    const oldToNew = new Map<number, number>();
+    oldBodyIndexByNewBodyIndex.forEach((oldBodyIndex, newBodyIndex) => {
+      oldToNew.set(oldBodyIndex + 1, newBodyIndex + 1);
+    });
+    this.remapNativeLayoutRows(layout, (row) => (row === 0 ? 0 : oldToNew.get(row) ?? row));
+  }
+
+  private transposeNativeLayoutMetadata(layout: TableLayoutMetadata) {
+    const nextColWidths = this.remapIndexedMap(layout.rowHeights, (row) => row);
+    const nextRowHeights = this.remapIndexedMap(layout.colWidths, (col) => col);
+    const nextColColors = this.remapIndexedMap(layout.rowColors, (row) => row);
+    const nextRowColors = this.remapIndexedMap(layout.colColors, (col) => col);
+    layout.colWidths = nextColWidths;
+    layout.rowHeights = nextRowHeights;
+    layout.colColors = nextColColors;
+    layout.rowColors = nextRowColors;
+    layout.cellColors = this.remapCellMap(layout.cellColors, (coord) => ({ row: coord.col, col: coord.row }));
+    layout.cellTextColors = this.remapCellMap(layout.cellTextColors, (coord) => ({ row: coord.col, col: coord.row }));
+    layout.cellAlignments = this.remapCellMap(layout.cellAlignments, (coord) => ({ row: coord.col, col: coord.row }));
+    layout.cellImageWidths = this.remapCellMap(layout.cellImageWidths, (coord) => ({ row: coord.col, col: coord.row }));
+    layout.merges = layout.merges.map((merge) => ({
+      row: merge.col,
+      col: merge.row,
+      rowspan: merge.colspan,
+      colspan: merge.rowspan,
+    }));
+  }
+
+  private remapNativeLayoutRows(layout: TableLayoutMetadata, transformRow: (row: number) => number | null) {
+    layout.rowHeights = this.remapIndexedMap(layout.rowHeights, transformRow);
+    layout.rowColors = this.remapIndexedMap(layout.rowColors, transformRow);
+    layout.cellColors = this.remapCellMap(layout.cellColors, (coord) => {
+      const row = transformRow(coord.row);
+      return row === null ? null : { ...coord, row };
+    });
+    layout.cellTextColors = this.remapCellMap(layout.cellTextColors, (coord) => {
+      const row = transformRow(coord.row);
+      return row === null ? null : { ...coord, row };
+    });
+    layout.cellAlignments = this.remapCellMap(layout.cellAlignments, (coord) => {
+      const row = transformRow(coord.row);
+      return row === null ? null : { ...coord, row };
+    });
+    layout.cellImageWidths = this.remapCellMap(layout.cellImageWidths, (coord) => {
+      const row = transformRow(coord.row);
+      return row === null ? null : { ...coord, row };
+    });
+    layout.merges = layout.merges.map((merge) => {
+      const row = transformRow(merge.row);
+      return row === null ? merge : { ...merge, row };
+    });
+  }
+
+  private remapNativeLayoutColumns(layout: TableLayoutMetadata, transformCol: (col: number) => number | null) {
+    layout.colWidths = this.remapIndexedMap(layout.colWidths, transformCol);
+    layout.colColors = this.remapIndexedMap(layout.colColors, transformCol);
+    layout.cellColors = this.remapCellMap(layout.cellColors, (coord) => {
+      const col = transformCol(coord.col);
+      return col === null ? null : { ...coord, col };
+    });
+    layout.cellTextColors = this.remapCellMap(layout.cellTextColors, (coord) => {
+      const col = transformCol(coord.col);
+      return col === null ? null : { ...coord, col };
+    });
+    layout.cellAlignments = this.remapCellMap(layout.cellAlignments, (coord) => {
+      const col = transformCol(coord.col);
+      return col === null ? null : { ...coord, col };
+    });
+    layout.cellImageWidths = this.remapCellMap(layout.cellImageWidths, (coord) => {
+      const col = transformCol(coord.col);
+      return col === null ? null : { ...coord, col };
+    });
+    layout.merges = layout.merges.map((merge) => {
+      const col = transformCol(merge.col);
+      return col === null ? merge : { ...merge, col };
+    });
+  }
+
+  private moveIndex(index: number, fromIndex: number, toIndex: number) {
+    if (index === fromIndex) return toIndex;
+    if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return index - 1;
+    if (fromIndex > toIndex && index >= toIndex && index < fromIndex) return index + 1;
+    return index;
+  }
+
+  private remapIndexedMap<T extends string | number>(input: Record<string, T>, transformIndex: (index: number) => number | null) {
+    const next: Record<string, T> = {};
+    for (const [key, value] of Object.entries(input)) {
+      const index = Number.parseInt(key, 10);
+      if (!Number.isFinite(index)) continue;
+      const nextIndex = transformIndex(index);
+      if (nextIndex === null || !Number.isFinite(nextIndex)) continue;
+      next[String(nextIndex)] = value;
+    }
+    return next;
+  }
+
+  private remapCellMap<T extends string | number>(
+    input: Record<string, T>,
+    transformCoord: (coord: CellCoord) => CellCoord | null
+  ) {
+    const next: Record<string, T> = {};
+    for (const [key, value] of Object.entries(input)) {
+      const coord = this.parseCellKey(key);
+      if (!coord) continue;
+      const nextCoord = transformCoord(coord);
+      if (!nextCoord) continue;
+      next[this.getCellKey(nextCoord)] = value;
+    }
+    return next;
   }
 
   private shiftIndexedMapForInsert<T extends string | number>(input: Record<string, T>, insertIndex: number) {
@@ -11256,14 +12714,23 @@ with open(out_path, "wb") as handle:
   private async syncTableRecords(file: TFile, parsedTables: ParsedTableBlock[], options: SyncTableRecordsOptions = {}) {
     const now = Date.now();
     let mutated = false;
+    const matchedIds = new Set<string>();
 
-    for (const table of parsedTables) {
-      if (!table.tableId) continue;
-      const existing = this.dataStore.tables[table.tableId];
-      const mode = options.forceMode ?? options.modeOverrides?.[table.tableId] ?? this.getTableRecordMode(existing);
+    for (let index = 0; index < parsedTables.length; index += 1) {
+      const table = parsedTables[index];
+      const tableId =
+        table.tableId ??
+        this.findBestMarkerlessRecordIdForParsedTable(file, table, index, matchedIds);
+      if (!tableId) continue;
+      matchedIds.add(tableId);
+
+      const existing = this.dataStore.tables[tableId];
+      const mode = options.forceMode ?? options.modeOverrides?.[tableId] ?? this.getTableRecordMode(existing);
       const nextRecord: TableRecord = {
-        tableId: table.tableId,
+        tableId,
         mode,
+        markerless: existing?.markerless === true || !table.tableId,
+        identity: this.createNativeTableIdentity(table, index),
         filePath: file.path,
         createdAt: existing?.createdAt ?? now,
         updatedAt: existing?.updatedAt ?? now,
@@ -11276,7 +12743,7 @@ with open(out_path, "wb") as handle:
       };
 
       if (!existing || JSON.stringify(existing) !== JSON.stringify(nextRecord)) {
-        this.dataStore.tables[table.tableId] = nextRecord;
+        this.dataStore.tables[tableId] = nextRecord;
         mutated = true;
       }
     }
@@ -11326,6 +12793,7 @@ with open(out_path, "wb") as handle:
   private cloneTableRecord(record: TableRecord): TableRecord {
     return {
       ...record,
+      identity: record.identity ? { ...record.identity } : undefined,
       lastKnownRange: { ...record.lastKnownRange },
       layout: this.cloneLayout(record.layout),
     };
@@ -11345,6 +12813,8 @@ with open(out_path, "wb") as handle:
     return {
       ...record,
       mode: "nativeLayout",
+      markerless: record.markerless === true,
+      identity: record.identity ? { ...record.identity } : undefined,
       lastKnownRange: { ...record.lastKnownRange },
       layout,
     };
@@ -11373,6 +12843,11 @@ with open(out_path, "wb") as handle:
       normalized.nativeColorPreset = NATIVE_COLOR_PRESET_BLUE_ZEBRA;
       normalized.nativeColorPalette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
       this.normalizeNativeColorPresetLayout(normalized);
+    } else if (layout?.nativeColorPalette) {
+      normalized.nativeColorPalette = this.normalizeNativeColorPalette(layout.nativeColorPalette, this.getCurrentNativeColorPalette());
+    }
+    if (layout?.nativeBorderEnabled === true) {
+      normalized.nativeBorderEnabled = true;
     }
     return normalized;
   }
@@ -11531,6 +13006,15 @@ with open(out_path, "wb") as handle:
   private joinLines(lines: string[], originalEndsWithNewline: boolean) {
     const joined = lines.join("\n");
     return originalEndsWithNewline ? `${joined}\n` : joined;
+  }
+
+  private splitContentLines(content: string) {
+    const originalEndsWithNewline = /\r?\n$/.test(content);
+    const lines = content.split(/\r?\n/);
+    if (originalEndsWithNewline && lines[lines.length - 1] === "") {
+      lines.pop();
+    }
+    return { lines, originalEndsWithNewline };
   }
 
   private createEmptyLayout(): TableLayoutMetadata {

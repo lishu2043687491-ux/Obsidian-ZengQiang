@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.14.11）
+# Obsidian 社区插件提交清单（目标版本 1.14.18）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -37,11 +37,16 @@
 - [x] `manifest.json`
 - [x] `styles.css`
 
-## 提交步骤（由开发者操作）
+## 提交步骤（已自动化）
 
-1. 推 GitHub Release **1.14.11**
-2. https://obsidian.md/plugins → Manage plugins → 确认仓库最新 Release 为 1.14.11
-3. https://community.obsidian.md/account/plugins/feishu-doc-toolbar → 等待 Review branch 对 **1.14.11** 重新扫描
+```bash
+cd /Users/mac/Projects/Obsidian-ZengQiang
+npm run publish:oss
+```
+
+脚本顺序：同步源码 → `build:oss` + smoke → git push → `gh release create` → **自动 Check for new releases**
+
+手动兜底： https://community.obsidian.md/account/plugins/feishu-doc-toolbar
 
 ## 禁止
 

@@ -474,6 +474,10 @@ type NativeColorSettings = {
   defaultColumnWidth?: number;
   defaultRowHeight?: number;
   defaultTextColor?: string;
+  defaultZebraEnabled?: boolean;
+  defaultBorderEnabled?: boolean;
+  defaultHeaderAlignment?: NativeTableAutoAlignment;
+  defaultFirstColumnAlignment?: NativeTableAutoAlignment;
   presets: Array<{
     id: string;
     label: string;
@@ -487,6 +491,15 @@ type NativeColorSettings = {
     palette: NativeColorPalette;
     saved?: boolean;
   }>;
+};
+
+type NativeTableAutoAlignment = "off" | "left" | "center" | "right";
+
+type AdvancedTableSettings = {
+  bindTab: boolean;
+  bindEnter: boolean;
+  formatType: "normal" | "weak";
+  showRibbonIcon: boolean;
 };
 
 const EXPERIENCE_SETTINGS_TABS: Array<{ id: ExperienceSettingsTabId; label: string }> = [
@@ -1538,8 +1551,10 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
   }
 
   private renderLocalLibraryPathsSection(containerEl: HTMLElement) {
-    const card = containerEl.createDiv({ cls: "fdtb-local-library-card" });
-    card.createDiv({ cls: "fdtb-local-library-title", text: "本地图片库位置" });
+    const card = containerEl.createEl("details", { cls: "fdtb-local-library-card" });
+    const summary = card.createEl("summary", { cls: "fdtb-local-library-summary" });
+    summary.createDiv({ cls: "fdtb-local-library-title", text: "本地图片库位置" });
+    summary.createSpan({ cls: "fdtb-local-library-toggle", text: "展开" });
 
     const desc = card.createDiv({ cls: "fdtb-local-library-desc" });
     desc.textContent = "这里仅展示路径，方便复制和确认；不会移动、删除或改写这些文件夹。";
@@ -2082,8 +2097,111 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     this.appendStatusRow(containerEl, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
     this.appendStatusRow(containerEl, "公式 / 自动填充", "已内置", "支持 LaTeX 显示、SUM/AVG/MIN/MAX 和拖拽自动填充");
+    this.appendStatusRow(containerEl, "Advanced Tables 编辑体验", "已接入", "支持跳格、格式化、增删移动、排序、转置、公式与 CSV");
 
+    this.renderAdvancedTableSettings(containerEl);
     this.renderNativeTableColorSettings(containerEl);
+  }
+
+  private renderAdvancedTableSettings(containerEl: HTMLElement) {
+    const settings = this.plugin.getAdvancedTableSettingsForManager();
+    if (!settings) {
+      this.appendStatusRow(containerEl, "Advanced Tables 设置", "未接通", "需要启用原生表格增强模块后才能设置编辑体验");
+      return;
+    }
+
+    const card = document.createElement("div");
+    card.className = "fdtb-native-color-card";
+
+    const header = document.createElement("div");
+    header.className = "fdtb-native-color-header";
+    const title = document.createElement("div");
+    title.className = "fdtb-native-color-title";
+    title.textContent = "Advanced Tables 编辑体验";
+    const hint = document.createElement("div");
+    hint.className = "fdtb-native-color-hint";
+    hint.textContent = "默认对齐成熟插件；遇到中文输入法或其他快捷键冲突时，可关闭 Tab / Enter 绑定。";
+    header.append(title, hint);
+    card.appendChild(header);
+
+    card.appendChild(
+      this.createAdvancedTableToggleRow({
+        label: "Tab / Shift+Tab 跳格",
+        checked: settings.bindTab,
+        onChange: async (checked) => {
+          await this.plugin.updateAdvancedTableSettingsFromManager({ bindTab: checked });
+          this.display();
+        },
+      })
+    );
+
+    card.appendChild(
+      this.createAdvancedTableToggleRow({
+        label: "Enter 跳到下一行",
+        checked: settings.bindEnter,
+        onChange: async (checked) => {
+          await this.plugin.updateAdvancedTableSettingsFromManager({ bindEnter: checked });
+          this.display();
+        },
+      })
+    );
+
+    card.appendChild(
+      this.createAdvancedTableToggleRow({
+        label: "显示 Advanced Tables 侧栏图标",
+        checked: settings.showRibbonIcon,
+        hint: "默认关闭，保留现有「表」按钮作为主入口；打开后需重载插件生效。",
+        onChange: async (checked) => {
+          await this.plugin.updateAdvancedTableSettingsFromManager({ showRibbonIcon: checked });
+          this.display();
+        },
+      })
+    );
+
+    const formatSelect = document.createElement("select");
+    formatSelect.value = settings.formatType;
+    for (const option of [
+      { value: "normal", label: "自动对齐列宽" },
+      { value: "weak", label: "轻量格式化" },
+    ] as const) {
+      const item = document.createElement("option");
+      item.value = option.value;
+      item.textContent = option.label;
+      formatSelect.appendChild(item);
+    }
+    formatSelect.addEventListener("change", async () => {
+      await this.plugin.updateAdvancedTableSettingsFromManager({
+        formatType: formatSelect.value === "weak" ? "weak" : "normal",
+      });
+      this.display();
+    });
+    card.appendChild(
+      this.createNativeTableSettingRow({
+        label: "格式化方式",
+        valueText: settings.formatType === "weak" ? "轻量格式化" : "自动对齐列宽",
+        input: formatSelect,
+      })
+    );
+
+    containerEl.appendChild(card);
+  }
+
+  private createAdvancedTableToggleRow(options: {
+    label: string;
+    checked: boolean;
+    hint?: string;
+    onChange: (checked: boolean) => Promise<void>;
+  }) {
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = options.checked;
+    input.addEventListener("change", () => void options.onChange(input.checked));
+    return this.createNativeTableSettingRow({
+      label: options.label,
+      valueText: options.checked ? "已开启" : "已关闭",
+      hint: options.hint,
+      input,
+    });
   }
 
   private renderNativeTableColorSettings(containerEl: HTMLElement) {
@@ -2293,10 +2411,98 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       })
     );
 
+    const zebraInput = document.createElement("input");
+    zebraInput.type = "checkbox";
+    zebraInput.checked = settings.defaultZebraEnabled !== false;
+    zebraInput.addEventListener("change", async () => {
+      await this.plugin.updateNativeTableDefaultsFromManager({ defaultZebraEnabled: zebraInput.checked });
+      this.display();
+    });
+    wrap.appendChild(
+      this.createNativeTableSettingRow({
+        label: "默认斑马纹",
+        valueText: zebraInput.checked ? "已开启" : "已关闭",
+        hint: "只影响之后新建或新美化的表格；当前默认保持开启。",
+        input: zebraInput,
+      })
+    );
+
+    const borderInput = document.createElement("input");
+    borderInput.type = "checkbox";
+    borderInput.checked = settings.defaultBorderEnabled === true;
+    borderInput.addEventListener("change", async () => {
+      await this.plugin.updateNativeTableDefaultsFromManager({ defaultBorderEnabled: borderInput.checked });
+      this.display();
+    });
+    wrap.appendChild(
+      this.createNativeTableSettingRow({
+        label: "默认边框样式",
+        valueText: borderInput.checked ? "已开启" : "已关闭",
+        hint: "默认关闭；需要时可在单张表格的「表」面板或右键菜单手动开启。",
+        input: borderInput,
+      })
+    );
+
+    const headerAlignment = this.createNativeTableAlignmentSelect(settings.defaultHeaderAlignment ?? "center", async (value) => {
+      await this.plugin.updateNativeTableDefaultsFromManager({ defaultHeaderAlignment: value });
+      this.display();
+    });
+    wrap.appendChild(
+      this.createNativeTableSettingRow({
+        label: "首行自动对齐",
+        valueText: this.getNativeTableAlignmentLabel(settings.defaultHeaderAlignment ?? "center"),
+        input: headerAlignment,
+      })
+    );
+
+    const firstColumnAlignment = this.createNativeTableAlignmentSelect(settings.defaultFirstColumnAlignment ?? "left", async (value) => {
+      await this.plugin.updateNativeTableDefaultsFromManager({ defaultFirstColumnAlignment: value });
+      this.display();
+    });
+    wrap.appendChild(
+      this.createNativeTableSettingRow({
+        label: "首列自动对齐",
+        valueText: this.getNativeTableAlignmentLabel(settings.defaultFirstColumnAlignment ?? "left"),
+        input: firstColumnAlignment,
+      })
+    );
+
     return wrap;
   }
 
-  private createNativeTableSettingRow(options: { label: string; valueText: string; input: HTMLElement }) {
+  private createNativeTableAlignmentSelect(
+    value: NativeTableAutoAlignment,
+    onChange: (value: NativeTableAutoAlignment) => Promise<void>
+  ) {
+    const input = document.createElement("select");
+    const options: Array<{ value: NativeTableAutoAlignment; label: string }> = [
+      { value: "off", label: "关闭" },
+      { value: "left", label: "居左" },
+      { value: "center", label: "居中" },
+      { value: "right", label: "居右" },
+    ];
+    input.value = value;
+    for (const option of options) {
+      const item = document.createElement("option");
+      item.value = option.value;
+      item.textContent = option.label;
+      input.appendChild(item);
+    }
+    input.addEventListener("change", () => {
+      const next = input.value === "left" || input.value === "center" || input.value === "right" ? input.value : "off";
+      void onChange(next);
+    });
+    return input;
+  }
+
+  private getNativeTableAlignmentLabel(value: NativeTableAutoAlignment) {
+    if (value === "left") return "居左";
+    if (value === "center") return "居中";
+    if (value === "right") return "居右";
+    return "关闭";
+  }
+
+  private createNativeTableSettingRow(options: { label: string; valueText: string; input: HTMLElement; hint?: string }) {
     const row = document.createElement("label");
     row.className = "fdtb-native-table-default-row";
     row.append(
@@ -2304,6 +2510,10 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       this.createTextSpan("fdtb-native-table-default-value", options.valueText),
       options.input
     );
+    if (options.hint) {
+      const hint = this.createTextSpan("fdtb-native-table-default-hint", options.hint);
+      row.appendChild(hint);
+    }
     return row;
   }
 
@@ -4117,6 +4327,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     defaultColumnWidth?: number;
     defaultRowHeight?: number;
     defaultTextColor?: string;
+    defaultZebraEnabled?: boolean;
+    defaultBorderEnabled?: boolean;
+    defaultHeaderAlignment?: NativeTableAutoAlignment;
+    defaultFirstColumnAlignment?: NativeTableAutoAlignment;
   }) {
     const enhancer = this.getTableEnhancerPlugin();
     if (typeof enhancer?.updateNativeTableDefaultsFromManager !== "function") {
@@ -4124,6 +4338,23 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       return null;
     }
     return (await enhancer.updateNativeTableDefaultsFromManager(input)) as NativeColorSettings;
+  }
+
+  getAdvancedTableSettingsForManager(): AdvancedTableSettings | null {
+    const enhancer = this.getTableEnhancerPlugin();
+    if (typeof enhancer?.getAdvancedTableSettingsForManager !== "function") return null;
+    return enhancer.getAdvancedTableSettingsForManager() as AdvancedTableSettings;
+  }
+
+  async updateAdvancedTableSettingsFromManager(input: Partial<AdvancedTableSettings>) {
+    const enhancer = this.getTableEnhancerPlugin();
+    if (typeof enhancer?.updateAdvancedTableSettingsFromManager !== "function") {
+      new Notice("原生表格增强插件未接通");
+      return null;
+    }
+    const result = await enhancer.updateAdvancedTableSettingsFromManager(input);
+    new Notice("已更新表格编辑体验");
+    return result as AdvancedTableSettings;
   }
 
   async saveCurrentNativeColorPaletteAsManager(label: string) {
