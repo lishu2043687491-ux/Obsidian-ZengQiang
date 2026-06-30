@@ -81,12 +81,18 @@ async function main() {
       throw new Error(`未进入插件管理页，当前 URL: ${page.url()}`);
     }
 
-    const menuButton = page
-      .locator('button[aria-haspopup="menu"], button:has-text("…"), button:has-text("...")')
-      .first();
-    if (await menuButton.count()) {
-      await menuButton.click({ timeout: 10000 });
+    const moreActions = page.getByRole("button", { name: "More actions" });
+    if (await moreActions.count()) {
+      await moreActions.first().click({ timeout: 10000 });
       await page.waitForTimeout(500);
+    } else {
+      const menuButton = page
+        .locator('button[aria-haspopup="menu"], button:has-text("…"), button:has-text("...")')
+        .first();
+      if (await menuButton.count()) {
+        await menuButton.click({ timeout: 10000 });
+        await page.waitForTimeout(500);
+      }
     }
 
     const checkItem = await waitForMenuItem(page, "Check for new releases");
