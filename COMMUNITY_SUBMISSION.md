@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.14.18）
+# Obsidian 社区插件提交清单（目标版本 1.14.27）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,14 +8,14 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.14.18`（与 Release tag 一致） |
+| `version` | `1.14.27`（与 Release tag 一致） |
 
-## 本版重点（1.14.18）
+## 本版重点（1.14.27）
 
-- 1.14.12–1.14.13：内置 Advanced Tables 对标（Tab/Enter、排序、公式、CSV、控制栏）
-- 1.14.14–1.14.15：选区填色/对齐、默认边框/斑马纹
-- 1.14.16–1.14.18：零入侵点击编辑、对齐菜单简化、markerless 表格记录
-- 延续 1.12/1.13：内置原生表格、右键修复、数据迁移、enhanced 锁定关闭
+- 1.14.19–1.14.25：视频总结时间轴预览 + 脱敏配置页（密钥不进 data.json / OSS）
+- 1.14.26：原生表格恢复「图」复制成图
+- 1.14.27：原生表格设置高级区默认折叠
+- 工具：`audit:privacy`、`package:oss`、`publish:oss`
 
 ## 官方审查对照
 

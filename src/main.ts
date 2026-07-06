@@ -40,6 +40,7 @@ import {
   blockLinkPlusModule,
   getEmbeddedBlockLinkPlusInstance,
 } from "./modules/block-link-plus-embedded";
+import { videoTimestampPreviewModule } from "./modules/video-timestamp-preview";
 import { renderBlockLinkPlusSettings } from "./modules/block-link-plus-bridge";
 import { ensureObsidianRequireBinding } from "./modules/node-bridge";
 import {
@@ -56,6 +57,7 @@ const EMBEDDED_MODULES: EmbeddedSubModule[] = [
   blockLinkPlusModule,
   fileAutoLocalizerModule,
   globalWidePageModule,
+  videoTimestampPreviewModule,
   rightClickCopyAsImageModule,
   claudianChatArchiveModule,
 ];
@@ -306,6 +308,8 @@ type FeishuDocToolbarData = {
   autoUpdatePluginIds: string[];
   autoUpdateLastRunAt: number;
   autoUpdateLastResults: Record<string, ManagedPluginAutoUpdateResult>;
+  /** 视频总结公开配置；不存 Cookie、API Key、Agent Token 或网页密码 */
+  videoSummarySettings: VideoSummaryUserSettings;
 };
 
 type ManagementSettingKey = "showDraggerIntegrationStatus" | "showTableEnhancerEntrances" | "showOneNoteImport";
@@ -314,6 +318,49 @@ type ManagementStatusItem = {
   label: string;
   status: string;
   description: string;
+};
+
+type VideoSummaryPlatformStatus = {
+  platform: string;
+  label: string;
+  configured: boolean;
+  length: number;
+  error?: string;
+};
+
+type VideoSummaryUserSettings = {
+  serviceUrl: string;
+  agentJobsUrl: string;
+  skillName: string;
+  outputDir: string;
+  defaultPrompt: string;
+  enableLocalDiagnostics: boolean;
+};
+type VideoSummaryStringSettingKey = Exclude<keyof VideoSummaryUserSettings, "enableLocalDiagnostics">;
+
+type VideoSummaryDiagnostics = {
+  pluginVersion: string;
+  skillPath: string;
+  skillExists: boolean;
+  scriptPath: string;
+  scriptExists: boolean;
+  outputDir: string;
+  defaultModel: string;
+  visualEnabled: boolean;
+  providerId: string;
+  providerBaseUrl: string;
+  serviceUrl: string;
+  agentJobsUrl: string;
+  serviceHealth: ManagementStatusItem;
+  bilibiliNoteHealth: ManagementStatusItem;
+  workbenchHealth: ManagementStatusItem;
+  configPath: string;
+  configExists: boolean;
+  agentTokenConfigured: boolean;
+  agentTokenLength: number;
+  sessionSecretConfigured: boolean;
+  webPasswordConfigured: boolean;
+  platforms: VideoSummaryPlatformStatus[];
 };
 
 type HostedPluginItem = {
@@ -368,7 +415,13 @@ type SecondaryMenuItem = {
   onClick?: () => void | Promise<void>;
 };
 
-type ExperienceSettingsTabId = "toolbar" | "nativeTable" | "templateLibrary" | "modules" | "plugins";
+type ExperienceSettingsTabId =
+  | "toolbar"
+  | "nativeTable"
+  | "templateLibrary"
+  | "modules"
+  | "plugins"
+  | "videoSummary";
 
 type OwnModuleMigrationStatus = "external" | "merged";
 
@@ -417,6 +470,13 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
     displayName: "全局宽页面",
     externalPluginId: "global-wide-page",
     description: "默认让所有 Markdown 页面以宽页面显示，并在状态栏提供一键切换",
+    status: "merged",
+  },
+  {
+    moduleId: "video-timestamp-preview",
+    displayName: "视频时间轴预览",
+    externalPluginId: "",
+    description: "点击视频总结里的时间轴，在 Obsidian 内预览本地视频或音频缓存",
     status: "merged",
   },
   {
@@ -508,6 +568,7 @@ const EXPERIENCE_SETTINGS_TABS: Array<{ id: ExperienceSettingsTabId; label: stri
   { id: "templateLibrary", label: "模板库管理" },
   { id: "modules", label: "自研功能开关" },
   { id: "plugins", label: "第三方插件管理" },
+  { id: "videoSummary", label: "视频总结" },
 ];
 
 const HOSTED_PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -687,8 +748,19 @@ const ENHANCED_TABLE_COMMANDS = {
 };
 
 declare const __OSS_RELEASE__: boolean;
-/** 仅 `OSS_RELEASE=1` 构建时为 true；近期工作日常构建始终为 false。 */
+/** 仅 `OSS_RELEASE=1` 构建时为 true；日常本机构建始终为 false。 */
 const ENHANCED_TABLE_FEATURE_LOCKED = __OSS_RELEASE__ === true;
+const OSS_RELEASE = __OSS_RELEASE__ === true;
+
+const DEFAULT_VIDEO_SUMMARY_SETTINGS: VideoSummaryUserSettings = {
+  serviceUrl: OSS_RELEASE ? "" : "https://video-summary.nimao.cn/",
+  agentJobsUrl: OSS_RELEASE ? "" : "https://video-summary.nimao.cn/jobs",
+  skillName: "视频总结 / video-summary",
+  outputDir: "视频总结（仓库）",
+  defaultPrompt:
+    "保留完整转写原文，输出可点击时间轴；根据内容自动选择教程步骤、概念性知识三问或事实性知识总结；最终补齐 video_summary frontmatter。",
+  enableLocalDiagnostics: !OSS_RELEASE,
+};
 
 const DEFAULT_SETTINGS_TAB_ORDER: ExperienceSettingsTabId[] = [
   "toolbar",
@@ -696,6 +768,7 @@ const DEFAULT_SETTINGS_TAB_ORDER: ExperienceSettingsTabId[] = [
   "templateLibrary",
   "modules",
   "plugins",
+  "videoSummary",
 ];
 
 const DEFAULT_DATA: FeishuDocToolbarData = {
@@ -721,6 +794,7 @@ const DEFAULT_DATA: FeishuDocToolbarData = {
   autoUpdatePluginIds: [...DEFAULT_AUTO_UPDATE_PLUGIN_IDS],
   autoUpdateLastRunAt: 0,
   autoUpdateLastResults: {},
+  videoSummarySettings: { ...DEFAULT_VIDEO_SUMMARY_SETTINGS },
 };
 
 const ACTION_ICONS: Partial<Record<BlockAction, string>> = {
@@ -855,9 +929,15 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     }
     containerEl.addClass?.("fdtb-settings-page");
 
+    const header = document.createElement("div");
+    header.className = "fdtb-settings-header";
     const title = document.createElement("h2");
     title.textContent = "Obsidian增强体验";
-    containerEl.appendChild(title);
+    const version = document.createElement("span");
+    version.className = "fdtb-settings-version-badge";
+    version.textContent = `版本 ${this.plugin.getPluginVersion()}`;
+    header.append(title, version);
+    containerEl.appendChild(header);
 
     const desc = document.createElement("p");
     desc.className = "fdtb-settings-page-desc";
@@ -886,8 +966,271 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       return;
     }
 
+    if (this.activeTab === "videoSummary") {
+      this.renderVideoSummarySection(containerEl);
+      return;
+    }
+
     this.renderPluginHostSection(containerEl);
     this.renderDraggerSection(containerEl);
+  }
+
+  private renderVideoSummarySection(containerEl: HTMLElement) {
+    this.appendSectionTitle(containerEl, "视频总结");
+
+    const intro = document.createElement("p");
+    intro.className = "fdtb-settings-page-desc";
+    intro.textContent =
+      "集中管理视频总结 Skill、服务入口和时间轴预览。密钥、Cookie、Agent token 和网页密码不写入插件数据，也不会在这里明文显示。";
+    containerEl.appendChild(intro);
+
+    this.renderVideoSummaryConfig(containerEl);
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "fdtb-video-summary-actions";
+    const refreshButton = document.createElement("button");
+    refreshButton.type = "button";
+    refreshButton.className = "mod-cta";
+    refreshButton.textContent = "刷新状态";
+    const webButton = document.createElement("button");
+    webButton.type = "button";
+    webButton.textContent = "打开网页入口";
+    webButton.addEventListener("click", () => {
+      const url = this.plugin.getVideoSummarySettings().serviceUrl;
+      if (!url) {
+        new Notice("请先填写视频总结网页入口 URL");
+        return;
+      }
+      void this.plugin.openExternalUrl(url);
+    });
+    const copyApiButton = document.createElement("button");
+    copyApiButton.type = "button";
+    copyApiButton.textContent = "复制 Agent 接口";
+    copyApiButton.addEventListener("click", async () => {
+      const url = this.plugin.getVideoSummarySettings().agentJobsUrl;
+      if (!url) {
+        new Notice("请先填写 Agent 接口 URL");
+        return;
+      }
+      await this.plugin.copyTextToClipboard(url);
+      new Notice("已复制 Agent 接口 URL；密钥不会复制。");
+    });
+    toolbar.append(refreshButton, webButton, copyApiButton);
+    containerEl.appendChild(toolbar);
+
+    const content = document.createElement("div");
+    content.className = "fdtb-video-summary-panel";
+    content.textContent = "正在读取视频总结配置状态…";
+    containerEl.appendChild(content);
+
+    const load = async () => {
+      refreshButton.disabled = true;
+      content.empty?.();
+      if (!content.empty) content.replaceChildren();
+      content.textContent = "正在读取视频总结配置状态…";
+      try {
+        const data = await this.plugin.getVideoSummaryDiagnostics();
+        this.renderVideoSummaryDiagnostics(content, data);
+      } catch (error) {
+        content.empty?.();
+        if (!content.empty) content.replaceChildren();
+        this.appendStatusRow(
+          content,
+          "视频总结状态",
+          "读取失败",
+          error instanceof Error ? error.message : String(error)
+        );
+      } finally {
+        refreshButton.disabled = false;
+      }
+    };
+
+    refreshButton.addEventListener("click", () => void load());
+    void load();
+  }
+
+  private renderVideoSummaryConfig(containerEl: HTMLElement) {
+    const settings = this.plugin.getVideoSummarySettings();
+    const card = document.createElement("div");
+    card.className = "fdtb-video-summary-config";
+
+    const title = document.createElement("div");
+    title.className = "fdtb-video-summary-config-title";
+    title.textContent = "通用配置";
+    const hint = document.createElement("p");
+    hint.className = "fdtb-video-summary-config-hint";
+    hint.textContent = "这里只保存可公开配置。Cookie、API Key、Agent token、网页密码继续由视频总结服务托管。";
+    card.append(title, hint);
+
+    const fields: Partial<Record<VideoSummaryStringSettingKey, HTMLInputElement | HTMLTextAreaElement>> = {};
+    const appendInput = (key: VideoSummaryStringSettingKey, labelText: string, placeholder: string) => {
+      const label = document.createElement("label");
+      label.className = "fdtb-video-summary-field";
+      const caption = document.createElement("span");
+      caption.textContent = labelText;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = settings[key];
+      input.placeholder = placeholder;
+      label.append(caption, input);
+      fields[key] = input;
+      card.appendChild(label);
+    };
+    const appendTextarea = (key: VideoSummaryStringSettingKey, labelText: string, placeholder: string) => {
+      const label = document.createElement("label");
+      label.className = "fdtb-video-summary-field fdtb-video-summary-field-wide";
+      const caption = document.createElement("span");
+      caption.textContent = labelText;
+      const textarea = document.createElement("textarea");
+      textarea.value = settings[key];
+      textarea.placeholder = placeholder;
+      textarea.rows = 4;
+      label.append(caption, textarea);
+      fields[key] = textarea;
+      card.appendChild(label);
+    };
+
+    appendInput("serviceUrl", "网页入口 URL", "https://example.com/");
+    appendInput("agentJobsUrl", "Agent 接口 URL", "https://example.com/jobs");
+    appendInput("skillName", "Skill 名称", "视频总结 / video-summary");
+    appendInput("outputDir", "输出仓库说明", "例如：视频总结（仓库）");
+    appendTextarea("defaultPrompt", "默认总结要求", "保留完整原文、可点击时间轴、按内容类型自动总结");
+
+    const localRow = document.createElement("label");
+    localRow.className = "fdtb-video-summary-checkbox";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = settings.enableLocalDiagnostics;
+    const checkboxText = document.createElement("span");
+    checkboxText.textContent = "启用本机状态读取（只适合自己的电脑；开源包默认关闭）";
+    localRow.append(checkbox, checkboxText);
+    card.appendChild(localRow);
+
+    const actions = document.createElement("div");
+    actions.className = "fdtb-video-summary-config-actions";
+    const saveButton = document.createElement("button");
+    saveButton.type = "button";
+    saveButton.className = "mod-cta";
+    saveButton.textContent = "保存配置";
+    saveButton.addEventListener("click", async () => {
+      await this.plugin.saveVideoSummarySettings({
+        serviceUrl: fields.serviceUrl?.value ?? "",
+        agentJobsUrl: fields.agentJobsUrl?.value ?? "",
+        skillName: fields.skillName?.value ?? "",
+        outputDir: fields.outputDir?.value ?? "",
+        defaultPrompt: fields.defaultPrompt?.value ?? "",
+        enableLocalDiagnostics: checkbox.checked,
+      });
+      new Notice("视频总结配置已保存；密钥类信息没有写入插件数据。");
+      this.display();
+    });
+    const copyTemplateButton = document.createElement("button");
+    copyTemplateButton.type = "button";
+    copyTemplateButton.textContent = "复制调用模板";
+    copyTemplateButton.addEventListener("click", async () => {
+      const next = this.plugin.getVideoSummarySettings();
+      const template = [
+        `调用 Skill：${next.skillName}`,
+        `网页入口：${next.serviceUrl || "待配置"}`,
+        `Agent 接口：${next.agentJobsUrl || "待配置"}`,
+        `输出仓库：${next.outputDir || "待配置"}`,
+        `默认要求：${next.defaultPrompt}`,
+        "注意：Bearer token、Cookie、API Key 不放在消息里，由本机视频总结服务托管。",
+      ].join("\n");
+      await this.plugin.copyTextToClipboard(template);
+      new Notice("已复制视频总结调用模板；不包含密钥。");
+    });
+    actions.append(saveButton, copyTemplateButton);
+    card.appendChild(actions);
+    containerEl.appendChild(card);
+  }
+
+  private renderVideoSummaryDiagnostics(containerEl: HTMLElement, data: VideoSummaryDiagnostics) {
+    containerEl.empty?.();
+    if (!containerEl.empty) containerEl.replaceChildren();
+
+    this.appendStatusRow(
+      containerEl,
+      "Obsidian 插件版本",
+      data.pluginVersion,
+      "本页只做私有配置状态查看；开源发行时可单独隔离此私有页。"
+    );
+    const customSummaryMode = data.scriptPath === "插件不读取本机脚本";
+    this.appendStatusRow(
+      containerEl,
+      "视频总结 Skill",
+      customSummaryMode ? "自定义配置" : data.skillExists && data.scriptExists ? "已接入" : "缺文件",
+      `入口：${data.skillPath}；脚本：${data.scriptPath}`
+    );
+    this.appendStatusRow(
+      containerEl,
+      "默认模型",
+      data.defaultModel || "未识别",
+      data.visualEnabled ? "默认开启视频理解和截图分析" : "当前未开启视频理解"
+    );
+    this.appendStatusRow(
+      containerEl,
+      "输出仓库",
+      "Obsidian 临时仓库",
+      data.outputDir || "未配置输出仓库"
+    );
+
+    this.appendSectionTitle(containerEl, "服务入口");
+    this.appendStatusRow(containerEl, "视频总结网页", data.serviceHealth.status, data.serviceUrl);
+    this.appendStatusRow(containerEl, "Agent 调用接口", "URL 可见", `${data.agentJobsUrl}；调用密钥已隐藏`);
+    this.appendStatusRow(containerEl, "BiliNote 后端", data.bilibiliNoteHealth.status, data.bilibiliNoteHealth.description);
+    this.appendStatusRow(containerEl, "内容分享工作台", data.workbenchHealth.status, data.workbenchHealth.description);
+
+    this.appendSectionTitle(containerEl, "隐私与密钥");
+    this.appendStatusRow(
+      containerEl,
+      "服务配置文件",
+      data.configExists ? "已找到" : "未找到",
+      `${data.configPath}；只读取配置项状态，不显示明文密钥。`
+    );
+    this.appendStatusRow(
+      containerEl,
+      "Agent 调用密钥",
+      data.agentTokenConfigured ? "已配置（已隐藏）" : "未配置",
+      data.agentTokenConfigured ? `长度 ${data.agentTokenLength}；页面不会显示或复制 token。` : "Work Buddy 远程调用需要 Bearer token。"
+    );
+    this.appendStatusRow(
+      containerEl,
+      "网页访问密码",
+      data.webPasswordConfigured ? "已设置（hash）" : "未设置",
+      "页面只显示是否存在 hash，不显示生成密码。"
+    );
+    this.appendStatusRow(
+      containerEl,
+      "Session Secret",
+      data.sessionSecretConfigured ? "已配置（已隐藏）" : "未配置",
+      "用于网页登录态签名；不进入插件 data.json。"
+    );
+
+    this.appendSectionTitle(containerEl, "平台与 Cookie");
+    for (const platform of data.platforms) {
+      const delegated = platform.error?.includes("托管") === true;
+      this.appendStatusRow(
+        containerEl,
+        platform.label,
+        delegated ? "服务端托管" : platform.configured ? "Cookie 已配置" : "未配置",
+        platform.error
+          ? platform.error
+          : platform.configured
+            ? `只显示长度 ${platform.length}，不显示 Cookie 内容。`
+            : "需要在 BiliNote 下载配置中补齐。"
+      );
+    }
+
+    this.appendSectionTitle(containerEl, "工具链");
+    this.appendStatusRow(containerEl, "模型供应商", data.providerBaseUrl ? "AutoDL" : "由服务端配置", data.providerBaseUrl || "插件不保存供应商密钥");
+    this.appendStatusRow(
+      containerEl,
+      "Provider ID",
+      data.providerId ? "已识别（已隐藏）" : "未识别",
+      data.providerId ? "来自 BiliNote 模型配置；只显示识别状态，不显示内部 ID。" : "未从 BiliNote 读取到 provider_id"
+    );
+    this.appendStatusRow(containerEl, "云端媒体", "工作台发布", "生成端会把可播放 preview mp4 发布到内容分享工作台，并写入 media_url。");
   }
 
   private renderOwnModulesSection(containerEl: HTMLElement) {
@@ -2095,12 +2438,44 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       "原生表格颜色、长宽高、对齐、轻量公式、自动填充与模板库已内置在 Obsidian增强体验中。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
     containerEl.appendChild(intro);
 
-    this.appendStatusRow(containerEl, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
-    this.appendStatusRow(containerEl, "公式 / 自动填充", "已内置", "支持 LaTeX 显示、SUM/AVG/MIN/MAX 和拖拽自动填充");
-    this.appendStatusRow(containerEl, "Advanced Tables 编辑体验", "已接入", "支持跳格、格式化、增删移动、排序、转置、公式与 CSV");
+    const advancedSection = this.createSettingsCollapsibleSection("编辑体验与内置能力", {
+      hint: "原生表格增强、公式/自动填充和 Advanced Tables 编辑体验",
+      open: false,
+    });
+    this.appendStatusRow(advancedSection.body, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
+    this.appendStatusRow(advancedSection.body, "公式 / 自动填充", "已内置", "支持 LaTeX 显示、SUM/AVG/MIN/MAX 和拖拽自动填充");
+    this.appendStatusRow(advancedSection.body, "Advanced Tables 编辑体验", "已接入", "支持跳格、格式化、增删移动、排序、转置、公式与 CSV");
+    this.renderAdvancedTableSettings(advancedSection.body);
+    containerEl.appendChild(advancedSection.details);
 
-    this.renderAdvancedTableSettings(containerEl);
     this.renderNativeTableColorSettings(containerEl);
+  }
+
+  private createSettingsCollapsibleSection(
+    titleText: string,
+    options?: { hint?: string; open?: boolean }
+  ) {
+    const details = document.createElement("details");
+    details.className = "fdtb-settings-collapsible-section fdtb-settings-collapsible-section-compact";
+    details.open = options?.open ?? false;
+
+    const summary = document.createElement("summary");
+    summary.className = "fdtb-settings-collapsible-summary";
+    const title = document.createElement("span");
+    title.className = "fdtb-settings-collapsible-title";
+    title.textContent = titleText;
+    summary.appendChild(title);
+    if (options?.hint) {
+      const hint = document.createElement("span");
+      hint.className = "fdtb-settings-collapsible-hint";
+      hint.textContent = options.hint;
+      summary.appendChild(hint);
+    }
+
+    const body = document.createElement("div");
+    body.className = "fdtb-settings-collapsible-body";
+    details.append(summary, body);
+    return { details, body };
   }
 
   private renderAdvancedTableSettings(containerEl: HTMLElement) {
@@ -3622,6 +3997,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       autoUpdatePluginIds: normalizeAutoUpdatePluginIds(saved.autoUpdatePluginIds),
       autoUpdateLastRunAt: Number.isFinite(saved.autoUpdateLastRunAt) ? Number(saved.autoUpdateLastRunAt) : 0,
       autoUpdateLastResults: normalizeAutoUpdateResults(saved.autoUpdateLastResults),
+      videoSummarySettings: this.normalizeVideoSummarySettings(saved.videoSummarySettings),
     };
     if (embeddedNativeTableEnhancer) {
       data.embeddedNativeTableEnhancer = embeddedNativeTableEnhancer;
@@ -3680,6 +4056,21 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     }
   }
 
+  getVideoSummarySettings(): VideoSummaryUserSettings {
+    return this.normalizeVideoSummarySettings(this.dataStore.videoSummarySettings);
+  }
+
+  async saveVideoSummarySettings(value: Partial<VideoSummaryUserSettings>) {
+    this.dataStore = {
+      ...this.dataStore,
+      videoSummarySettings: this.normalizeVideoSummarySettings({
+        ...this.dataStore.videoSummarySettings,
+        ...value,
+      }),
+    };
+    await this.saveData(this.dataStore);
+  }
+
   private async syncExperimentalFeatureGateToTableEnhancer(enabled: boolean) {
     const tableEnhancer = (this.app as any)?.plugins?.plugins?.[MARKDOWN_TABLE_PLUGIN_ID];
     if (!tableEnhancer) return;
@@ -3706,6 +4097,36 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       if (!result.includes(tabId)) result.push(tabId);
     }
     return result;
+  }
+
+  private normalizeVideoSummarySettings(value: unknown): VideoSummaryUserSettings {
+    const source = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    const cleanString = (key: VideoSummaryStringSettingKey, maxLength: number) => {
+      const raw = source[key];
+      return typeof raw === "string" && raw.trim()
+        ? raw.trim().slice(0, maxLength)
+        : DEFAULT_VIDEO_SUMMARY_SETTINGS[key];
+    };
+    const serviceUrl = this.normalizeExternalUrl(cleanString("serviceUrl", 500));
+    const agentJobsUrl = this.normalizeExternalUrl(cleanString("agentJobsUrl", 500));
+    return {
+      serviceUrl,
+      agentJobsUrl,
+      skillName: cleanString("skillName", 80),
+      outputDir: cleanString("outputDir", 300),
+      defaultPrompt: cleanString("defaultPrompt", 2000),
+      enableLocalDiagnostics:
+        typeof source.enableLocalDiagnostics === "boolean"
+          ? source.enableLocalDiagnostics
+          : DEFAULT_VIDEO_SUMMARY_SETTINGS.enableLocalDiagnostics,
+    };
+  }
+
+  private normalizeExternalUrl(value: string) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (!/^https?:\/\//i.test(text)) return "";
+    return text;
   }
 
   private normalizePluginCategoryRemoved(value: unknown) {
@@ -4392,6 +4813,254 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   async runManagedCommand(commandId: string) {
     return this.executeCommandById(commandId);
+  }
+
+  getPluginVersion() {
+    return this.manifest.version || "unknown";
+  }
+
+  async openExternalUrl(url: string) {
+    const nodeRequire = this.getNodeRequire();
+    const childProcess = nodeRequire?.("child_process");
+    if (childProcess && typeof childProcess.execFile === "function") {
+      childProcess.execFile("/usr/bin/open", [url], (error: Error | null) => {
+        if (error) new Notice(`打开失败：${error.message}`, 8000);
+      });
+      return;
+    }
+    window.open(url, "_blank");
+  }
+
+  async getVideoSummaryDiagnostics(): Promise<VideoSummaryDiagnostics> {
+    const settings = this.getVideoSummarySettings();
+    const serviceUrl = settings.serviceUrl;
+    const agentJobsUrl = settings.agentJobsUrl || (serviceUrl ? this.joinUrl(serviceUrl, "jobs") : "");
+    const serviceHealth = serviceUrl
+      ? await this.checkHttpEndpoint(this.joinUrl(serviceUrl, "health"), "视频总结服务健康检查")
+      : { label: "视频总结服务健康检查", status: "待配置", description: "请先填写视频总结网页入口 URL。" };
+
+    if (OSS_RELEASE || !settings.enableLocalDiagnostics) {
+      const delegated = { label: "视频总结服务", status: "服务端托管", description: "Cookie、API Key 和媒体下载由视频总结服务托管，插件不保存密钥。" };
+      const delegatedPlatforms: VideoSummaryPlatformStatus[] = [
+        { platform: "bilibili", label: "B站 Cookie", configured: false, length: 0, error: "由视频总结服务托管；插件不保存 Cookie。" },
+        { platform: "douyin", label: "抖音 Cookie", configured: false, length: 0, error: "由视频总结服务托管；插件不保存 Cookie。" },
+        { platform: "youtube", label: "YouTube Cookie", configured: false, length: 0, error: "由视频总结服务托管；插件不保存 Cookie。" },
+      ];
+      return {
+        pluginVersion: this.getPluginVersion(),
+        skillPath: settings.skillName,
+        skillExists: true,
+        scriptPath: "插件不读取本机脚本",
+        scriptExists: true,
+        outputDir: settings.outputDir,
+        defaultModel: "由服务端或 Skill 配置",
+        visualEnabled: true,
+        providerId: "",
+        providerBaseUrl: "",
+        serviceUrl: serviceUrl || "未配置",
+        agentJobsUrl: agentJobsUrl || "未配置",
+        serviceHealth,
+        bilibiliNoteHealth: delegated,
+        workbenchHealth: delegated,
+        configPath: "插件不保存 Cookie/API/Token",
+        configExists: false,
+        agentTokenConfigured: false,
+        agentTokenLength: 0,
+        sessionSecretConfigured: false,
+        webPasswordConfigured: false,
+        platforms: delegatedPlatforms,
+      };
+    }
+
+    const paths = this.getVideoSummaryPaths();
+    const fs = this.getNodeRequire()?.("fs");
+    const skillExists = Boolean(fs?.existsSync?.(paths.skill));
+    const scriptExists = Boolean(fs?.existsSync?.(paths.script));
+    const config = this.readVideoSummaryServiceConfig(paths.config);
+    const check = scriptExists ? await this.runVideoSummaryCheck(paths.script) : null;
+    const workbenchHealth = await this.checkHttpEndpoint("http://127.0.0.1:4321/__workbench_health", "本地内容分享工作台");
+
+    const model = String(check?.default_model || "Kimi-K2.6");
+    const providerId = String(check?.provider_id || "");
+    const outputDir = String(check?.output_dir || settings.outputDir || "未配置输出仓库");
+    const cookies = check?.cookies && typeof check.cookies === "object" ? check.cookies : {};
+    const platforms: VideoSummaryPlatformStatus[] = [
+      this.normalizeVideoSummaryPlatformStatus("bilibili", "B站 Cookie", (cookies as any).bilibili),
+      this.normalizeVideoSummaryPlatformStatus("douyin", "抖音 Cookie", (cookies as any).douyin),
+      this.normalizeVideoSummaryPlatformStatus("youtube", "YouTube Cookie", (cookies as any).youtube),
+    ];
+
+    return {
+      pluginVersion: this.getPluginVersion(),
+      skillPath: paths.skill,
+      skillExists,
+      scriptPath: paths.script,
+      scriptExists,
+      outputDir,
+      defaultModel: model,
+      visualEnabled: check?.video_understanding_enabled_by_default !== false,
+      providerId,
+      providerBaseUrl: "https://www.autodl.art/api/v1",
+      serviceUrl: serviceUrl || "未配置",
+      agentJobsUrl: agentJobsUrl || "未配置",
+      serviceHealth,
+      bilibiliNoteHealth: check
+        ? { label: "BiliNote 后端", status: "正常", description: String(check.base_url || "http://127.0.0.1:8483") }
+        : { label: "BiliNote 后端", status: "未连接", description: "未能完成 BiliNote 配置检查；请确认 BiliNote 后端正在运行。" },
+      workbenchHealth,
+      configPath: paths.config,
+      configExists: config.exists,
+      agentTokenConfigured: config.agentTokenConfigured,
+      agentTokenLength: config.agentTokenLength,
+      sessionSecretConfigured: config.sessionSecretConfigured,
+      webPasswordConfigured: config.webPasswordConfigured,
+      platforms,
+    };
+  }
+
+  private getVideoSummaryPaths() {
+    const home = this.getHomeDir();
+    return {
+      skill: this.joinSystemPath(home, "ai-skills", "video-summary", "SKILL.md"),
+      script: this.joinSystemPath(home, "ai-skills", "video-summary", "scripts", "video_summary.py"),
+      config: this.joinSystemPath(home, ".config", "video-summary-service", "config.json"),
+    };
+  }
+
+  private getHomeDir() {
+    const nodeRequire = this.getNodeRequire();
+    const os = nodeRequire?.("os");
+    if (os && typeof os.homedir === "function") return String(os.homedir());
+    const processModule = nodeRequire?.("process");
+    return String(processModule?.env?.HOME ?? "");
+  }
+
+  private readVideoSummaryServiceConfig(configPath: string) {
+    const result = {
+      exists: false,
+      agentTokenConfigured: false,
+      agentTokenLength: 0,
+      sessionSecretConfigured: false,
+      webPasswordConfigured: false,
+    };
+    const nodeRequire = this.getNodeRequire();
+    const fs = nodeRequire?.("fs");
+    if (!fs?.existsSync?.(configPath)) return result;
+    result.exists = true;
+    try {
+      const raw = fs.readFileSync(configPath, "utf8");
+      const data = JSON.parse(raw || "{}");
+      const agentToken = typeof data.agent_token === "string" ? data.agent_token : "";
+      result.agentTokenConfigured = agentToken.length > 0;
+      result.agentTokenLength = agentToken.length;
+      result.sessionSecretConfigured = typeof data.session_secret === "string" && data.session_secret.length > 0;
+      result.webPasswordConfigured =
+        (typeof data.web_password_hash === "string" && data.web_password_hash.length > 0) ||
+        (typeof data.web_password_salt === "string" && data.web_password_salt.length > 0);
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 读取视频总结服务配置失败", error);
+    }
+    return result;
+  }
+
+  private async runVideoSummaryCheck(scriptPath: string): Promise<any | null> {
+    try {
+      const result = await this.runSystemCommand("python3", [scriptPath, "--check", "--no-open-app"], {
+        timeout: 90 * 1000,
+        maxBuffer: 2 * 1024 * 1024,
+      });
+      if (!result.ok) return null;
+      return this.extractJsonFromOutput(result.stdout);
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 视频总结配置检查失败", error);
+      return null;
+    }
+  }
+
+  private normalizeVideoSummaryPlatformStatus(
+    platform: string,
+    label: string,
+    value: unknown
+  ): VideoSummaryPlatformStatus {
+    if (!value || typeof value !== "object") {
+      return { platform, label, configured: false, length: 0 };
+    }
+    const item = value as Record<string, unknown>;
+    return {
+      platform,
+      label,
+      configured: item.configured === true,
+      length: Number.isFinite(item.length) ? Number(item.length) : 0,
+      error: typeof item.error === "string" ? item.error : undefined,
+    };
+  }
+
+  private joinUrl(base: string, child: string) {
+    const root = String(base || "").replace(/\/+$/g, "");
+    const tail = String(child || "").replace(/^\/+/g, "");
+    return root && tail ? `${root}/${tail}` : root || tail;
+  }
+
+  private async checkHttpEndpoint(url: string, label: string): Promise<ManagementStatusItem> {
+    try {
+      const result = await this.runSystemCommand("/usr/bin/curl", ["-sS", "-m", "8", "-o", "/dev/null", "-w", "%{http_code}", url], {
+        timeout: 12 * 1000,
+        maxBuffer: 64 * 1024,
+      });
+      const statusCode = Number(String(result.stdout || "").trim());
+      const ok = result.ok && statusCode >= 200 && statusCode < 400;
+      return {
+        label,
+        status: ok ? "正常" : `异常 ${statusCode || "未知"}`,
+        description: `${url}${ok ? "" : result.stderr ? `；${result.stderr.trim().slice(0, 160)}` : ""}`,
+      };
+    } catch (error) {
+      return {
+        label,
+        status: "不可访问",
+        description: `${url}；${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  private runSystemCommand(
+    command: string,
+    args: string[],
+    options: { timeout?: number; maxBuffer?: number; cwd?: string } = {}
+  ): Promise<{ ok: boolean; stdout: string; stderr: string; code?: number | string }> {
+    const nodeRequire = this.getNodeRequire();
+    const childProcess = nodeRequire?.("child_process");
+    const processModule = nodeRequire?.("process");
+    if (!childProcess || typeof childProcess.execFile !== "function") {
+      return Promise.resolve({ ok: false, stdout: "", stderr: "当前 Obsidian 环境不能调用本机命令" });
+    }
+    const env = {
+      ...(processModule?.env ?? {}),
+      PATH: `${processModule?.env?.HOME ?? ""}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${processModule?.env?.PATH ?? ""}`,
+    };
+    return new Promise((resolve) => {
+      childProcess.execFile(
+        command,
+        args,
+        {
+          cwd: options.cwd,
+          env,
+          timeout: options.timeout ?? 30 * 1000,
+          maxBuffer: options.maxBuffer ?? 1024 * 1024,
+        },
+        (error: Error & { code?: number | string } | null, stdout: string, stderr: string) => {
+          resolve({ ok: !error, stdout: stdout || "", stderr: stderr || error?.message || "", code: error?.code });
+        }
+      );
+    });
+  }
+
+  private extractJsonFromOutput(output: string) {
+    const text = String(output || "").trim();
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start < 0 || end <= start) return null;
+    return JSON.parse(text.slice(start, end + 1));
   }
 
   getClaudianAgentBridgePaths() {

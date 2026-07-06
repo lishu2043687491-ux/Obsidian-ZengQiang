@@ -38,7 +38,9 @@ rsync -a "$SRC/tests/" "$REPO/tests/" \
   --exclude 'claudian-test-bundle.cjs' \
   --exclude 'managed-plugin-auto-updater-bundle.cjs' \
   --exclude 'goal-progress-sync-bundle.cjs' \
-  --exclude 'native-table-video-helpers-bundle.cjs'
+  --exclude 'native-table-video-helpers-bundle.cjs' \
+  --exclude 'advanced-table-helpers-bundle.cjs' \
+  --exclude 'video-timestamp-preview-helpers-bundle.cjs'
 
 cp "$SRC/manifest.json" "$REPO/manifest.json"
 cp "$SRC/styles.css" "$REPO/styles.css"
@@ -49,6 +51,7 @@ echo "==> build + verify (vault)"
 cd "$SRC"
 npm install
 npm run build:oss
+npm run audit:privacy
 if rg -n "os\.hostname|localStorage|/Users/mac|近期工作|知识仓库" main.js >/dev/null 2>&1; then
   echo "main.js 泄漏检查失败"
   exit 1
@@ -63,6 +66,7 @@ if git diff --quiet && git diff --cached --quiet; then
 else
   git add manifest.json package.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md" COMMUNITY_SUBMISSION.md 2>/dev/null || \
   git add manifest.json package.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md"
+  CHECK_GIT=1 node scripts/audit-privacy.mjs
   git commit -m "$(cat <<EOF
 Release ${VERSION}: OSS publish.
 

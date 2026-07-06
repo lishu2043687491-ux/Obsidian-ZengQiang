@@ -357,7 +357,7 @@ async function run() {
         managedPluginCategoryOrder: ["table", "block", "automation", "content", "style", "file", "ai", "other"],
         managedPluginCategoryRemoved: [],
         managedPluginStatusCheckedAt: 0,
-        settingsTabOrder: ["toolbar", "nativeTable", "templateLibrary", "modules", "plugins"],
+        settingsTabOrder: ["toolbar", "nativeTable", "templateLibrary", "modules", "plugins", "videoSummary"],
         embeddedModules: {},
         enableBetaFeatures: false,
         showOneNoteImport: false,
@@ -367,6 +367,15 @@ async function run() {
         autoUpdatePluginIds: ["yolo", "realclaudian"],
         autoUpdateLastRunAt: 0,
         autoUpdateLastResults: {},
+        videoSummarySettings: {
+          serviceUrl: "https://video-summary.nimao.cn/",
+          agentJobsUrl: "https://video-summary.nimao.cn/jobs",
+          skillName: "视频总结 / video-summary",
+          outputDir: "视频总结（仓库）",
+          defaultPrompt:
+            "保留完整转写原文，输出可点击时间轴；根据内容自动选择教程步骤、概念性知识三问或事实性知识总结；最终补齐 video_summary frontmatter。",
+          enableLocalDiagnostics: true,
+        },
       },
       "management settings should get stable defaults"
     );

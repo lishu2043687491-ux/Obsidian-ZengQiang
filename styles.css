@@ -809,6 +809,29 @@
   max-width: 860px;
 }
 
+.fdtb-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.fdtb-settings-header h2 {
+  margin: 0;
+}
+
+.fdtb-settings-version-badge {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .fdtb-settings-page-desc {
   margin: -4px 0 14px;
   color: var(--text-muted);
@@ -1022,9 +1045,39 @@
   transform: rotate(90deg);
 }
 
+.fdtb-settings-collapsible-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.fdtb-settings-collapsible-title {
+  flex: 0 0 auto;
+}
+
+.fdtb-settings-collapsible-hint {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
 .fdtb-settings-collapsible-body {
   padding: 0 12px 12px;
   border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
+}
+
+.fdtb-settings-collapsible-section-compact > summary {
+  padding: 12px 16px;
+}
+
+.fdtb-settings-collapsible-section-compact .fdtb-settings-status-row {
+  margin: 10px 0;
+}
+
+.fdtb-settings-collapsible-section-compact .fdtb-native-color-card {
+  margin: 10px 0 0;
 }
 
 .fdtb-settings-status-row {
@@ -1071,6 +1124,92 @@
   color: var(--text-on-accent);
   font-size: 12px;
   font-weight: 700;
+}
+
+.fdtb-video-summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.fdtb-video-summary-config {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 16px;
+  padding: 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.fdtb-video-summary-config-title,
+.fdtb-video-summary-config-hint,
+.fdtb-video-summary-field-wide,
+.fdtb-video-summary-checkbox,
+.fdtb-video-summary-config-actions {
+  grid-column: 1 / -1;
+}
+
+.fdtb-video-summary-config-title {
+  color: var(--text-normal);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.fdtb-video-summary-config-hint {
+  margin: -6px 0 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.fdtb-video-summary-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.fdtb-video-summary-field input,
+.fdtb-video-summary-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+}
+
+.fdtb-video-summary-field textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.fdtb-video-summary-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.fdtb-video-summary-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fdtb-video-summary-panel {
+  min-height: 80px;
+}
+
+@media (max-width: 720px) {
+  .fdtb-video-summary-config {
+    grid-template-columns: 1fr;
+  }
 }
 
 .fdtb-settings-toolbar-workbench {

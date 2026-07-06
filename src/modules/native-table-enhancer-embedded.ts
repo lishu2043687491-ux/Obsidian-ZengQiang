@@ -42,6 +42,8 @@ const OPEN_NATIVE_ROW_BANDS_COMMAND_NAME = "打开当前原生表格行段配色
 const INSERT_TEMPLATE_COMMAND_NAME = "插入原生表格模板";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_ID = "open-template-library";
 const OPEN_TEMPLATE_LIBRARY_COMMAND_NAME = "模板库";
+const COPY_TABLE_AS_IMAGE_LABEL = "复制当前表格成图";
+const COPY_TABLE_AS_IMAGE_SHORT_LABEL = "图";
 const RESTORE_COMMAND_NAME = "恢复当前文件最近一次表格增强快照";
 const STATUS_COMMAND_NAME = "查看当前文件表格增强状态";
 const SET_SELECTION_YELLOW_COMMAND_ID = "set-current-table-selection-yellow";
@@ -1507,6 +1509,7 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private activeNativeTableContext: UninitializedTableContext | null = null;
   private plainTableSidebarFallbackTimer: number | null = null;
   private tableSidebarHandleEl: HTMLButtonElement | null = null;
+  private tableCopyImageHandleEl: HTMLButtonElement | null = null;
   private tableSidebarPopoverEl: HTMLDivElement | null = null;
   private activeTableSidebarContext: TableSidebarContext | null = null;
   private activeImageToolbar: ImageToolbarState | null = null;
@@ -5695,8 +5698,35 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
   private showTableSidebar(context: TableSidebarContext) {
     if (context.mode === "enhanced") return;
     this.ensureTableSidebarHandle();
+    this.ensureTableCopyImageHandle();
     this.activeTableSidebarContext = context;
     this.renderTableSidebarHandle(context);
+  }
+
+  private ensureTableCopyImageHandle() {
+    if (this.tableCopyImageHandleEl) return;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mdtp-sidebar-handle mdtp-copy-image-handle";
+    button.textContent = COPY_TABLE_AS_IMAGE_SHORT_LABEL;
+    button.setAttribute("aria-label", COPY_TABLE_AS_IMAGE_LABEL);
+    button.title = COPY_TABLE_AS_IMAGE_LABEL;
+    button.style.display = "none";
+    button.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const context = this.activeTableSidebarContext;
+      if (!context) return;
+      void this.copyCurrentTableAsImageStable(context.tableEl);
+    });
+
+    document.body.appendChild(button);
+    this.tableCopyImageHandleEl = button;
   }
 
   private renderTableSidebarHandle(context: TableSidebarContext) {
@@ -5718,6 +5748,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
       const top = Math.max(72, draggerRect.top + Math.max(0, (draggerRect.height - 22) / 2));
       const left = Math.max(8, draggerRect.left - 54);
       positionHandle(this.tableSidebarHandleEl, top, left, true);
+      if (this.tableCopyImageHandleEl) {
+        positionHandle(this.tableCopyImageHandleEl, top + 28, left, true);
+      }
       return;
     }
 
@@ -5725,6 +5758,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     const top = Math.max(72, rect.top + 8);
     const left = Math.max(12, rect.left - 58);
     positionHandle(this.tableSidebarHandleEl, top, left, false);
+    if (this.tableCopyImageHandleEl) {
+      positionHandle(this.tableCopyImageHandleEl, top + 28, left, false);
+    }
   }
 
   private findDraggerHandleForTableSidebarContext(context: TableSidebarContext) {
@@ -5762,6 +5798,9 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
     this.hideTableSidebarPopover();
     if (this.tableSidebarHandleEl) {
       this.tableSidebarHandleEl.style.display = "none";
+    }
+    if (this.tableCopyImageHandleEl) {
+      this.tableCopyImageHandleEl.style.display = "none";
     }
     if (force) {
       this.activeTableSidebarContext = null;
@@ -6419,6 +6458,17 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   getEnhancedSidebarActionDescriptors(): SidebarActionDescriptor[] {
     return [];
+  }
+
+  private async copyCurrentTableAsImageStable(tableEl: HTMLTableElement) {
+    const feishu = this.app.plugins.plugins["feishu-doc-toolbar"] as
+      | { copyCurrentTableAsImage?: (tableEl: HTMLTableElement) => Promise<boolean> }
+      | undefined;
+    if (typeof feishu?.copyCurrentTableAsImage === "function") {
+      await feishu.copyCurrentTableAsImage(tableEl);
+      return;
+    }
+    new Notice("请先启用 Obsidian增强体验 中的「右键复制成图」");
   }
 
   private shouldExposeExperimentalAction(experimental?: boolean) {
