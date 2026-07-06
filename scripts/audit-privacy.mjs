@@ -25,6 +25,9 @@ const BLOCK_PATTERNS = [
   { name: "cookie-value", re: /SESSDATA=[^"'\\s]{20,}/i },
   { name: "session-secret-literal", re: /session[_-]?secret["'\s:=]+["'][A-Za-z0-9+/=]{16,}/i },
   { name: "agent-token-literal", re: /agent[_-]?token["'\s:=]+["'][A-Za-z0-9._\-]{16,}/i },
+  { name: "oss-release-disabled", re: /\bOSS_RELEASE\s*=\s*false\b/ },
+  { name: "private-video-summary-domain", re: /video-summary\.nimao\.cn/i },
+  { name: "private-domain", re: /\bnimao\.cn\b/i },
 ];
 
 const ALLOWLIST_SNIPPETS = [

@@ -368,8 +368,8 @@ async function run() {
         autoUpdateLastRunAt: 0,
         autoUpdateLastResults: {},
         videoSummarySettings: {
-          serviceUrl: "https://video-summary.nimao.cn/",
-          agentJobsUrl: "https://video-summary.nimao.cn/jobs",
+          serviceUrl: "",
+          agentJobsUrl: "",
           skillName: "视频总结 / video-summary",
           outputDir: "视频总结（仓库）",
           defaultPrompt:

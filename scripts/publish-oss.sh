@@ -13,6 +13,14 @@ export PATH="/Users/mac/.local/bin:/usr/bin:/bin:/usr/local/bin:$PATH"
 VERSION="$(node -p "require('$SRC/manifest.json').version")"
 NOTES_FILE="$REPO/RELEASE_NOTES_${VERSION}.md"
 
+restore_daily_build() {
+  if [[ -d "$SRC" && -f "$SRC/package.json" ]]; then
+    echo "==> restore daily vault build (OSS_RELEASE=0)"
+    (cd "$SRC" && npm run build) || true
+  fi
+}
+trap restore_daily_build EXIT
+
 echo "==> ZengQiang OSS publish $VERSION"
 echo "    src : $SRC"
 echo "    repo: $REPO"
@@ -52,20 +60,26 @@ cd "$SRC"
 npm install
 npm run build:oss
 npm run audit:privacy
-if rg -n "os\.hostname|localStorage|/Users/mac|近期工作|知识仓库" main.js >/dev/null 2>&1; then
+if rg -n "OSS_RELEASE\s*=\s*false|video-summary\.nimao\.cn|nimao\.cn|os\.hostname|localStorage|/Users/mac|近期工作|知识仓库" main.js >/dev/null 2>&1; then
   echo "main.js 泄漏检查失败"
   exit 1
 fi
 npm run test:smoke
 npm run audit:css
+npm run build:oss
+npm run audit:privacy
+if rg -n "OSS_RELEASE\s*=\s*false|video-summary\.nimao\.cn|nimao\.cn|os\.hostname|localStorage|/Users/mac|近期工作|知识仓库" main.js >/dev/null 2>&1; then
+  echo "Release 附件 main.js 泄漏检查失败"
+  exit 1
+fi
 
 echo "==> git commit + push"
 cd "$REPO"
 if git diff --quiet && git diff --cached --quiet; then
   echo "源码无变更，跳过 commit"
 else
-  git add manifest.json package.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md" COMMUNITY_SUBMISSION.md 2>/dev/null || \
-  git add manifest.json package.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md"
+  git add manifest.json package.json package-lock.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md" COMMUNITY_SUBMISSION.md 2>/dev/null || \
+  git add manifest.json package.json package-lock.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md"
   CHECK_GIT=1 node scripts/audit-privacy.mjs
   git commit -m "$(cat <<EOF
 Release ${VERSION}: OSS publish.
@@ -79,6 +93,10 @@ echo "==> GitHub Release"
 RELEASE_DIR="/tmp/zengqiang-${VERSION}-release"
 rm -rf "$RELEASE_DIR" && mkdir -p "$RELEASE_DIR"
 cp "$SRC/main.js" "$SRC/manifest.json" "$SRC/styles.css" "$RELEASE_DIR/"
+if rg -n "OSS_RELEASE\s*=\s*false|video-summary\.nimao\.cn|nimao\.cn|os\.hostname|localStorage|/Users/mac|近期工作|知识仓库" "$RELEASE_DIR/main.js" >/dev/null 2>&1; then
+  echo "Release 附件 main.js 泄漏检查失败，已停止上传"
+  exit 1
+fi
 if gh release view "$VERSION" --repo "$GITHUB_REPO" >/dev/null 2>&1; then
   echo "Release $VERSION 已存在，跳过 gh release create"
 else

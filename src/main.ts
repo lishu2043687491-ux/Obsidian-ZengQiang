@@ -753,8 +753,8 @@ const ENHANCED_TABLE_FEATURE_LOCKED = __OSS_RELEASE__ === true;
 const OSS_RELEASE = __OSS_RELEASE__ === true;
 
 const DEFAULT_VIDEO_SUMMARY_SETTINGS: VideoSummaryUserSettings = {
-  serviceUrl: OSS_RELEASE ? "" : "https://video-summary.nimao.cn/",
-  agentJobsUrl: OSS_RELEASE ? "" : "https://video-summary.nimao.cn/jobs",
+  serviceUrl: "",
+  agentJobsUrl: "",
   skillName: "视频总结 / video-summary",
   outputDir: "视频总结（仓库）",
   defaultPrompt:
