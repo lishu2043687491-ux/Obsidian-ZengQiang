@@ -114,6 +114,48 @@ export function mediaTypeFromPath(path: string): "video" | "audio" | "unknown" {
   return "unknown";
 }
 
+export function buildVideoSummaryMediaCandidates(videoId: string, mediaPath = "", platform = "", mediaLibraryPath = ""): string[] {
+  const rawId = String(videoId || "").trim();
+  const stems = new Set<string>();
+  if (rawId) stems.add(rawId);
+
+  const basename = String(mediaPath || "")
+    .replace(/\\/g, "/")
+    .split("/")
+    .pop();
+  if (basename) {
+    const stem = basename.replace(/\.[^.]+$/, "");
+    if (stem) stems.add(stem.replace(/\.preview$/, ""));
+  }
+
+  const platformDir = String(platform || "").trim().toLowerCase();
+  const mediaLibrary = String(mediaLibraryPath || "").trim().replace(/\/+$/, "");
+  const directories = [
+    ...(mediaLibrary && platformDir
+      ? [
+          `${mediaLibrary}/${platformDir}`,
+        ]
+      : []),
+    ...(mediaLibrary ? [mediaLibrary] : []),
+    "开发插件（Obsidian优化）/视频总结（仓库）/_media",
+    "视频总结（仓库）/_media",
+    "_video-summary-media",
+  ];
+  const candidates: string[] = [];
+  for (const stem of stems) {
+    for (const directory of directories) {
+      candidates.push(`${directory}/${stem}.preview.mp4`);
+    }
+    for (const directory of directories) {
+      candidates.push(`${directory}/${stem}.mp4`);
+    }
+    for (const directory of directories) {
+      candidates.push(`${directory}/${stem}.mp3`);
+    }
+  }
+  return [...new Set(candidates)];
+}
+
 function extractYouTubeId(sourceUrl: string): string {
   try {
     const url = new URL(sourceUrl);
@@ -149,9 +191,8 @@ export function buildOnlineEmbedUrl(sourceUrl: string, platform: string, start: 
     const id = extractYouTubeId(sourceUrl);
     return id ? `https://www.youtube.com/embed/${encodeURIComponent(id)}?start=${startSeconds}&autoplay=1` : "";
   }
-  if (normalizedPlatform === "bilibili") {
-    const bvid = extractBilibiliBvid(sourceUrl);
-    return bvid ? `https://player.bilibili.com/player.html?bvid=${encodeURIComponent(bvid)}&t=${startSeconds}&autoplay=1` : "";
-  }
+  // Bilibili's source-site iframe may treat player clicks as a navigation to B站.
+  // Use media_url/raw media or local cache instead, where pause/seek stay under our control.
+  if (normalizedPlatform === "bilibili") return "";
   return "";
 }

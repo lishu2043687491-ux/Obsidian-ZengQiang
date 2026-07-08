@@ -4,6 +4,7 @@ import {
   absolutePathToFileUrl,
   buildOnlineEmbedUrl,
   buildSeekUrl,
+  buildVideoSummaryMediaCandidates,
   convertLegacyTimelineMarkdown,
   detectVideoPlatform,
   mediaTypeFromPath,
@@ -34,7 +35,10 @@ type ResolvedMedia = {
   vaultPath?: string;
   copied: boolean;
   source: "local" | "cloud" | "embed";
+  mode: PlaybackMode;
 };
+
+type PlaybackMode = "online" | "local";
 
 const DEFAULT_SETTINGS: VideoTimestampPreviewSettings = {
   playerWidth: 420,
@@ -74,6 +78,26 @@ const MODULE_STYLE = `
   cursor: pointer;
   font-size: 18px;
   line-height: 1;
+}
+.fdtb-video-preview-source-toggle {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+.fdtb-video-preview-source-button {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 5px 7px;
+}
+.fdtb-video-preview-source-button.is-active {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
 }
 .fdtb-video-preview-body {
   flex: 1;
@@ -177,13 +201,12 @@ function inferMetadataFromMarkdown(markdown: string): VideoSummaryMetadata | nul
   const bvMatch = markdown.match(/https?:\/\/(?:www\.)?bilibili\.com\/video\/(BV[0-9A-Za-z]+)/);
   if (bvMatch) {
     const videoId = bvMatch[1];
-    const mediaPath = `/Applications/BiliNote.app/Contents/MacOS/data/${videoId}.mp4`;
     return {
       sourceUrl: bvMatch[0],
       platform: "bilibili",
       title: "",
       videoId,
-      mediaPath,
+      mediaPath: "",
       mediaUrl: "",
       mediaPageUrl: "",
       mediaType: "video",
@@ -280,6 +303,7 @@ class VideoTimestampPreviewView extends ItemView {
   private mediaEl: HTMLVideoElement | HTMLAudioElement | null = null;
   private iframeEl: HTMLIFrameElement | null = null;
   private metadata: VideoSummaryMetadata | null = null;
+  private switchSource: ((mode: PlaybackMode) => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf) {
     super(leaf);
@@ -305,14 +329,21 @@ class VideoTimestampPreviewView extends ItemView {
     this.pause();
   }
 
-  show(metadata: VideoSummaryMetadata, media: ResolvedMedia, seek: VideoSeekTarget) {
+  show(
+    metadata: VideoSummaryMetadata,
+    media: ResolvedMedia,
+    seek: VideoSeekTarget,
+    switchSource: (mode: PlaybackMode) => void
+  ) {
     this.metadata = metadata;
+    this.switchSource = switchSource;
     this.renderPlayer(metadata, media);
     this.seekTo(media, seek);
   }
 
   private renderEmpty() {
     this.pause();
+    this.switchSource = null;
     this.contentEl.empty();
     this.contentEl.addClass("fdtb-video-preview-root");
     this.contentEl.createDiv({
@@ -337,6 +368,7 @@ class VideoTimestampPreviewView extends ItemView {
     this.contentEl.addClass("fdtb-video-preview-root");
     const header = this.contentEl.createDiv({ cls: "fdtb-video-preview-header" });
     header.createDiv({ cls: "fdtb-video-preview-title", text: metadata.title || metadata.videoId || "视频预览" });
+    this.appendSourceToggle(header, resolved.mode);
     const close = header.createEl("button", { cls: "fdtb-video-preview-close", text: "×" });
     close.addEventListener("click", () => this.leaf.detach());
     const body = this.contentEl.createDiv({ cls: "fdtb-video-preview-body" });
@@ -350,11 +382,13 @@ class VideoTimestampPreviewView extends ItemView {
       cls: "fdtb-video-preview-meta",
       text: resolved.copied
         ? "已复制到 Obsidian 本地媒体缓存"
-        : resolved.source === "cloud"
-          ? "云端媒体预览；另一台 Mac 没有本地缓存时也可播放"
+        : resolved.mode === "online"
+          ? resolved.source === "cloud"
+            ? "在线 raw 媒体预览；另一台 Mac 没有本地缓存时也可播放"
+            : "在线源预览；如有广告或源站失效，可切换到本地。"
           : metadata.mediaType === "audio"
           ? "当前为音频缓存预览"
-          : "本地视频缓存预览",
+          : "本地视频缓存预览；通过仅本机可访问的播放通道读取已配置媒体库。",
     });
     this.mediaEl = media;
   }
@@ -368,6 +402,7 @@ class VideoTimestampPreviewView extends ItemView {
     this.contentEl.addClass("fdtb-video-preview-root");
     const header = this.contentEl.createDiv({ cls: "fdtb-video-preview-header" });
     header.createDiv({ cls: "fdtb-video-preview-title", text: metadata.title || metadata.videoId || "在线视频预览" });
+    this.appendSourceToggle(header, resolved.mode);
     const close = header.createEl("button", { cls: "fdtb-video-preview-close", text: "×" });
     close.addEventListener("click", () => this.leaf.detach());
     const body = this.contentEl.createDiv({ cls: "fdtb-video-preview-body" });
@@ -380,9 +415,24 @@ class VideoTimestampPreviewView extends ItemView {
     }) as HTMLIFrameElement;
     body.createDiv({
       cls: "fdtb-video-preview-meta",
-      text: "在线源预览；未找到本地视频缓存时使用源站播放器兜底。",
+      text: "在线源预览；如有广告或源站失效，可切换到本地。",
     });
     this.iframeEl = frame;
+  }
+
+  private appendSourceToggle(header: HTMLElement, activeMode: PlaybackMode) {
+    const group = header.createDiv({ cls: "fdtb-video-preview-source-toggle" });
+    for (const mode of ["online", "local"] as PlaybackMode[]) {
+      const button = group.createEl("button", {
+        cls: `fdtb-video-preview-source-button${activeMode === mode ? " is-active" : ""}`,
+        text: mode === "online" ? "在线" : "本地",
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.switchSource?.(mode);
+      });
+    }
   }
 
   private seekTo(resolved: ResolvedMedia, seek: VideoSeekTarget) {
@@ -429,6 +479,13 @@ class VideoTimestampPreviewRunner {
   private settings: VideoTimestampPreviewSettings = DEFAULT_SETTINGS;
   private lastOpenKey = "";
   private lastOpenAt = 0;
+  private localMediaServer: any = null;
+  private localMediaServerStarting: Promise<void> | null = null;
+  private localMediaPort = 0;
+  private localMediaPathTokens = new Map<string, string>();
+  private localMediaTokenPaths = new Map<string, string>();
+  private playbackModeByNote = new Map<string, PlaybackMode>();
+  private defaultPlaybackMode: PlaybackMode = "online";
 
   constructor(private host: SubPluginHost) {}
 
@@ -454,6 +511,7 @@ class VideoTimestampPreviewRunner {
 
     this.host.register(() => {
       removeStyle();
+      this.stopLocalMediaServer();
     });
   }
 
@@ -543,7 +601,7 @@ class VideoTimestampPreviewRunner {
     });
   }
 
-  private async openForFile(file: TFile | null, seek: VideoSeekTarget) {
+  private async openForFile(file: TFile | null, seek: VideoSeekTarget, mode?: PlaybackMode) {
     let metadata = readVideoSummaryFrontmatter(this.host, file);
     if (!metadata && file) {
       const markdown = await this.host.app.vault.read(file);
@@ -554,9 +612,12 @@ class VideoTimestampPreviewRunner {
       return;
     }
     try {
-      const media = await this.resolveMedia(metadata, seek);
+      const modeKey = this.getPlaybackModeKey(file, metadata);
+      const playbackMode = mode ?? this.playbackModeByNote.get(modeKey) ?? this.defaultPlaybackMode;
+      const media = await this.resolveMedia(metadata, seek, playbackMode);
+      this.rememberPlaybackMode(modeKey, media.mode);
       const view = await this.openPreviewView();
-      view.show(metadata, media, seek);
+      view.show(metadata, media, seek, (mode) => void this.openForFile(file, seek, mode));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn("[video-timestamp-preview] open failed", error);
@@ -564,28 +625,72 @@ class VideoTimestampPreviewRunner {
     }
   }
 
-  private async resolveMedia(metadata: VideoSummaryMetadata, seek: VideoSeekTarget): Promise<ResolvedMedia> {
+  private getPlaybackModeKey(file: TFile | null, metadata: VideoSummaryMetadata): string {
+    return file?.path || metadata.videoId || metadata.sourceUrl || "__video-summary-current-note__";
+  }
+
+  private rememberPlaybackMode(key: string, mode: PlaybackMode) {
+    this.playbackModeByNote.set(key, mode);
+    this.defaultPlaybackMode = mode;
+  }
+
+  private async resolveMedia(metadata: VideoSummaryMetadata, seek: VideoSeekTarget, mode: PlaybackMode): Promise<ResolvedMedia> {
     const errors: string[] = [];
+    if (mode === "online") {
+      const online = this.resolveOnlineMedia(metadata, seek);
+      if (online) return online;
+    }
+    const fallbackMode: PlaybackMode = mode === "online" ? "local" : mode;
+    const preferredVaultMedia = await this.resolvePreferredVaultMedia(metadata, fallbackMode);
+    if (preferredVaultMedia) return preferredVaultMedia;
     if (metadata.mediaPath) {
       try {
-        return await this.resolveLocalMedia(metadata.mediaPath);
+        return await this.resolveLocalMedia(metadata.mediaPath, fallbackMode);
       } catch (error) {
         errors.push(error instanceof Error ? error.message : String(error));
       }
     }
-    if (metadata.mediaUrl) {
-      return { src: metadata.mediaUrl, copied: false, source: "cloud" };
-    }
-    const embedUrl = buildOnlineEmbedUrl(metadata.sourceUrl, metadata.platform, seek.start);
-    if (embedUrl) {
-      return { src: embedUrl, copied: false, source: "embed" };
-    }
+    const online = this.resolveOnlineMedia(metadata, seek);
+    if (online) return online;
     throw new Error(errors[0] || "当前笔记没有可播放的本地、云端媒体地址，源站也不支持内嵌预览");
   }
 
-  private async resolveLocalMedia(mediaPath: string): Promise<ResolvedMedia> {
+  private resolveOnlineMedia(metadata: VideoSummaryMetadata, seek: VideoSeekTarget): ResolvedMedia | null {
+    if (metadata.mediaUrl) {
+      return { src: metadata.mediaUrl, copied: false, source: "cloud", mode: "online" };
+    }
+    const embedUrl = buildOnlineEmbedUrl(metadata.sourceUrl, metadata.platform, seek.start);
+    if (embedUrl) {
+      return { src: embedUrl, copied: false, source: "embed", mode: "online" };
+    }
+    return null;
+  }
+
+  private async resolvePreferredVaultMedia(metadata: VideoSummaryMetadata, mode: PlaybackMode): Promise<ResolvedMedia | null> {
+    const adapter = this.host.app.vault.adapter as any;
+    for (const candidate of buildVideoSummaryMediaCandidates(
+      metadata.videoId,
+      metadata.mediaPath,
+      metadata.platform,
+      this.getMediaLibraryPath()
+    )) {
+      if (candidate.startsWith("/")) {
+        try {
+          return await this.resolveLocalMedia(candidate, mode);
+        } catch {
+          continue;
+        }
+      }
+      if (typeof adapter?.exists === "function" && await adapter.exists(candidate)) {
+        return { src: this.getVaultResourcePath(candidate), vaultPath: candidate, copied: false, source: "local", mode };
+      }
+    }
+    return null;
+  }
+
+  private async resolveLocalMedia(mediaPath: string, mode: PlaybackMode): Promise<ResolvedMedia> {
     if (/^(https?:|app:|file:)/i.test(mediaPath)) {
-      return { src: mediaPath, copied: false, source: /^https?:/i.test(mediaPath) ? "cloud" : "local" };
+      return { src: mediaPath, copied: false, source: /^https?:/i.test(mediaPath) ? "cloud" : "local", mode };
     }
 
     const adapter = this.host.app.vault.adapter as any;
@@ -594,32 +699,205 @@ class VideoTimestampPreviewRunner {
     if (basePath && normalizedMediaPath.startsWith(`${basePath}/`)) {
       const relative = normalizedMediaPath.slice(basePath.length + 1);
       if (!(await adapter.exists(relative))) throw new Error(`找不到 vault 内媒体文件：${relative}`);
-      return { src: this.getVaultResourcePath(relative), vaultPath: relative, copied: false, source: "local" };
+      return { src: this.getVaultResourcePath(relative), vaultPath: relative, copied: false, source: "local", mode };
     }
 
     if (!normalizedMediaPath.startsWith("/")) {
       if (!(await adapter.exists(normalizedMediaPath))) throw new Error(`找不到 vault 内媒体文件：${normalizedMediaPath}`);
-      return { src: this.getVaultResourcePath(normalizedMediaPath), vaultPath: normalizedMediaPath, copied: false, source: "local" };
+      return { src: this.getVaultResourcePath(normalizedMediaPath), vaultPath: normalizedMediaPath, copied: false, source: "local", mode };
     }
 
+    return { src: await this.getExternalLocalMediaUrl(normalizedMediaPath), copied: false, source: "local", mode };
+  }
+
+  private async getExternalLocalMediaUrl(mediaPath: string): Promise<string> {
     const req = getNodeRequire();
-    if (!req) {
-      return { src: absolutePathToFileUrl(mediaPath), copied: false, source: "local" };
-    }
+    if (!req) return absolutePathToFileUrl(mediaPath);
     const fs = req("fs") as typeof import("fs");
-    if (!fs.existsSync(mediaPath)) {
+    const path = req("path") as typeof import("path");
+    const resolvedPath = path.resolve(mediaPath);
+    let stat: import("fs").Stats;
+    try {
+      stat = fs.statSync(resolvedPath);
+    } catch {
       throw new Error(`找不到本地媒体文件：${mediaPath}`);
     }
-
-    const folder = "_video-summary-media";
-    const basename = sanitizeFilename(normalizedMediaPath.split("/").pop() || "video.mp4");
-    const targetPath = `${folder}/${basename}`;
-    if (!(await adapter.exists(targetPath))) {
-      await ensureFolder(adapter, folder);
-      const data = fs.readFileSync(mediaPath);
-      await adapter.writeBinary(targetPath, bufferToArrayBuffer(data));
+    if (!stat.isFile()) throw new Error(`本地媒体路径不是文件：${mediaPath}`);
+    await this.ensureLocalMediaServer(req);
+    let token = this.localMediaPathTokens.get(resolvedPath);
+    if (!token) {
+      const crypto = req("crypto") as typeof import("crypto");
+      token = crypto.randomBytes(18).toString("base64url");
+      this.localMediaPathTokens.set(resolvedPath, token);
+      this.localMediaTokenPaths.set(token, resolvedPath);
     }
-    return { src: this.getVaultResourcePath(targetPath), vaultPath: targetPath, copied: true, source: "local" };
+    return `http://127.0.0.1:${this.localMediaPort}/${encodeURIComponent(token)}/${encodeURIComponent(path.basename(resolvedPath))}`;
+  }
+
+  private async ensureLocalMediaServer(req: (id: string) => any): Promise<void> {
+    if (this.localMediaServer && this.localMediaPort > 0) return;
+    if (this.localMediaServerStarting) {
+      await this.localMediaServerStarting;
+      return;
+    }
+    this.localMediaServerStarting = new Promise((resolve, reject) => {
+      const http = req("http") as typeof import("http");
+      const server = http.createServer((request, response) => {
+        this.handleLocalMediaRequest(req, request, response);
+      });
+      const onError = (error: Error) => {
+        this.localMediaServerStarting = null;
+        reject(error);
+      };
+      server.once("error", onError);
+      server.listen(0, "127.0.0.1", () => {
+        server.off?.("error", onError);
+        const address = server.address();
+        if (!address || typeof address === "string") {
+          try {
+            server.close();
+          } catch {
+            // ignore
+          }
+          this.localMediaServerStarting = null;
+          reject(new Error("本地媒体播放通道启动失败"));
+          return;
+        }
+        this.localMediaServer = server;
+        this.localMediaPort = address.port;
+        server.unref?.();
+        this.localMediaServerStarting = null;
+        resolve();
+      });
+    });
+    await this.localMediaServerStarting;
+  }
+
+  private handleLocalMediaRequest(req: (id: string) => any, request: any, response: any) {
+    const method = String(request.method || "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      response.writeHead(405, { Allow: "GET, HEAD" });
+      response.end();
+      return;
+    }
+    let mediaPath = "";
+    try {
+      const parsed = new URL(String(request.url || "/"), "http://127.0.0.1");
+      const token = decodeURIComponent(parsed.pathname.split("/").filter(Boolean)[0] || "");
+      mediaPath = this.localMediaTokenPaths.get(token) || "";
+    } catch {
+      mediaPath = "";
+    }
+    if (!mediaPath) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+
+    const fs = req("fs") as typeof import("fs");
+    let stat: import("fs").Stats;
+    try {
+      stat = fs.statSync(mediaPath);
+    } catch {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+    if (!stat.isFile()) {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
+
+    const size = stat.size;
+    const contentType = this.contentTypeForMediaPath(mediaPath);
+    const baseHeaders: Record<string, string | number> = {
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "no-store",
+      "Content-Type": contentType,
+      "X-Content-Type-Options": "nosniff",
+    };
+    const range = String(request.headers?.range || "");
+    const rangeMatch = range.match(/^bytes=(\d*)-(\d*)$/);
+    if (rangeMatch) {
+      const start = rangeMatch[1] ? Number(rangeMatch[1]) : 0;
+      const end = rangeMatch[2] ? Number(rangeMatch[2]) : size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= size) {
+        response.writeHead(416, { ...baseHeaders, "Content-Range": `bytes */${size}` });
+        response.end();
+        return;
+      }
+      const safeEnd = Math.min(end, size - 1);
+      response.writeHead(206, {
+        ...baseHeaders,
+        "Content-Length": safeEnd - start + 1,
+        "Content-Range": `bytes ${start}-${safeEnd}/${size}`,
+      });
+      if (method === "HEAD") {
+        response.end();
+        return;
+      }
+      this.pipeMediaFile(fs, mediaPath, response, start, safeEnd);
+      return;
+    }
+
+    response.writeHead(200, {
+      ...baseHeaders,
+      "Content-Length": size,
+    });
+    if (method === "HEAD") {
+      response.end();
+      return;
+    }
+    this.pipeMediaFile(fs, mediaPath, response);
+  }
+
+  private pipeMediaFile(fs: typeof import("fs"), mediaPath: string, response: any, start?: number, end?: number) {
+    const stream = fs.createReadStream(mediaPath, typeof start === "number" ? { start, end } : undefined);
+    stream.on("error", () => {
+      try {
+        response.destroy();
+      } catch {
+        // ignore
+      }
+    });
+    stream.pipe(response);
+  }
+
+  private contentTypeForMediaPath(mediaPath: string): string {
+    const ext = mediaPath.toLowerCase().split(".").pop() || "";
+    if (ext === "mp4" || ext === "m4v") return "video/mp4";
+    if (ext === "webm") return "video/webm";
+    if (ext === "mov") return "video/quicktime";
+    if (ext === "mp3") return "audio/mpeg";
+    if (ext === "m4a" || ext === "aac") return "audio/aac";
+    if (ext === "wav") return "audio/wav";
+    if (ext === "ogg") return "audio/ogg";
+    return "application/octet-stream";
+  }
+
+  private stopLocalMediaServer() {
+    const server = this.localMediaServer;
+    this.localMediaServer = null;
+    this.localMediaServerStarting = null;
+    this.localMediaPort = 0;
+    this.localMediaPathTokens.clear();
+    this.localMediaTokenPaths.clear();
+    if (!server) return;
+    try {
+      server.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  private getMediaLibraryPath(): string {
+    try {
+      const settings = (this.host.component as any)?.getVideoSummarySettings?.();
+      return typeof settings?.mediaLibraryPath === "string" ? settings.mediaLibraryPath.trim() : "";
+    } catch {
+      return "";
+    }
   }
 
   private getVaultResourcePath(vaultPath: string): string {

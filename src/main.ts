@@ -26,6 +26,11 @@ import {
   type ClaudianChatArchiveRunner,
 } from "./modules/claudian-chat-archive";
 import {
+  CLAUDIAN_MENTION_GUARD_LOG_PATH,
+  ensureClaudianMentionExcludeGuard as ensureClaudianMentionExcludeGuardCore,
+  type ClaudianMentionExcludeGuardResult,
+} from "./modules/claudian-mention-exclude-guard";
+import {
   AUTO_UPDATE_PLUGIN_LABELS,
   DEFAULT_AUTO_UPDATE_PLUGIN_IDS,
   formatAutoUpdateResult,
@@ -329,14 +334,35 @@ type VideoSummaryPlatformStatus = {
 };
 
 type VideoSummaryUserSettings = {
+  downloadUrl: string;
   serviceUrl: string;
   agentJobsUrl: string;
+  biliNoteBaseUrl: string;
+  providerId: string;
+  defaultModelId: string;
+  fallbackModelId: string;
+  visualModelId: string;
   skillName: string;
   outputDir: string;
+  mediaLibraryPath: string;
   defaultPrompt: string;
   enableLocalDiagnostics: boolean;
 };
 type VideoSummaryStringSettingKey = Exclude<keyof VideoSummaryUserSettings, "enableLocalDiagnostics">;
+
+type VideoSummaryProviderStatus = {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKeyConfigured: boolean;
+  selected: boolean;
+};
+
+type VideoSummaryModelCheckStatus = {
+  model: string;
+  status: string;
+  message: string;
+};
 
 type VideoSummaryDiagnostics = {
   pluginVersion: string;
@@ -360,7 +386,10 @@ type VideoSummaryDiagnostics = {
   agentTokenLength: number;
   sessionSecretConfigured: boolean;
   webPasswordConfigured: boolean;
+  generatedWebPasswordConfigured: boolean;
   platforms: VideoSummaryPlatformStatus[];
+  providers: VideoSummaryProviderStatus[];
+  modelChecks: VideoSummaryModelCheckStatus[];
 };
 
 type HostedPluginItem = {
@@ -753,10 +782,17 @@ const ENHANCED_TABLE_FEATURE_LOCKED = __OSS_RELEASE__ === true;
 const OSS_RELEASE = __OSS_RELEASE__ === true;
 
 const DEFAULT_VIDEO_SUMMARY_SETTINGS: VideoSummaryUserSettings = {
+  downloadUrl: "https://github.com/JefferyHcool/BiliNote/releases",
   serviceUrl: "",
   agentJobsUrl: "",
+  biliNoteBaseUrl: "http://127.0.0.1:8483",
+  providerId: "",
+  defaultModelId: "Kimi-K2.6",
+  fallbackModelId: "",
+  visualModelId: "Kimi-K2.6",
   skillName: "视频总结 / video-summary",
   outputDir: "视频总结（仓库）",
+  mediaLibraryPath: OSS_RELEASE ? "" : "/Volumes/Mac移动硬盘/视频总结媒体库",
   defaultPrompt:
     "保留完整转写原文，输出可点击时间轴；根据内容自动选择教程步骤、概念性知识三问或事实性知识总结；最终补齐 video_summary frontmatter。",
   enableLocalDiagnostics: !OSS_RELEASE,
@@ -1059,8 +1095,26 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     title.textContent = "通用配置";
     const hint = document.createElement("p");
     hint.className = "fdtb-video-summary-config-hint";
-    hint.textContent = "这里只保存可公开配置。Cookie、API Key、Agent token、网页密码继续由视频总结服务托管。";
+    hint.textContent = "这里只保存可公开配置。API Key、Cookie、Agent token、网页密码继续由 BiliNote 或视频总结服务托管。";
     card.append(title, hint);
+
+    const guide = document.createElement("div");
+    guide.className = "fdtb-video-summary-guide";
+    const guideTitle = document.createElement("div");
+    guideTitle.className = "fdtb-video-summary-config-title";
+    guideTitle.textContent = "新用户三步";
+    const guideList = document.createElement("ol");
+    [
+      "下载安装 BiliNote 桌面版，启动后保持本机后端可访问。",
+      "在 BiliNote 的模型供应商设置里填写 API Key；Obsidian 只检测是否已配置，不保存明文。",
+      "在下方填写 Provider ID、默认模型 ID、视觉模型 ID；不填 Provider ID 时按脚本自动选择。"
+    ].forEach((text) => {
+      const item = document.createElement("li");
+      item.textContent = text;
+      guideList.appendChild(item);
+    });
+    guide.append(guideTitle, guideList);
+    card.appendChild(guide);
 
     const fields: Partial<Record<VideoSummaryStringSettingKey, HTMLInputElement | HTMLTextAreaElement>> = {};
     const appendInput = (key: VideoSummaryStringSettingKey, labelText: string, placeholder: string) => {
@@ -1090,10 +1144,17 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       card.appendChild(label);
     };
 
+    appendInput("downloadUrl", "快捷下载链接", "https://github.com/JefferyHcool/BiliNote/releases");
     appendInput("serviceUrl", "网页入口 URL", "https://example.com/");
     appendInput("agentJobsUrl", "Agent 接口 URL", "https://example.com/jobs");
+    appendInput("biliNoteBaseUrl", "BiliNote 后端 URL", "http://127.0.0.1:8483");
+    appendInput("providerId", "Provider ID（可空）", "留空则自动选择已配置 API Key 的供应商");
+    appendInput("defaultModelId", "默认模型 ID", "Kimi-K2.6");
+    appendInput("fallbackModelId", "备用模型 ID（可空）", "主模型失败时使用");
+    appendInput("visualModelId", "视觉模型 ID", "Kimi-K2.6");
     appendInput("skillName", "Skill 名称", "视频总结 / video-summary");
     appendInput("outputDir", "输出仓库说明", "例如：视频总结（仓库）");
+    appendInput("mediaLibraryPath", "本地媒体库路径", "/Volumes/Mac移动硬盘/视频总结媒体库");
     appendTextarea("defaultPrompt", "默认总结要求", "保留完整原文、可点击时间轴、按内容类型自动总结");
 
     const localRow = document.createElement("label");
@@ -1114,10 +1175,17 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     saveButton.textContent = "保存配置";
     saveButton.addEventListener("click", async () => {
       await this.plugin.saveVideoSummarySettings({
+        downloadUrl: fields.downloadUrl?.value ?? "",
         serviceUrl: fields.serviceUrl?.value ?? "",
         agentJobsUrl: fields.agentJobsUrl?.value ?? "",
+        biliNoteBaseUrl: fields.biliNoteBaseUrl?.value ?? "",
+        providerId: fields.providerId?.value ?? "",
+        defaultModelId: fields.defaultModelId?.value ?? "",
+        fallbackModelId: fields.fallbackModelId?.value ?? "",
+        visualModelId: fields.visualModelId?.value ?? "",
         skillName: fields.skillName?.value ?? "",
         outputDir: fields.outputDir?.value ?? "",
+        mediaLibraryPath: fields.mediaLibraryPath?.value ?? "",
         defaultPrompt: fields.defaultPrompt?.value ?? "",
         enableLocalDiagnostics: checkbox.checked,
       });
@@ -1130,9 +1198,15 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     copyTemplateButton.addEventListener("click", async () => {
       const next = this.plugin.getVideoSummarySettings();
       const template = [
+        `下载 BiliNote：${next.downloadUrl || "待配置"}`,
         `调用 Skill：${next.skillName}`,
         `网页入口：${next.serviceUrl || "待配置"}`,
         `Agent 接口：${next.agentJobsUrl || "待配置"}`,
+        `BiliNote 后端：${next.biliNoteBaseUrl || "待配置"}`,
+        `Provider ID：${next.providerId || "自动选择"}`,
+        `默认模型：${next.defaultModelId || "待配置"}`,
+        `备用模型：${next.fallbackModelId || "未启用"}`,
+        `视觉模型：${next.visualModelId || "待配置"}`,
         `输出仓库：${next.outputDir || "待配置"}`,
         `默认要求：${next.defaultPrompt}`,
         "注意：Bearer token、Cookie、API Key 不放在消息里，由本机视频总结服务托管。",
@@ -1140,7 +1214,35 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       await this.plugin.copyTextToClipboard(template);
       new Notice("已复制视频总结调用模板；不包含密钥。");
     });
-    actions.append(saveButton, copyTemplateButton);
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.textContent = "打开下载页";
+    downloadButton.addEventListener("click", () => {
+      const url = fields.downloadUrl?.value || settings.downloadUrl;
+      if (!url) {
+        new Notice("请先填写 BiliNote 下载链接");
+        return;
+      }
+      void this.plugin.openExternalUrl(url);
+    });
+    const openBiliNoteButton = document.createElement("button");
+    openBiliNoteButton.type = "button";
+    openBiliNoteButton.textContent = "打开 BiliNote 配置";
+    openBiliNoteButton.addEventListener("click", () => {
+      const url = fields.biliNoteBaseUrl?.value || settings.biliNoteBaseUrl;
+      if (!url) {
+        new Notice("请先填写 BiliNote 后端 URL");
+        return;
+      }
+      void this.plugin.openExternalUrl(url);
+    });
+    const openServiceConfigButton = document.createElement("button");
+    openServiceConfigButton.type = "button";
+    openServiceConfigButton.textContent = "打开服务配置";
+    openServiceConfigButton.addEventListener("click", async () => {
+      await this.plugin.openVideoSummaryServiceConfig();
+    });
+    actions.append(saveButton, copyTemplateButton, downloadButton, openBiliNoteButton, openServiceConfigButton);
     card.appendChild(actions);
     containerEl.appendChild(card);
   }
@@ -1181,6 +1283,23 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     this.appendStatusRow(containerEl, "BiliNote 后端", data.bilibiliNoteHealth.status, data.bilibiliNoteHealth.description);
     this.appendStatusRow(containerEl, "内容分享工作台", data.workbenchHealth.status, data.workbenchHealth.description);
 
+    this.appendSectionTitle(containerEl, "模型与 API Key");
+    if (data.providers.length > 0) {
+      for (const provider of data.providers) {
+        this.appendStatusRow(
+          containerEl,
+          provider.selected ? `当前供应商：${provider.name || provider.id}` : `供应商：${provider.name || provider.id}`,
+          provider.apiKeyConfigured ? "API Key 已配置" : "API Key 未配置",
+          `${provider.baseUrl || "未配置 Base URL"}；Provider ID：${provider.id}`
+        );
+      }
+    } else {
+      this.appendStatusRow(containerEl, "模型供应商", "未读取到", "打开 BiliNote 配置页填写 API Key 后再刷新状态。");
+    }
+    for (const model of data.modelChecks) {
+      this.appendStatusRow(containerEl, `模型：${model.model}`, model.status, model.message);
+    }
+
     this.appendSectionTitle(containerEl, "隐私与密钥");
     this.appendStatusRow(
       containerEl,
@@ -1192,19 +1311,21 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       containerEl,
       "Agent 调用密钥",
       data.agentTokenConfigured ? "已配置（已隐藏）" : "未配置",
-      data.agentTokenConfigured ? `长度 ${data.agentTokenLength}；页面不会显示或复制 token。` : "Work Buddy 远程调用需要 Bearer token。"
+      data.agentTokenConfigured ? `${this.maskConfiguredSecret()}；页面不会显示或复制 token。` : "Work Buddy 远程调用需要 Bearer token。"
     );
     this.appendStatusRow(
       containerEl,
       "网页访问密码",
       data.webPasswordConfigured ? "已设置（hash）" : "未设置",
-      "页面只显示是否存在 hash，不显示生成密码。"
+      data.generatedWebPasswordConfigured
+        ? "已生成初始密码（已隐藏为 ******）；如需查看或重置，请打开本机服务配置文件。"
+        : "页面只显示是否存在 hash，不显示生成密码。"
     );
     this.appendStatusRow(
       containerEl,
       "Session Secret",
       data.sessionSecretConfigured ? "已配置（已隐藏）" : "未配置",
-      "用于网页登录态签名；不进入插件 data.json。"
+      data.sessionSecretConfigured ? "******；用于网页登录态签名，不进入插件 data.json。" : "用于网页登录态签名；不进入插件 data.json。"
     );
 
     this.appendSectionTitle(containerEl, "平台与 Cookie");
@@ -1217,7 +1338,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
         platform.error
           ? platform.error
           : platform.configured
-            ? `只显示长度 ${platform.length}，不显示 Cookie 内容。`
+            ? "已由 BiliNote 保存；页面不显示 Cookie 内容或长度。"
             : "需要在 BiliNote 下载配置中补齐。"
       );
     }
@@ -1226,11 +1347,15 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     this.appendStatusRow(containerEl, "模型供应商", data.providerBaseUrl ? "AutoDL" : "由服务端配置", data.providerBaseUrl || "插件不保存供应商密钥");
     this.appendStatusRow(
       containerEl,
-      "Provider ID",
-      data.providerId ? "已识别（已隐藏）" : "未识别",
-      data.providerId ? "来自 BiliNote 模型配置；只显示识别状态，不显示内部 ID。" : "未从 BiliNote 读取到 provider_id"
+      "当前 Provider ID",
+      data.providerId ? "已识别" : "未识别",
+      data.providerId || "未从 BiliNote 读取到 provider_id"
     );
     this.appendStatusRow(containerEl, "云端媒体", "工作台发布", "生成端会把可播放 preview mp4 发布到内容分享工作台，并写入 media_url。");
+  }
+
+  private maskConfiguredSecret() {
+    return "******";
   }
 
   private renderOwnModulesSection(containerEl: HTMLElement) {
@@ -1243,7 +1368,12 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       "日常只需用右侧开关启停各功能。点击功能卡片可展开详细设置（交互与「模板库管理」里点分组一致）。模板请用「模板库管理」页签。";
     containerEl.appendChild(intro);
 
+    this.appendClaudianSuiteOwnModuleRow(containerEl);
+
     for (const descriptor of OWN_MODULE_DESCRIPTORS) {
+      if (descriptor.moduleId === "claudian-chat-archive" || descriptor.moduleId === "claudian-agent-bridge") {
+        continue;
+      }
       this.appendOwnModuleRow(containerEl, descriptor);
     }
 
@@ -1366,6 +1496,208 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     containerEl.appendChild(card);
   }
 
+  private appendClaudianSuiteOwnModuleRow(containerEl: HTMLElement) {
+    const chatDescriptor = OWN_MODULE_DESCRIPTORS.find((item) => item.moduleId === "claudian-chat-archive");
+    const bridgeDescriptor = OWN_MODULE_DESCRIPTORS.find((item) => item.moduleId === "claudian-agent-bridge");
+    const chatEnabled = this.plugin.isEmbeddedModuleEnabled("claudian-chat-archive");
+
+    const card = document.createElement("details");
+    card.className = "fdtb-own-module-card";
+    card.open = true;
+
+    const summary = document.createElement("summary");
+    summary.className = "fdtb-own-module-card-summary";
+    const summaryRow = document.createElement("div");
+    summaryRow.className = "fdtb-plugin-manager-row";
+
+    const main = document.createElement("div");
+    main.className = "fdtb-plugin-manager-main";
+    const title = document.createElement("div");
+    title.className = "fdtb-plugin-manager-title";
+    title.textContent = "Claudian 管理中心";
+    const meta = document.createElement("div");
+    meta.className = "fdtb-plugin-manager-meta";
+    meta.textContent = "集中管理：聊天同步 / @ 排除规则 / Agent 接入修复";
+    const desc = document.createElement("div");
+    desc.className = "fdtb-plugin-manager-desc";
+    desc.textContent =
+      "Claudian 更新后，本插件会自动补齐 @ 候选排除规则；如果自动处理失败，会写入提醒日志，方便后续让 Agent 手动处理。";
+    main.append(title, meta, desc);
+
+    const controls = document.createElement("div");
+    controls.className = "fdtb-plugin-manager-controls";
+    const stateLabel = document.createElement("span");
+    stateLabel.className = "fdtb-plugin-manager-meta";
+    stateLabel.textContent = chatEnabled ? "聊天同步已启用；@ 排除自动运行" : "聊天同步已禁用；@ 排除自动运行";
+    controls.appendChild(stateLabel);
+
+    summaryRow.append(main, controls);
+    summary.appendChild(summaryRow);
+
+    const body = document.createElement("div");
+    body.className = "fdtb-own-module-card-body";
+
+    const chatSection = this.appendClaudianSuiteSubsection(
+      body,
+      "聊天记录同步",
+      chatDescriptor?.description ||
+        "轻量同步 Claudian 会话到 vault；换电脑后从 Claudian 原历史入口打开，并创建本机新线程继续聊天。"
+    );
+    const chatControls = document.createElement("div");
+    chatControls.className = "fdtb-plugin-manager-controls fdtb-claudian-suite-controls";
+    const chatState = document.createElement("span");
+    chatState.className = "fdtb-plugin-manager-meta";
+    chatState.textContent = chatEnabled ? "已启用（内嵌）" : "已禁用";
+    chatControls.appendChild(chatState);
+    const chatToggleLabel = document.createElement("label");
+    chatToggleLabel.className = "fdtb-plugin-manager-toggle";
+    chatToggleLabel.title = "启用或关闭 Claudian 聊天记录同步";
+    const chatToggle = document.createElement("input");
+    chatToggle.type = "checkbox";
+    chatToggle.checked = chatEnabled;
+    const chatToggleTrack = document.createElement("span");
+    chatToggleTrack.className = "fdtb-plugin-manager-toggle-track";
+    chatToggleLabel.append(chatToggle, chatToggleTrack);
+    chatToggleLabel.addEventListener("click", (event) => event.stopPropagation());
+    chatToggleLabel.addEventListener("mousedown", (event) => event.stopPropagation());
+    chatToggle.addEventListener("change", async () => {
+      const nextEnabled = chatToggle.checked;
+      chatToggle.disabled = true;
+      try {
+        await this.plugin.setEmbeddedModuleEnabled("claudian-chat-archive", nextEnabled);
+        this.display();
+      } catch (error) {
+        chatToggle.checked = chatEnabled;
+        chatToggle.disabled = false;
+        new Notice(`Claudian 聊天同步开关失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+    });
+    chatControls.appendChild(chatToggleLabel);
+    chatSection.appendChild(chatControls);
+    if (chatEnabled) {
+      renderClaudianChatArchiveSettings(chatSection, () => this.display());
+    } else {
+      chatSection.createEl("p", {
+        text: "开启后显示 Claudian 聊天记录同步细项。",
+        cls: "setting-item-description",
+      });
+    }
+
+    const guardSection = this.appendClaudianSuiteSubsection(
+      body,
+      "@ 候选排除规则",
+      "默认排除「开发插件（Obsidian优化）」整棵目录，写入 Claudian excludedPaths 和 vault .ignore；启动时和 Claudian 更新后都会自动补齐。"
+    );
+    const guardActions = document.createElement("div");
+    guardActions.className = "fdtb-plugin-manager-controls fdtb-claudian-suite-controls";
+    guardSection.appendChild(guardActions);
+    const guardOutput = document.createElement("pre");
+    guardOutput.className = "setting-item-description";
+    guardOutput.style.whiteSpace = "pre-wrap";
+    guardOutput.style.maxHeight = "180px";
+    guardOutput.style.overflow = "auto";
+    guardOutput.textContent = "默认自动运行；需要时可手动检测/补齐。";
+    guardSection.appendChild(guardOutput);
+
+    this.appendBridgeActionButton(guardActions, "检测/补齐排除规则", async () => {
+      guardOutput.textContent = "正在检测并补齐...";
+      const result = await this.plugin.runClaudianMentionExcludeGuardNow();
+      const lines = [
+        result.ok ? (result.changed ? "处理结果：已补齐" : "处理结果：规则已存在") : "处理结果：失败",
+        "",
+        ...result.messages,
+        ...result.errors,
+      ].filter(Boolean);
+      guardOutput.textContent = lines.join("\n");
+    });
+    this.appendBridgeActionButton(guardActions, "打开失败提醒日志", async () => {
+      await this.plugin.openClaudianMentionGuardLog();
+    });
+
+    const bridgeSection = this.appendClaudianSuiteSubsection(
+      body,
+      "Agent 接入修复",
+      bridgeDescriptor?.description ||
+        "Claudian 官方更新后，一键检测并重新接入本机 Cursor Agent 与 Codex CLI；脚本会先备份，失败时生成 Agent 修复提示。"
+    );
+    this.appendClaudianAgentBridgeControls(bridgeSection);
+
+    card.append(summary, body);
+    containerEl.appendChild(card);
+  }
+
+  private appendClaudianSuiteSubsection(containerEl: HTMLElement, titleText: string, descText: string) {
+    const section = document.createElement("div");
+    section.className = "fdtb-claudian-suite-section";
+    const title = document.createElement("div");
+    title.className = "fdtb-settings-status-label";
+    title.textContent = titleText;
+    const desc = document.createElement("p");
+    desc.className = "fdtb-settings-page-desc";
+    desc.textContent = descText;
+    section.append(title, desc);
+    containerEl.appendChild(section);
+    return section;
+  }
+
+  private appendClaudianAgentBridgeControls(body: HTMLElement) {
+    const hint = document.createElement("p");
+    hint.className = "fdtb-settings-page-desc";
+    hint.textContent =
+      "检测会读取当前状态；一键修复会先备份 Claudian，再尝试重新接入 Cursor Agent 与 Codex CLI。若官方更新导致脚本失败，请复制 Agent 修复提示继续处理。";
+    body.appendChild(hint);
+
+    const actions = document.createElement("div");
+    actions.className = "fdtb-plugin-manager-controls fdtb-claudian-suite-controls";
+    body.appendChild(actions);
+
+    const output = document.createElement("pre");
+    output.className = "setting-item-description";
+    output.style.whiteSpace = "pre-wrap";
+    output.style.maxHeight = "220px";
+    output.style.overflow = "auto";
+    output.textContent = "尚未检测。";
+    body.appendChild(output);
+
+    const setButtonsDisabled = (disabled: boolean) => {
+      actions.querySelectorAll("button").forEach((button) => {
+        (button as HTMLButtonElement).disabled = disabled;
+      });
+    };
+    const renderResult = (label: string, result: ClaudianAgentBridgeScriptResult) => {
+      output.textContent = `${label}${result.ok ? "通过" : "失败"}\n\n${result.output.trim() || "无输出"}`;
+      new Notice(result.ok ? `${label}通过` : `${label}失败，请查看输出`, result.ok ? 4000 : 8000);
+    };
+
+    this.appendBridgeActionButton(actions, "检测状态", async () => {
+      setButtonsDisabled(true);
+      output.textContent = "正在检测...";
+      try {
+        renderResult("检测", await this.plugin.runClaudianAgentBridgeScript("verify.sh"));
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+    this.appendBridgeActionButton(actions, "一键修复", async () => {
+      if (!window.confirm("将备份并重建 Claudian 接入文件。确认继续？")) return;
+      setButtonsDisabled(true);
+      output.textContent = "正在修复，可能需要几分钟...";
+      try {
+        renderResult("修复", await this.plugin.runClaudianAgentBridgeScript("repair.sh"));
+      } finally {
+        setButtonsDisabled(false);
+      }
+    });
+    this.appendBridgeActionButton(actions, "打开日志", async () => {
+      await this.plugin.openClaudianAgentBridgeFile("logs/latest.log");
+    });
+    this.appendBridgeActionButton(actions, "复制 Agent 修复提示", async () => {
+      const prompt = await this.plugin.readClaudianAgentBridgeFile("agent-repair-prompt.md");
+      await this.plugin.copyTextToClipboard(prompt);
+      new Notice("已复制 Agent 修复提示");
+    });
+  }
+
   private appendClaudianAgentBridgeOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
     const card = document.createElement("details");
     card.className = "fdtb-own-module-card";
@@ -1400,61 +1732,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     const body = document.createElement("div");
     body.className = "fdtb-own-module-card-body";
-    const hint = document.createElement("p");
-    hint.className = "fdtb-settings-page-desc";
-    hint.textContent =
-      "检测会读取当前状态；一键修复会先备份 Claudian，再尝试重新接入 Cursor Agent 与 Codex CLI。若官方更新导致脚本失败，请复制 Agent 修复提示继续处理。";
-    body.appendChild(hint);
-
-    const actions = document.createElement("div");
-    actions.className = "fdtb-plugin-manager-controls";
-    body.appendChild(actions);
-
-    const output = document.createElement("pre");
-    output.className = "setting-item-description";
-    output.style.whiteSpace = "pre-wrap";
-    output.style.maxHeight = "220px";
-    output.style.overflow = "auto";
-    output.textContent = "尚未检测。";
-    body.appendChild(output);
-
-    const setButtonsDisabled = (disabled: boolean) => {
-      actions.querySelectorAll("button").forEach((button) => {
-        (button as HTMLButtonElement).disabled = disabled;
-      });
-    };
-    const renderResult = (label: string, result: ClaudianAgentBridgeScriptResult) => {
-      output.textContent = `${label}${result.ok ? "通过" : "失败"}\n\n${result.output.trim() || "无输出"}`;
-      new Notice(result.ok ? `${label}通过` : `${label}失败，请查看输出`, result.ok ? 4000 : 8000);
-    };
-
-    this.appendBridgeActionButton(actions, "检测状态", async () => {
-      setButtonsDisabled(true);
-      output.textContent = "正在检测...";
-      try {
-        renderResult("检测", await this.plugin.runClaudianAgentBridgeScript("verify.sh"));
-      } finally {
-        setButtonsDisabled(false);
-      }
-    });
-    this.appendBridgeActionButton(actions, "一键修复", async () => {
-      if (!confirmAction("将备份并重建 Claudian 接入文件。确认继续？")) return;
-      setButtonsDisabled(true);
-      output.textContent = "正在修复，可能需要几分钟...";
-      try {
-        renderResult("修复", await this.plugin.runClaudianAgentBridgeScript("repair.sh"));
-      } finally {
-        setButtonsDisabled(false);
-      }
-    });
-    this.appendBridgeActionButton(actions, "打开日志", async () => {
-      await this.plugin.openClaudianAgentBridgeFile("logs/latest.log");
-    });
-    this.appendBridgeActionButton(actions, "复制 Agent 修复提示", async () => {
-      const prompt = await this.plugin.readClaudianAgentBridgeFile("agent-repair-prompt.md");
-      await this.plugin.copyTextToClipboard(prompt);
-      new Notice("已复制 Agent 修复提示");
-    });
+    this.appendClaudianAgentBridgeControls(body);
 
     card.append(summary, body);
     containerEl.appendChild(card);
@@ -3430,6 +3708,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.scheduleStyleRefresh();
     window.setTimeout(() => this.applyManagedPluginAliasesToSettingsSidebar(), 500);
     this.scheduleStartupManagedPluginAutoUpdate();
+    this.scheduleClaudianMentionExcludeGuard();
   }
 
   onunload() {
@@ -4109,11 +4388,20 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     };
     const serviceUrl = this.normalizeExternalUrl(cleanString("serviceUrl", 500));
     const agentJobsUrl = this.normalizeExternalUrl(cleanString("agentJobsUrl", 500));
+    const downloadUrl = this.normalizeExternalUrl(cleanString("downloadUrl", 500));
+    const biliNoteBaseUrl = this.normalizeExternalUrl(cleanString("biliNoteBaseUrl", 500));
     return {
+      downloadUrl,
       serviceUrl,
       agentJobsUrl,
+      biliNoteBaseUrl,
+      providerId: cleanString("providerId", 120),
+      defaultModelId: cleanString("defaultModelId", 120),
+      fallbackModelId: cleanString("fallbackModelId", 120),
+      visualModelId: cleanString("visualModelId", 120),
       skillName: cleanString("skillName", 80),
       outputDir: cleanString("outputDir", 300),
+      mediaLibraryPath: cleanString("mediaLibraryPath", 500),
       defaultPrompt: cleanString("defaultPrompt", 2000),
       enableLocalDiagnostics:
         typeof source.enableLocalDiagnostics === "boolean"
@@ -4621,6 +4909,32 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     }, 8000);
   }
 
+  private scheduleClaudianMentionExcludeGuard() {
+    window.setTimeout(() => {
+      void this.ensureClaudianMentionExcludeGuard();
+    }, this.dataStore.autoUpdatePluginsEnabled ? 15000 : 3000);
+  }
+
+  private async ensureClaudianMentionExcludeGuard() {
+    await ensureClaudianMentionExcludeGuardCore(this.app, {
+      notifyFailure: (message) => new Notice(message, 10000),
+      console,
+    });
+  }
+
+  async runClaudianMentionExcludeGuardNow(): Promise<ClaudianMentionExcludeGuardResult> {
+    const result = await ensureClaudianMentionExcludeGuardCore(this.app, {
+      notifyFailure: (message) => new Notice(message, 10000),
+      console,
+    });
+    if (result.ok) {
+      new Notice(result.changed ? "Claudian @ 排除规则已补齐" : "Claudian @ 排除规则已存在", 4000);
+    } else {
+      new Notice("Claudian @ 排除规则处理失败，已写入提醒日志", 10000);
+    }
+    return result;
+  }
+
   async runAutoUpdateManagedPlugins(options: { manual?: boolean } = {}) {
     if (this.autoUpdateInFlight) {
       if (options.manual) {
@@ -4648,6 +4962,9 @@ export default class FeishuDocToolbarPlugin extends Plugin {
         };
         await this.saveData(this.dataStore);
         await this.refreshManagedPluginStatus({ silent: true });
+        if (results.some((result) => result.pluginId === "realclaudian" && result.status === "updated")) {
+          await this.ensureClaudianMentionExcludeGuard();
+        }
         new Notice(summary);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -4831,6 +5148,31 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     window.open(url, "_blank");
   }
 
+  async openVideoSummaryServiceConfig() {
+    await this.openSystemPath(this.getVideoSummaryPaths().config);
+  }
+
+  async openClaudianMentionGuardLog() {
+    const targetPath = this.getVaultChildSystemPath(CLAUDIAN_MENTION_GUARD_LOG_PATH);
+    const fs = this.getNodeRequire()?.("fs");
+    if (!fs?.existsSync?.(targetPath)) {
+      new Notice("目前没有 Claudian @ 排除规则失败提醒日志。");
+      return;
+    }
+    await this.openSystemPath(targetPath);
+  }
+
+  private async openSystemPath(targetPath: string) {
+    const nodeRequire = this.getNodeRequire();
+    const childProcess = nodeRequire?.("child_process");
+    if (!childProcess || typeof childProcess.execFile !== "function") {
+      throw new Error("当前环境不能打开本机文件");
+    }
+    childProcess.execFile("/usr/bin/open", [targetPath], (error: Error | null) => {
+      if (error) new Notice(`打开失败：${error.message}`, 8000);
+    });
+  }
+
   async getVideoSummaryDiagnostics(): Promise<VideoSummaryDiagnostics> {
     const settings = this.getVideoSummarySettings();
     const serviceUrl = settings.serviceUrl;
@@ -4868,7 +5210,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
         agentTokenLength: 0,
         sessionSecretConfigured: false,
         webPasswordConfigured: false,
+        generatedWebPasswordConfigured: false,
         platforms: delegatedPlatforms,
+        providers: [],
+        modelChecks: [],
       };
     }
 
@@ -4877,11 +5222,13 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     const skillExists = Boolean(fs?.existsSync?.(paths.skill));
     const scriptExists = Boolean(fs?.existsSync?.(paths.script));
     const config = this.readVideoSummaryServiceConfig(paths.config);
-    const check = scriptExists ? await this.runVideoSummaryCheck(paths.script) : null;
+    const check = scriptExists ? await this.runVideoSummaryCheck(paths.script, settings) : null;
     const workbenchHealth = await this.checkHttpEndpoint("http://127.0.0.1:4321/__workbench_health", "本地内容分享工作台");
 
-    const model = String(check?.default_model || "Kimi-K2.6");
-    const providerId = String(check?.provider_id || "");
+    const model = String(check?.default_model || settings.defaultModelId || "Kimi-K2.6");
+    const providerId = String(check?.provider_id || settings.providerId || "");
+    const providers = await this.readVideoSummaryProviders(settings.biliNoteBaseUrl, providerId);
+    const selectedProvider = providers.find((provider) => provider.selected);
     const outputDir = String(check?.output_dir || settings.outputDir || "未配置输出仓库");
     const cookies = check?.cookies && typeof check.cookies === "object" ? check.cookies : {};
     const platforms: VideoSummaryPlatformStatus[] = [
@@ -4900,12 +5247,12 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       defaultModel: model,
       visualEnabled: check?.video_understanding_enabled_by_default !== false,
       providerId,
-      providerBaseUrl: "https://www.autodl.art/api/v1",
+      providerBaseUrl: selectedProvider?.baseUrl || "https://www.autodl.art/api/v1",
       serviceUrl: serviceUrl || "未配置",
       agentJobsUrl: agentJobsUrl || "未配置",
       serviceHealth,
       bilibiliNoteHealth: check
-        ? { label: "BiliNote 后端", status: "正常", description: String(check.base_url || "http://127.0.0.1:8483") }
+        ? { label: "BiliNote 后端", status: "正常", description: String(check.base_url || settings.biliNoteBaseUrl || "http://127.0.0.1:8483") }
         : { label: "BiliNote 后端", status: "未连接", description: "未能完成 BiliNote 配置检查；请确认 BiliNote 后端正在运行。" },
       workbenchHealth,
       configPath: paths.config,
@@ -4914,7 +5261,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       agentTokenLength: config.agentTokenLength,
       sessionSecretConfigured: config.sessionSecretConfigured,
       webPasswordConfigured: config.webPasswordConfigured,
+      generatedWebPasswordConfigured: config.generatedWebPasswordConfigured,
       platforms,
+      providers,
+      modelChecks: this.normalizeVideoSummaryModelChecks(check?.models),
     };
   }
 
@@ -4942,6 +5292,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       agentTokenLength: 0,
       sessionSecretConfigured: false,
       webPasswordConfigured: false,
+      generatedWebPasswordConfigured: false,
     };
     const nodeRequire = this.getNodeRequire();
     const fs = nodeRequire?.("fs");
@@ -4957,15 +5308,23 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       result.webPasswordConfigured =
         (typeof data.web_password_hash === "string" && data.web_password_hash.length > 0) ||
         (typeof data.web_password_salt === "string" && data.web_password_salt.length > 0);
+      result.generatedWebPasswordConfigured =
+        typeof data.generated_web_password === "string" && data.generated_web_password.length > 0;
     } catch (error) {
       console.warn("[feishu-doc-toolbar] 读取视频总结服务配置失败", error);
     }
     return result;
   }
 
-  private async runVideoSummaryCheck(scriptPath: string): Promise<any | null> {
+  private async runVideoSummaryCheck(scriptPath: string, settings: VideoSummaryUserSettings): Promise<any | null> {
     try {
-      const result = await this.runSystemCommand("python3", [scriptPath, "--check", "--no-open-app"], {
+      const args = [scriptPath, "--check", "--no-open-app"];
+      if (settings.biliNoteBaseUrl) args.push("--base-url", settings.biliNoteBaseUrl);
+      if (settings.providerId) args.push("--provider-id", settings.providerId);
+      if (settings.defaultModelId) args.push("--model", settings.defaultModelId);
+      if (settings.fallbackModelId) args.push("--fallback-model", settings.fallbackModelId);
+      if (settings.visualModelId) args.push("--visual-model", settings.visualModelId);
+      const result = await this.runSystemCommand("python3", args, {
         timeout: 90 * 1000,
         maxBuffer: 2 * 1024 * 1024,
       });
@@ -4975,6 +5334,55 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       console.warn("[feishu-doc-toolbar] 视频总结配置检查失败", error);
       return null;
     }
+  }
+
+  private async readVideoSummaryProviders(baseUrl: string, selectedProviderId: string): Promise<VideoSummaryProviderStatus[]> {
+    if (!baseUrl) return [];
+    try {
+      const result = await this.runSystemCommand("/usr/bin/curl", [
+        "-sS",
+        "-m",
+        "8",
+        this.joinUrl(baseUrl, "/api/get_all_providers"),
+      ], {
+        timeout: 12 * 1000,
+        maxBuffer: 512 * 1024,
+      });
+      if (!result.ok) return [];
+      const parsed = JSON.parse(result.stdout || "{}");
+      const data = Array.isArray(parsed?.data) ? parsed.data : [];
+      return data
+        .filter((item: unknown): item is Record<string, unknown> => !!item && typeof item === "object")
+        .map((item) => {
+          const id = String(item.id ?? "");
+          const apiKey = typeof item.api_key === "string" ? item.api_key : "";
+          return {
+            id,
+            name: String(item.name ?? id),
+            baseUrl: String(item.base_url ?? ""),
+            apiKeyConfigured: apiKey.length > 0,
+            selected: !!selectedProviderId && id === selectedProviderId,
+          };
+        })
+        .filter((item) => item.id)
+        .slice(0, 12);
+    } catch (error) {
+      console.warn("[feishu-doc-toolbar] 读取 BiliNote provider 失败", error);
+      return [];
+    }
+  }
+
+  private normalizeVideoSummaryModelChecks(value: unknown): VideoSummaryModelCheckStatus[] {
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        model: String(item.model ?? ""),
+        status: item.code === 0 ? "连接成功" : "连接失败",
+        message: String(item.msg ?? item.error ?? ""),
+      }))
+      .filter((item) => item.model)
+      .slice(0, 6);
   }
 
   private normalizeVideoSummaryPlatformStatus(

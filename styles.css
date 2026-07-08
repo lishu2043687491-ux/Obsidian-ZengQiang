@@ -1146,6 +1146,7 @@
 
 .fdtb-video-summary-config-title,
 .fdtb-video-summary-config-hint,
+.fdtb-video-summary-guide,
 .fdtb-video-summary-field-wide,
 .fdtb-video-summary-checkbox,
 .fdtb-video-summary-config-actions {
@@ -1163,6 +1164,21 @@
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+.fdtb-video-summary-guide {
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+}
+
+.fdtb-video-summary-guide ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .fdtb-video-summary-field {
@@ -2039,6 +2055,23 @@
 .fdtb-own-module-card-body {
   padding: 0 12px 12px;
   border-top: 1px solid color-mix(in srgb, var(--background-modifier-border) 55%, transparent);
+}
+
+.fdtb-claudian-suite-section {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
+}
+
+.fdtb-claudian-suite-section:first-child {
+  margin-top: 12px;
+}
+
+.fdtb-claudian-suite-controls {
+  justify-content: flex-start;
+  margin: 8px 0;
 }
 
 .fdtb-embedded-module-detail {

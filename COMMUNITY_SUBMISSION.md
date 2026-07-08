@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.14.27）
+# Obsidian 社区插件提交清单（目标版本 1.14.35）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,13 +8,14 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.14.27`（与 Release tag 一致） |
+| `version` | `1.14.35`（与 Release tag 一致） |
 
-## 本版重点（1.14.27）
+## 本版重点（1.14.35）
 
-- 1.14.19–1.14.25：视频总结时间轴预览 + 脱敏配置页（密钥不进 data.json / OSS）
-- 1.14.26：原生表格恢复「图」复制成图
-- 1.14.27：原生表格设置高级区默认折叠
+- 视频总结时间轴预览支持在线 / 本地双播放链路，并记住当前播放端。
+- 优先使用有声预览媒体，修复部分本地缓存播放异常。
+- 默认禁用 B 站 iframe 兜底，避免点击后跳转离开 Obsidian。
+- Claudian 管理入口收口，`@` 候选排除规则自动补齐开发目录。
 - 工具：`audit:privacy`、`package:oss`、`publish:oss`
 
 ## 官方审查对照

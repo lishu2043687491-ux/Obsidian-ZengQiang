@@ -3,6 +3,7 @@ const {
   absolutePathToFileUrl,
   buildOnlineEmbedUrl,
   buildSeekUrl,
+  buildVideoSummaryMediaCandidates,
   convertLegacyTimelineLine,
   convertLegacyTimelineMarkdown,
   hasVideoSummarySeekLink,
@@ -44,13 +45,27 @@ assert.equal(
 assert.equal(mediaTypeFromPath("/tmp/a.mp4"), "video");
 assert.equal(mediaTypeFromPath("/tmp/a.mp3"), "audio");
 assert.equal(mediaTypeFromPath("/tmp/a.txt"), "unknown");
+assert.deepEqual(
+  buildVideoSummaryMediaCandidates(
+    "BV1Sp756vEhs",
+    "/Applications/BiliNote.app/Contents/MacOS/data/BV1Sp756vEhs.mp4",
+    "bilibili",
+    "/Volumes/Mac移动硬盘/视频总结媒体库"
+  ).slice(0, 4),
+  [
+    "/Volumes/Mac移动硬盘/视频总结媒体库/bilibili/BV1Sp756vEhs.preview.mp4",
+    "/Volumes/Mac移动硬盘/视频总结媒体库/BV1Sp756vEhs.preview.mp4",
+    "开发插件（Obsidian优化）/视频总结（仓库）/_media/BV1Sp756vEhs.preview.mp4",
+    "视频总结（仓库）/_media/BV1Sp756vEhs.preview.mp4",
+  ]
+);
 assert.equal(
   buildOnlineEmbedUrl("https://youtu.be/OcKl98ZQbMQ", "youtube", 65),
   "https://www.youtube.com/embed/OcKl98ZQbMQ?start=65&autoplay=1"
 );
 assert.equal(
   buildOnlineEmbedUrl("https://www.bilibili.com/video/BV198jE6pE8Y/", "bilibili", 5),
-  "https://player.bilibili.com/player.html?bvid=BV198jE6pE8Y&t=5&autoplay=1"
+  ""
 );
 assert.equal(buildOnlineEmbedUrl("https://www.douyin.com/video/123", "douyin", 5), "");
 

@@ -368,10 +368,17 @@ async function run() {
         autoUpdateLastRunAt: 0,
         autoUpdateLastResults: {},
         videoSummarySettings: {
+          downloadUrl: "https://github.com/JefferyHcool/BiliNote/releases",
           serviceUrl: "",
           agentJobsUrl: "",
+          biliNoteBaseUrl: "http://127.0.0.1:8483",
+          providerId: "",
+          defaultModelId: "Kimi-K2.6",
+          fallbackModelId: "",
+          visualModelId: "Kimi-K2.6",
           skillName: "视频总结 / video-summary",
           outputDir: "视频总结（仓库）",
+          mediaLibraryPath: "/Volumes/Mac移动硬盘/视频总结媒体库",
           defaultPrompt:
             "保留完整转写原文，输出可点击时间轴；根据内容自动选择教程步骤、概念性知识三问或事实性知识总结；最终补齐 video_summary frontmatter。",
           enableLocalDiagnostics: true,
@@ -454,6 +461,64 @@ async function run() {
       toolbarActionOrder: ["insertImage", "tableMenu", "insertImage", "unknown"],
     }).toolbarActionOrder;
     assert.deepEqual(normalizedOrder, ["insertImage", "tableMenu"], "toolbar order should keep only known unique toolbar actions");
+
+    const videoCheckPlugin = createPlugin(PluginClass);
+    let capturedVideoCheck = null;
+    videoCheckPlugin.runSystemCommand = async (command, args) => {
+      capturedVideoCheck = { command, args };
+      return {
+        ok: true,
+        stdout: JSON.stringify({ default_model: "model-a", models: [] }),
+        stderr: "",
+      };
+    };
+    await videoCheckPlugin.runVideoSummaryCheck("/tmp/video_summary.py", {
+      biliNoteBaseUrl: "http://127.0.0.1:8483",
+      providerId: "provider-public-id",
+      defaultModelId: "model-a",
+      fallbackModelId: "model-b",
+      visualModelId: "model-v",
+    });
+    assert.equal(capturedVideoCheck.command, "python3", "video summary check should invoke the local Python script");
+    assert.deepEqual(
+      capturedVideoCheck.args,
+      [
+        "/tmp/video_summary.py",
+        "--check",
+        "--no-open-app",
+        "--base-url",
+        "http://127.0.0.1:8483",
+        "--provider-id",
+        "provider-public-id",
+        "--model",
+        "model-a",
+        "--fallback-model",
+        "model-b",
+        "--visual-model",
+        "model-v",
+      ],
+      "video summary check should pass only public configuration values"
+    );
+    assert.equal(
+      /token|cookie|api[_-]?key|password|secret|bearer/i.test(capturedVideoCheck.args.join(" ")),
+      false,
+      "video summary check arguments should not include secret-like values"
+    );
+
+    const claudianFiles = new Map();
+    const claudianPlugin = createPlugin(PluginClass, { fileContents: claudianFiles });
+    const guardResult = await claudianPlugin.runClaudianMentionExcludeGuardNow();
+    assert.equal(guardResult.ok, true, "manual Claudian exclude guard should succeed in the plugin wrapper");
+    assert.match(
+      claudianFiles.get(".claudian/claudian-settings.json") || "",
+      /"excludedPaths": \[\s+"开发插件（Obsidian优化）"\s+\]/,
+      "manual Claudian exclude guard should write Claudian excludedPaths"
+    );
+    assert.match(
+      claudianFiles.get(".ignore") || "",
+      /开发插件（Obsidian优化）\/\*\*/,
+      "manual Claudian exclude guard should write vault ignore descendants rule"
+    );
   }
 
   {
