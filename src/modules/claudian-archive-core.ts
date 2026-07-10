@@ -125,18 +125,15 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-export function createLocalDeviceId(): string {
-  const crypto = globalThis.crypto;
-  if (crypto?.randomUUID) {
-    return sanitizePathSegment(crypto.randomUUID().replace(/-/g, "").slice(0, 12));
-  }
-  return sanitizePathSegment(`dev-${Date.now().toString(36)}`);
-}
-
 export function resolveDeviceId(settings: ClaudianChatArchiveSettings): string {
-  const id = settings.deviceId?.trim();
-  if (id) return sanitizePathSegment(id);
-  return "unknown-device";
+  if (settings.deviceId) return sanitizePathSegment(settings.deviceId);
+  const suffix =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID().slice(0, 12)
+      : Math.random().toString(36).slice(2, 14);
+  const deviceId = sanitizePathSegment(`device-${suffix}`);
+  settings.deviceId = deviceId;
+  return deviceId;
 }
 
 export function sanitizePathSegment(value: string): string {

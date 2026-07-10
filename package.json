@@ -1,6 +1,6 @@
 {
   "name": "feishu-doc-toolbar",
-  "version": "1.14.35",
+  "version": "1.16.5",
   "description": "Obsidian Enhanced Experience — unified toolbar, templates, and utilities",
   "repository": {
     "type": "git",
@@ -25,7 +25,8 @@
     "test:native-table-selection-style": "node ./tests/native-table-selection-style.cjs",
     "test:native-table-regression": "npm run test:native-table-selection-style && node ./tests/native-table-markerless-regression.cjs",
     "test:advanced-tables-parity": "npm run build:advanced-table-test && node ./tests/advanced-tables-parity.cjs",
-    "test:smoke": "npm run build && npm run build:claudian-test && npm run build:claudian-mention-guard-test && npm run build:auto-updater-test && npm run build:goal-progress-test && npm run build:native-table-video-test && npm run build:video-timestamp-preview-test && npm run build:advanced-table-test && npm run test:iteration-guardrails && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && NODE_PATH=./test-support node ./tests/claudian-cross-device-bridge.cjs && node ./tests/claudian-mention-exclude-guard.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater-integration.cjs && node ./tests/goal-progress-sync.cjs && node ./tests/native-table-video-helpers.cjs && node ./tests/video-timestamp-preview-helpers.cjs && npm run test:native-table-regression && node ./tests/advanced-tables-parity.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs",
+    "test:advanced-tables-visual-controls": "npm run build && node ./tests/advanced-tables-visual-controls.cjs",
+    "test:smoke": "npm run build && npm run build:claudian-test && npm run build:claudian-mention-guard-test && npm run build:auto-updater-test && npm run build:goal-progress-test && npm run build:native-table-video-test && npm run build:video-timestamp-preview-test && npm run build:advanced-table-test && npm run test:iteration-guardrails && node ./tests/advanced-tables-visual-controls.cjs && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && NODE_PATH=./test-support node ./tests/claudian-cross-device-bridge.cjs && node ./tests/claudian-mention-exclude-guard.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater-integration.cjs && node ./tests/goal-progress-sync.cjs && node ./tests/native-table-video-helpers.cjs && node ./tests/video-timestamp-preview-helpers.cjs && npm run test:native-table-regression && node ./tests/advanced-tables-parity.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs",
     "community:check-releases": "node scripts/trigger-community-release-check.mjs",
     "community:login": "OBSIDIAN_COMMUNITY_HEADED=1 node scripts/trigger-community-release-check.mjs",
     "publish:oss": "bash scripts/publish-oss.sh",

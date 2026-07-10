@@ -1,0 +1,235 @@
+:root {
+  --advanced-tables-helper-size: 28px;
+}
+
+.HyperMD-table-row span.cm-inline-code {
+  font-size: 100%;
+  padding: 0px;
+}
+
+.advanced-tables-buttons>div>.title {
+  font-weight: var(--font-medium);
+  font-size: var(--nav-item-size);
+  color: var(--nav-item-color);
+  text-decoration: underline;
+}
+
+[data-type="advanced-tables-toolbar"] .nav-buttons-container {
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.2rem 0;
+  justify-content: start;
+}
+
+[data-type="advanced-tables-toolbar"] .nav-buttons-container::before {
+  min-width: 2.6rem;
+  line-height: var(--advanced-tables-helper-size);
+  font-size: var(--nav-item-size);
+  font-weight: var(--nav-item-weight);
+  color: var(--nav-item-color);
+}
+
+[data-type="advanced-tables-toolbar"] .nav-buttons-container>* {
+  height: var(--advanced-tables-helper-size);
+  line-height: var(--advanced-tables-helper-size);
+}
+
+[data-type="advanced-tables-toolbar"] .nav-buttons-container .nav-action-button {
+  width: var(--advanced-tables-helper-size);
+  height: var(--advanced-tables-helper-size);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: var(--radius-s);
+}
+
+[data-type="advanced-tables-toolbar"] .nav-buttons-container .nav-action-button:hover {
+  background-color: var(--nav-item-background-hover);
+  color: var(--nav-item-color-hover);
+  font-weight: var(--nav-item-weight-hover);
+}
+
+.advanced-tables-row-label {
+  width: 64px;
+}
+
+.widget-icon {
+  width: 20px;
+  height: 20px;
+  fill: var(--text-muted);
+}
+
+.widget-icon:hover {
+  fill: var(--text-normal);
+}
+
+.advanced-tables-csv-export textarea {
+  height: 200px;
+  width: 100%;
+}
+
+.advanced-tables-donation {
+  width: 70%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.advanced-tables-donate-button {
+  margin: 10px;
+}
+
+.advanced-tables-floating-handle {
+  position: fixed;
+  z-index: 121;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 50px;
+  height: 27px;
+  padding: 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--background-primary) 96%, white);
+  color: var(--text-normal);
+  box-shadow: 0 2px 8px rgba(31, 35, 41, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.advanced-tables-floating-handle:hover {
+  border-color: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-modifier-border));
+  background: var(--background-modifier-hover);
+}
+
+.advanced-tables-floating-handle-icon,
+.advanced-tables-floating-handle-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.advanced-tables-floating-popover {
+  position: fixed;
+  z-index: 122;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: min(356px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-primary) 97%, white);
+  box-shadow: 0 12px 28px rgba(31, 35, 41, 0.16);
+}
+
+.advanced-tables-floating-title {
+  position: sticky;
+  top: -10px;
+  z-index: 2;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: color-mix(in srgb, var(--background-primary) 97%, white);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.advanced-tables-floating-section {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.advanced-tables-floating-section-title {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.advanced-tables-floating-action {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 82%, transparent);
+  border-radius: 7px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.advanced-tables-floating-action:hover:not(:disabled) {
+  border-color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+.advanced-tables-floating-action.is-danger:hover:not(:disabled) {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+.advanced-tables-floating-action:disabled {
+  cursor: progress;
+  opacity: 0.62;
+}
+
+.advanced-tables-floating-action-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+}
+
+.advanced-tables-floating-action-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
+.advanced-tables-floating-action-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+body.advanced-tables-color-blocks-enabled
+  :is(.markdown-source-view.mod-cm6 .cm-table-widget, .markdown-preview-view) table thead > tr > th {
+  border-color: color-mix(in srgb, var(--color-green) 46%, var(--background-modifier-border));
+  background: color-mix(in srgb, var(--color-green) 30%, var(--background-primary));
+  color: var(--text-normal);
+  font-weight: 700;
+}
+
+body.advanced-tables-color-blocks-enabled.advanced-tables-zebra-stripes-enabled
+  :is(.markdown-source-view.mod-cm6 .cm-table-widget, .markdown-preview-view) table tbody > tr:nth-child(even) > td {
+  background: color-mix(in srgb, var(--color-green) 9%, var(--background-primary));
+}
+
+body.advanced-tables-color-blocks-enabled:not(.advanced-tables-zebra-stripes-enabled)
+  :is(.markdown-source-view.mod-cm6 .cm-table-widget, .markdown-preview-view) table tbody > tr:is(:hover, :focus-within) > td {
+  background: color-mix(in srgb, var(--color-green) 18%, var(--background-primary));
+}
+
+@media (max-width: 520px) {
+  .advanced-tables-floating-popover {
+    width: min(312px, calc(100vw - 20px));
+  }
+
+  .advanced-tables-floating-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

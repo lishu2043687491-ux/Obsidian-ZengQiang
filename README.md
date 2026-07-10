@@ -5,11 +5,12 @@
 
 ## 简介（中文）
 
-浮动 **T 工具栏**、**模板库**、**内置原生表格增强**（配色 / 长宽高 / 行段配色 / 模板库 / OneNote 原生粘贴），以及多种实用工具（粘贴触发文件本地化、宽页面、复制成图、Claudian 跨设备存档、内嵌指向链接增强）。
+浮动 **T 工具栏**、**模板库**、**内置表格增强**，以及多种实用工具（粘贴触发文件本地化、宽页面、复制成图、Claudian 跨设备存档、内嵌指向链接增强）。
 
 - **单插件即用**：原生表格增强已内置，**无需**再单独安装 `markdown-table-enhancer`。
 - 模板功能使用 vault 内 **`.templates/`**（可配置）；仓库 bundled 示例见 `examples/templates/`（不含个人模板库内容）。
-- 非原生的「增强表格」实验态在发布版中**恒定关闭**，普通表格不会被自动增强。
+- 表格默认使用成熟版编辑体验：首行高亮与当前行高亮默认开启；斑马纹为可选模式，开启后不叠加当前行颜色。
+- 表格浮动控制面板会在点击表格正文或页面其他区域时自动收起，避免遮挡编辑。
 
 ---
 
@@ -49,4 +50,4 @@ Bundled starters in [`examples/templates/`](examples/templates/) — copy into y
 
 ## License
 
-MIT
+本发行版包含并修改了 GPL-3.0 许可的表格编辑器代码，因此整体以 **GPL-3.0-only** 发布；完整文本见 [`src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt`](src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt)。

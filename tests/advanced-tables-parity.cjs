@@ -14,8 +14,17 @@ function run(text, cursor, operation, settings) {
 
 {
   const result = run("| A | B |\n| --- | --- |\n| x | longer |", { line: 0, ch: 2 }, "format-table");
-  assert.match(result.text, /\| A\s+\| B\s+\|/);
-  assert.match(result.text, /\| x\s+\| longer \|/);
+  assert.equal(result.text, "| A | B |\n| --- | --- |\n| x | longer |");
+}
+
+{
+  const padded =
+    "| A                 | B      |\n" +
+    "| ----------------- | ------ |\n" +
+    "| short             | value  |";
+  const result = run(padded, { line: 2, ch: 3 }, "format-table", { formatType: "weak" });
+  assert.equal(result.text, "| A | B |\n| --- | --- |\n| short | value |");
+  assert.doesNotMatch(result.text, / {8,}/, "light formatting should remove long padding spaces");
 }
 
 {
@@ -82,7 +91,7 @@ function run(text, cursor, operation, settings) {
 {
   const table = "| Name | Score |\n| --- | --- |\n| Bob | 2 |\n| Ann | 10 |";
   assert.equal(exportAdvancedTableCsvFromText(table, { line: 2, ch: 3 }, false), "Bob\t2\nAnn\t10");
-  assert.equal(exportAdvancedTableCsvFromText(table, { line: 2, ch: 3 }, true), "Name\tScore\n----\t-----\nBob\t2\nAnn\t10");
+  assert.equal(exportAdvancedTableCsvFromText(table, { line: 2, ch: 3 }, true), "Name\tScore\n---\t---\nBob\t2\nAnn\t10");
 }
 
 {
@@ -98,7 +107,7 @@ function run(text, cursor, operation, settings) {
   assert.deepEqual(normalizeAdvancedTableSettings({ bindEnter: false, showRibbonIcon: true }), {
     bindTab: true,
     bindEnter: false,
-    formatType: "normal",
+    formatType: "weak",
     showRibbonIcon: true,
   });
 }

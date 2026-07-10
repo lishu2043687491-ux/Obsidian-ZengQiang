@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.14.35）
+# Obsidian 社区插件提交清单（目标版本 1.16.5）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,14 +8,12 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.14.35`（与 Release tag 一致） |
+| `version` | `1.16.5`（与 Release tag 一致） |
 
-## 本版重点（1.14.35）
+## 本版重点（1.16.5）
 
-- 视频总结时间轴预览支持在线 / 本地双播放链路，并记住当前播放端。
-- 优先使用有声预览媒体，修复部分本地缓存播放异常。
-- 默认禁用 B 站 iframe 兜底，避免点击后跳转离开 Obsidian。
-- Claudian 管理入口收口，`@` 候选排除规则自动补齐开发目录。
+- 表格浮动控制面板在点击表格正文或其他页面区域时自动收起。
+- 默认启用首行高亮与当前行高亮；斑马纹为可选模式，开启后不叠加当前行颜色。
 - 工具：`audit:privacy`、`package:oss`、`publish:oss`
 
 ## 官方审查对照
@@ -41,7 +39,7 @@
 ## 提交步骤（已自动化）
 
 ```bash
-cd /Users/mac/Projects/Obsidian-ZengQiang
+cd "$GITHUB_REPO_DIR"
 npm run publish:oss
 ```
 

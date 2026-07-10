@@ -18,6 +18,10 @@ class FakeEditor {
     return this.lines.length;
   }
 
+  lastLine() {
+    return Math.max(0, this.lines.length - 1);
+  }
+
   setCursor(cursor) {
     this.cursor = { ...cursor };
   }
@@ -84,6 +88,11 @@ function createPlugin(PluginClass, options = {}) {
   const fileContents = options.fileContents ?? new Map();
   const folderPaths = new Set();
   const activeView = options.activeView ?? null;
+  const enabledPluginIds = new Set([
+    "markdown-table-enhancer",
+    ...(options.draggerEnabled ? ["dragger"] : []),
+    ...(options.advancedTablesEnabled ? ["table-editor-obsidian"] : []),
+  ]);
 
   const hasFolderContents = (folderPath) =>
     folderPaths.has(folderPath) ||
@@ -120,6 +129,14 @@ function createPlugin(PluginClass, options = {}) {
       },
       getLeavesOfType() {
         return [];
+      },
+      revealLeaf() {},
+      getRightLeaf() {
+        return {
+          setViewState() {
+            return Promise.resolve();
+          },
+        };
       },
     },
     vault: {
@@ -261,15 +278,32 @@ function createPlugin(PluginClass, options = {}) {
       manifests: {
         "feishu-doc-toolbar": { name: "Obsidian增强体验", version: "0.6.0" },
         "markdown-table-enhancer": {},
+        ...(options.advancedTablesInstalled || options.advancedTablesEnabled
+          ? { "table-editor-obsidian": { name: "Advanced Tables", version: "0.23.2" } }
+          : {}),
         dragger: {},
       },
+      enabledPlugins: enabledPluginIds,
       plugins: {
         "markdown-table-enhancer": tableEnhancerPlugin,
+        ...(options.advancedTablesEnabled
+          ? {
+              "table-editor-obsidian": { manifest: { name: "Advanced Tables", version: "0.23.2" } },
+            }
+          : {}),
         ...(options.draggerEnabled
           ? {
               dragger: {},
             }
           : {}),
+      },
+      async enablePluginAndSave(id) {
+        this.enabledPlugins.add(id);
+        this.plugins[id] = this.plugins[id] ?? { manifest: this.manifests[id] ?? {} };
+      },
+      async disablePluginAndSave(id) {
+        this.enabledPlugins.delete(id);
+        delete this.plugins[id];
       },
     },
   };
@@ -362,6 +396,7 @@ async function run() {
         enableBetaFeatures: false,
         showOneNoteImport: false,
         showTableEnhancerEntrances: false,
+        tableEnhancementMode: "advancedTables",
         showDraggerIntegrationStatus: true,
         autoUpdatePluginsEnabled: true,
         autoUpdatePluginIds: ["yolo", "realclaudian"],
@@ -387,8 +422,222 @@ async function run() {
       "management settings should get stable defaults"
     );
 
+    assert.equal(
+      plugin.getTableEnhancementModeForManager(),
+      "advancedTables",
+      "table enhancement mode should default to embedded mature tables"
+    );
+
     assert.deepEqual(plugin.getManagedPluginStatus("markdown-table-enhancer"), { installed: true, enabled: true });
     assert.deepEqual(plugin.getManagedPluginStatus("dragger"), { installed: true, enabled: false });
+    const tableModePlugin = createPlugin(PluginClass, {
+      advancedTablesInstalled: true,
+      advancedTablesEnabled: false,
+    });
+    await tableModePlugin.setTableEnhancementMode("off");
+    assert.equal(tableModePlugin.getTableEnhancementModeForManager(), "off", "all-off table mode should persist");
+    assert.deepEqual(
+      tableModePlugin.getManagedPluginStatus("markdown-table-enhancer"),
+      { installed: true, enabled: false },
+      "all-off table mode should disable the legacy table enhancer"
+    );
+    assert.deepEqual(
+      tableModePlugin.getManagedPluginStatus("table-editor-obsidian"),
+      { installed: true, enabled: false },
+      "all-off table mode should disable external mature tables"
+    );
+    await tableModePlugin.setTableEnhancementMode("advancedTables");
+    assert.deepEqual(
+      tableModePlugin.getManagedPluginStatus("table-editor-obsidian"),
+      { installed: true, enabled: false },
+      "mature table mode should keep the external table plugin disabled"
+    );
+    assert.ok(tableModePlugin.embeddedAdvancedTables, "mature table mode should start the embedded mature tables module");
+    assert.deepEqual(
+      tableModePlugin.getAdvancedTableSettingsForManager(),
+      {
+        bindEnter: true,
+        bindTab: true,
+        formatType: "weak",
+        showRibbonIcon: true,
+        showFloatingControls: true,
+        showColorBlocks: true,
+        showZebraStripes: false,
+      },
+      "mature table mode should expose embedded mature table settings"
+    );
+    assert.equal(
+      tableModePlugin.canUseEmbeddedAdvancedTablesPlugin({
+        addCommand() {},
+        addRibbonIcon() {},
+        registerEditorExtension() {},
+        registerEvent() {},
+        registerView() {},
+      }),
+      true,
+      "Obsidian 1.12 runtime should not require the removed unregisterView API"
+    );
+    const matureActionGroups = tableModePlugin.getAdvancedTableActionGroupsForManager();
+    assert.deepEqual(
+      matureActionGroups.map((group) => group.label),
+      ["单元格跳转", "格式与对齐", "行操作", "列操作", "数据处理", "导出与备用入口"],
+      "mature table mode should expose the full Advanced Tables capability groups"
+    );
+    assert.deepEqual(
+      matureActionGroups.flatMap((group) => group.actions.map((action) => action.id)),
+      [
+        "next-cell",
+        "previous-cell",
+        "next-row",
+        "escape-table",
+        "format-table",
+        "format-all-tables",
+        "left-align-column",
+        "center-align-column",
+        "right-align-column",
+        "insert-row",
+        "move-row-up",
+        "move-row-down",
+        "delete-row",
+        "insert-column",
+        "move-column-left",
+        "move-column-right",
+        "delete-column",
+        "sort-rows-ascending",
+        "sort-rows-descending",
+        "transpose",
+        "evaluate-formulas",
+        "export-csv",
+        "table-control-bar",
+      ],
+      "mature table action buttons should cover navigation, formatting, row/column editing, sorting, formulas and export"
+    );
+    let delegatedMatureAction = null;
+    tableModePlugin.embeddedAdvancedTables.runAdvancedTableActionForManager = async (actionId) => {
+      delegatedMatureAction = actionId;
+      return true;
+    };
+    assert.equal(await tableModePlugin.runAdvancedTableActionFromManager("sort-rows-ascending"), true);
+    assert.equal(delegatedMatureAction, "sort-rows-ascending", "mature table setting button should call the embedded action");
+
+    const storedMatureSettingsPlugin = createPlugin(PluginClass);
+    storedMatureSettingsPlugin.embeddedAdvancedTables = null;
+    let storedMatureSettingsSave = null;
+    storedMatureSettingsPlugin.saveData = async (data) => {
+      storedMatureSettingsSave = data;
+    };
+    assert.deepEqual(
+      storedMatureSettingsPlugin.getAdvancedTableSettingsForManager(),
+      {
+        bindEnter: true,
+        bindTab: true,
+        formatType: "weak",
+        showRibbonIcon: true,
+        showFloatingControls: true,
+        showColorBlocks: true,
+        showZebraStripes: false,
+      },
+      "mature table settings should remain visible even before the embedded module is connected"
+    );
+    assert.deepEqual(
+      await storedMatureSettingsPlugin.updateAdvancedTableSettingsFromManager({
+        bindTab: false,
+        formatType: "weak",
+      }),
+      {
+        bindEnter: true,
+        bindTab: false,
+        formatType: "weak",
+        showRibbonIcon: true,
+        showFloatingControls: true,
+        showColorBlocks: true,
+        showZebraStripes: false,
+      },
+      "mature table settings should save into the host plugin when the embedded module is not connected"
+    );
+    assert.equal(storedMatureSettingsSave.embeddedAdvancedTables.bindTab, false);
+    assert.equal(storedMatureSettingsSave.embeddedAdvancedTables.formatType, "weak");
+
+    const livePreviewEditor = new FakeEditor(
+      "| A                 | B      |\n| ----------------- | ------ |\n| x                 | y      |"
+    );
+    livePreviewEditor.setCursor({ line: 2, ch: 2 });
+    const livePreviewFile = new TFile();
+    livePreviewFile.path = "Live preview table.md";
+    const livePreviewPlugin = createPlugin(PluginClass, {
+      activeView: {
+        file: livePreviewFile,
+        editor: livePreviewEditor,
+        currentMode: { sourceMode: false },
+        getMode: () => "source",
+      },
+    });
+    await livePreviewPlugin.applyTableEnhancementModeAtStartup();
+    assert.equal(
+      await livePreviewPlugin.embeddedAdvancedTables.runAdvancedTableActionForManager("format-table"),
+      true,
+      "mature table actions should run in Live Preview instead of being rejected"
+    );
+    assert.doesNotMatch(livePreviewEditor.toString(), / {8,}/);
+
+    const sidePanelEditor = new FakeEditor(
+      "| A                 | B      |\n| ----------------- | ------ |\n| x                 | y      |"
+    );
+    sidePanelEditor.setCursor({ line: 2, ch: 2 });
+    const sidePanelFile = new TFile();
+    sidePanelFile.path = "Side toolbar table.md";
+    const sidePanelView = {
+      file: sidePanelFile,
+      editor: sidePanelEditor,
+      currentMode: { sourceMode: false },
+      getMode: () => "source",
+    };
+    const sidePanelPlugin = createPlugin(PluginClass, { activeView: null });
+    sidePanelPlugin.app.workspace.getActiveFile = () => sidePanelFile;
+    sidePanelPlugin.app.workspace.getLeavesOfType = (type) =>
+      type === "markdown" ? [{ view: sidePanelView }] : [];
+    await sidePanelPlugin.applyTableEnhancementModeAtStartup();
+    assert.equal(
+      await sidePanelPlugin.embeddedAdvancedTables.runAdvancedTableActionForManager("format-table"),
+      true,
+      "mature actions should keep targeting the recent Markdown table when settings or the side toolbar has focus"
+    );
+    assert.doesNotMatch(sidePanelEditor.toString(), / {8,}/);
+
+    const startupTableModePlugin = createPlugin(PluginClass, {
+      advancedTablesInstalled: true,
+      advancedTablesEnabled: false,
+    });
+    startupTableModePlugin.dataStore.tableEnhancementMode = "advancedTables";
+    await startupTableModePlugin.applyTableEnhancementModeAtStartup();
+    assert.deepEqual(
+      startupTableModePlugin.getManagedPluginStatus("markdown-table-enhancer"),
+      { installed: true, enabled: false },
+      "mature table startup mode should disable the legacy table enhancer"
+    );
+    assert.deepEqual(
+      startupTableModePlugin.getManagedPluginStatus("table-editor-obsidian"),
+      { installed: true, enabled: false },
+      "mature table startup mode should keep external mature tables disabled"
+    );
+    assert.ok(startupTableModePlugin.embeddedAdvancedTables, "mature table startup mode should start embedded mature tables");
+    const offStartupTableModePlugin = createPlugin(PluginClass, {
+      advancedTablesInstalled: true,
+      advancedTablesEnabled: true,
+    });
+    offStartupTableModePlugin.dataStore.tableEnhancementMode = "off";
+    await offStartupTableModePlugin.applyTableEnhancementModeAtStartup();
+    assert.deepEqual(
+      offStartupTableModePlugin.getManagedPluginStatus("markdown-table-enhancer"),
+      { installed: true, enabled: false },
+      "all-off startup mode should disable the legacy table enhancer"
+    );
+    assert.deepEqual(
+      offStartupTableModePlugin.getManagedPluginStatus("table-editor-obsidian"),
+      { installed: true, enabled: false },
+      "all-off startup mode should disable external mature tables"
+    );
+    assert.equal(offStartupTableModePlugin.embeddedAdvancedTables, null, "all-off startup mode should not start embedded mature tables");
     assert.ok(
       plugin.getHostedPluginItems().some((item) => item.id === "feishu-doc-toolbar" && item.name === "Obsidian增强体验"),
       "management center should expose the unified Obsidian experience host plugin"
@@ -614,10 +863,13 @@ async function run() {
         },
       },
     });
+    pluginWithNativeColorSettings.dataStore.tableEnhancementMode = "lishuNative";
+    pluginWithNativeColorSettings.embeddedNativeTableEnhancer =
+      pluginWithNativeColorSettings.app.plugins.plugins["markdown-table-enhancer"];
     assert.equal(
       pluginWithNativeColorSettings.getNativeColorSettingsForManager().defaultPresetId,
       "green",
-      "unified settings should read native table color settings from markdown-table-enhancer"
+      "unified settings should read native table color settings from the embedded lishu table enhancer"
     );
     await pluginWithNativeColorSettings.updateNativeColorSettingsFromManager({
       defaultPresetId: "blue",
@@ -1494,8 +1746,11 @@ async function run() {
     pluginForDetachedTemplateMenu.app.plugins.plugins["markdown-table-enhancer"].openTemplateLibraryModal = () => {
       openedSharedLibrary += 1;
     };
+    pluginForDetachedTemplateMenu.dataStore.tableEnhancementMode = "lishuNative";
+    pluginForDetachedTemplateMenu.embeddedNativeTableEnhancer =
+      pluginForDetachedTemplateMenu.app.plugins.plugins["markdown-table-enhancer"];
     await menuItems.find((item) => item.label === "模板库").onClick();
-    assert.equal(openedSharedLibrary, 1, "template library action should open the shared template library modal instead of a separate index page");
+    assert.equal(openedSharedLibrary, 1, "template library action should open the embedded shared template library modal");
   }
 
   {
@@ -1810,6 +2065,8 @@ async function run() {
       ],
     ]);
     const pluginWithEnhancerInsert = createPlugin(PluginClass, { fileContents, tableEnhancerPlugin });
+    pluginWithEnhancerInsert.dataStore.tableEnhancementMode = "lishuNative";
+    pluginWithEnhancerInsert.embeddedNativeTableEnhancer = tableEnhancerPlugin;
     const ok = await pluginWithEnhancerInsert.insertTemplateIntoContext(createContext(pluginWithEnhancerInsert, editor, 0), ".模板库/周计划.md");
     assert.equal(ok, true, "template insertion should succeed through table enhancer bridge");
     assert.equal(received.content.includes("mdtp-template"), true, "table metadata should be handed to table enhancer for filtering");
@@ -1923,16 +2180,25 @@ async function run() {
     pluginForMenu.extendEditorMenu(tableMenu, editor, { file: {}, contentEl: {} });
     assert.deepEqual(
       tableMenu.items.map((item) => item.title),
-      ["打开飞书插入面板", "打开模板库面板", "对当前表格美化", "高亮", "打开表格操作面板"],
-      "table editor menu should expose native layout as the first table action"
+      ["打开飞书插入面板", "打开模板库面板"],
+      "mature table mode should not expose Lishu table enhancement actions"
     );
-    await tableMenu.items[2].click();
+
+    const lishuTableMenu = new FakeMenu();
+    pluginForMenu.dataStore.tableEnhancementMode = "lishuNative";
+    pluginForMenu.extendEditorMenu(lishuTableMenu, editor, { file: {}, contentEl: {} });
+    assert.deepEqual(
+      lishuTableMenu.items.map((item) => item.title),
+      ["打开飞书插入面板", "打开模板库面板", "对当前表格美化", "高亮", "打开表格操作面板"],
+      "Lishu table mode should expose native layout actions"
+    );
+    await lishuTableMenu.items[2].click();
     assert.deepEqual(
       pluginForMenu.app.commands.executed,
       ["markdown-table-enhancer:initialize-current-table-native-layout"],
       "native layout menu item should call the table enhancer command"
     );
-    tableMenu.items[3].click();
+    lishuTableMenu.items[3].click();
     assert.equal(editor.toString(), "==正文==", "table highlight menu item should use the same compact markdown highlight action");
   }
 

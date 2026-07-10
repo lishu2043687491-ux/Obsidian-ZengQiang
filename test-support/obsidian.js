@@ -64,6 +64,37 @@ class Plugin extends Component {
     delete this.viewByType[type];
   }
 
+  registerEditorExtension(extension) {
+    this.editorExtensions = this.editorExtensions || [];
+    this.editorExtensions.push(extension);
+    return extension;
+  }
+
+  registerInterval(interval) {
+    return interval;
+  }
+
+  registerMarkdownPostProcessor(processor) {
+    return processor;
+  }
+
+  addCommand(command) {
+    this.commands = this.commands || [];
+    this.commands.push(command);
+    return command;
+  }
+
+  addRibbonIcon(icon, title, callback) {
+    const ribbonIcon = { icon, title, callback, remove() {} };
+    this.ribbonIcons = this.ribbonIcons || [];
+    this.ribbonIcons.push(ribbonIcon);
+    return ribbonIcon;
+  }
+
+  addStatusBarItem() {
+    return { remove() {}, empty() {}, setText() {}, addClass() {} };
+  }
+
   load() {
     if (this._loaded) return;
     this._loaded = true;
@@ -111,6 +142,38 @@ Notice.messages = [];
 class MarkdownView {}
 class MarkdownRenderChild extends Component {}
 
+class ItemView extends Component {
+  constructor(leaf) {
+    super();
+    this.leaf = leaf;
+    this.contentEl = {
+      empty() {},
+      addClass() {},
+      removeClass() {},
+      createDiv() {
+        return {
+          style: {},
+          addClass() {},
+          createDiv() { return this; },
+          createEl() {
+            return {
+              addEventListener() {}, setAttribute() {}, getAttribute() { return ""; },
+              load() {}, play() {}, pause() {},
+            };
+          },
+          appendChild() {},
+        };
+      },
+      createEl() {
+        return {
+          addEventListener() {}, setAttribute() {}, getAttribute() { return ""; },
+          load() {}, play() {}, pause() {},
+        };
+      },
+    };
+  }
+}
+
 class TextFileView extends Component {
   constructor(leaf) {
     super();
@@ -155,6 +218,10 @@ class Menu {
         this.icon = value;
         return this;
       },
+      setDisabled(value) {
+        this.disabled = value;
+        return this;
+      },
       onClick(handler) {
         this.click = handler;
         return this;
@@ -162,6 +229,24 @@ class Menu {
     };
     builder(item);
     this.items.push(item);
+    return this;
+  }
+  addSeparator() {
+    this.items.push({ separator: true });
+    return this;
+  }
+  addSubmenu(builder) {
+    const submenu = new Menu();
+    submenu.setTitle = function (value) {
+      this.title = value;
+      return this;
+    };
+    submenu.setIcon = function (value) {
+      this.icon = value;
+      return this;
+    };
+    builder(submenu);
+    this.items.push({ title: submenu.title, icon: submenu.icon, submenu });
     return this;
   }
 }
@@ -194,6 +279,10 @@ const MarkdownRenderer = {
     return Promise.resolve();
   },
 };
+
+const Platform = { isMobile: false };
+
+function addIcon() {}
 
 function requestUrl() {
   return Promise.resolve({ status: 200, arrayBuffer: new ArrayBuffer(0), headers: {} });
@@ -276,6 +365,7 @@ module.exports = {
   Notice,
   MarkdownView,
   MarkdownRenderChild,
+  ItemView,
   TextFileView,
   AbstractInputSuggest,
   Menu,
@@ -286,6 +376,8 @@ module.exports = {
   Editor,
   Modal,
   MarkdownRenderer,
+  Platform,
+  addIcon,
   requestUrl,
   normalizePath,
 };

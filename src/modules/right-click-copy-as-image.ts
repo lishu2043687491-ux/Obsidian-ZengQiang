@@ -799,6 +799,8 @@ class RightClickCopyAsImageRunner {
       ".mdtp-image-manipulator",
       ".mdtp-inline-editor",
       ".mdtp-resize-handle",
+      ".advanced-tables-floating-handle",
+      ".advanced-tables-floating-popover",
     ];
 
     for (const selector of selectors) {

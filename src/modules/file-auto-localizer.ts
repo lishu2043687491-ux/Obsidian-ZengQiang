@@ -58,10 +58,6 @@ const HTTP_RE = /^https?:\/\//i;
 const DATA_IMAGE_RE = /^data:image\//i;
 const LOCAL_IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?)$/i;
 const SCATTERED_ATTACHMENT_RE = /(?:^|\/)(?:assets\/attachments|\.attachments)(?:\/|$)/i;
-const AUTO_PROCESS_DELAY_MS = 3000;
-const AUTO_PROCESS_MIN_INTERVAL_MS = 10 * 60 * 1000;
-const AUTO_PROCESS_MAX_PENDING_FILES = 10;
-const AUTO_PROCESS_MAX_FILE_BYTES = 500_000;
 
 type ImageMatch = {
   raw: string;
@@ -81,8 +77,6 @@ class FileAutoLocalizerRunner {
   settings: FileAutoLocalizerSettings = { ...DEFAULT_SETTINGS };
   processingPaths: Set<string> = new Set();
   autoTimers: Map<string, number> = new Map();
-  lastAutoProcessAt: Map<string, number> = new Map();
-  lastAutoProcessHash: Map<string, string> = new Map();
 
   constructor(public host: SubPluginHost) {}
 
@@ -114,9 +108,17 @@ class FileAutoLocalizerRunner {
       },
     });
 
-    this.host.registerDomEvent(document, "paste", (event: ClipboardEvent) => {
-      this.queueAutoProcessFromPaste(event);
-    }, true);
+    this.host.registerEvent(this.host.app.workspace.on("file-open", (file) => {
+      this.queueAutoProcess(file as TFile | null);
+    }));
+
+    this.host.registerEvent(this.host.app.vault.on("modify", (file) => {
+      this.queueAutoProcess(file as TFile);
+    }));
+
+    this.host.registerEvent(this.host.app.vault.on("create", (file) => {
+      this.queueAutoProcess(file as TFile);
+    }));
 
     this.host.register(() => {
       for (const timer of this.autoTimers.values()) {
@@ -175,16 +177,14 @@ class FileAutoLocalizerRunner {
     new Notice(`批量完成：${changed}/${files.length} 篇有更新，${downloaded} 张下载，${reused} 张复用，${links} 个链接转换，${removed} 个占位移除，${failed} 张失败`);
   }
 
-  async localizeFile(file: TFile, sourceOverride?: string) {
+  async localizeFile(file: TFile) {
     if (this.processingPaths.has(file.path)) {
       return { downloaded: 0, reused: 0, failed: 0, links: 0, removed: 0, migrated: 0, changed: false };
     }
 
     this.processingPaths.add(file.path);
     try {
-      const source = typeof sourceOverride === "string"
-        ? sourceOverride
-        : await this.host.app.vault.read(file);
+      const source = await this.host.app.vault.read(file);
       const legacyResult = this.normalizeLegacyAttachmentLinks(source, file.path);
       const linkResult = this.normalizeOneNoteLinksWrap(legacyResult.markdown);
       let workingMarkdown = linkResult.markdown;
@@ -263,70 +263,26 @@ class FileAutoLocalizerRunner {
   }
 
   queueAutoProcess(file: TFile | null) {
-    if (!this.shouldQueueAutoProcess(file)) return;
+    if (!this.settings.autoProcessActiveNote) return;
+    if (!(file instanceof TFile) || file.extension !== "md") return;
+
+    const activeFile = this.host.app.workspace.getActiveFile();
+    if (!this.settings.autoProcessAllMarkdown && activeFile !== file) return;
 
     const existingTimer = this.autoTimers.get(file.path);
     if (existingTimer) window.clearTimeout(existingTimer);
 
     const timer = window.setTimeout(async () => {
       this.autoTimers.delete(file.path);
-      try {
-        if (!this.shouldQueueAutoProcess(file)) return;
+      const currentlyActive = this.host.app.workspace.getActiveFile();
 
-        const source = await this.host.app.vault.read(file);
-        const sourceHash = stableHash(source);
-        const previousHash = this.lastAutoProcessHash.get(file.path);
-        const lastRunAt = this.lastAutoProcessAt.get(file.path) || 0;
-        const now = Date.now();
-        if (previousHash === sourceHash && now - lastRunAt < AUTO_PROCESS_MIN_INTERVAL_MS) {
-          return;
-        }
-
-        this.lastAutoProcessHash.set(file.path, sourceHash);
-        this.lastAutoProcessAt.set(file.path, now);
-        if (!hasActionableAutoProcessWork(source, this.settings)) {
-          return;
-        }
-
-        const currentlyActive = this.host.app.workspace.getActiveFile();
-        const result = await this.localizeFile(file, source);
-        if ((result.changed || result.failed > 0) && currentlyActive === file) {
-          new Notice(`文件自动本地化（后台）：${result.downloaded} 张下载，${result.reused} 张复用，${result.links || 0} 个链接转换，${result.removed || 0} 个占位移除，${result.failed} 张失败`);
-        }
-      } catch (error) {
-        console.error("[file-auto-localizer] 后台自动处理失败", file.path, error);
+      const result = await this.localizeFile(file);
+      if ((result.changed || result.failed > 0) && currentlyActive === file) {
+        new Notice(`文件自动本地化（后台）：${result.downloaded} 张下载，${result.reused} 张复用，${result.links || 0} 个链接转换，${result.removed || 0} 个占位移除，${result.failed} 张失败`);
       }
-    }, AUTO_PROCESS_DELAY_MS);
+    }, 3000);
 
     this.autoTimers.set(file.path, timer);
-  }
-
-  queueAutoProcessFromPaste(event: ClipboardEvent) {
-    if (!this.settings.autoProcessActiveNote) return;
-    if (!isEditorPasteTarget(event.target)) return;
-    if (!pasteCouldNeedAutoProcess(event.clipboardData)) return;
-
-    const file = this.host.app.workspace.getActiveFile();
-    if (!(file instanceof TFile) || file.extension !== "md") return;
-    this.queueAutoProcess(file);
-  }
-
-  shouldQueueAutoProcess(file: TFile | null) {
-    if (!this.settings.autoProcessActiveNote) return false;
-    if (!(file instanceof TFile) || file.extension !== "md") return false;
-    if (this.processingPaths.has(file.path)) return false;
-    if ((file.stat?.size || 0) > AUTO_PROCESS_MAX_FILE_BYTES) return false;
-
-    const activeFile = this.host.app.workspace.getActiveFile();
-    if (activeFile !== file) return false;
-
-    const existingTimer = this.autoTimers.get(file.path);
-    if (!existingTimer && this.autoTimers.size >= AUTO_PROCESS_MAX_PENDING_FILES) return false;
-
-    const lastRunAt = this.lastAutoProcessAt.get(file.path) || 0;
-    if (Date.now() - lastRunAt < AUTO_PROCESS_MIN_INTERVAL_MS) return false;
-
-    return true;
   }
 
   async resolveRemoteAsset(url: string) {
@@ -911,76 +867,6 @@ function isScatteredAttachmentPath(vaultPath: string, attachmentFolder: string) 
   return SCATTERED_ATTACHMENT_RE.test(normalized);
 }
 
-function hasActionableAutoProcessWork(markdown: string, settings: FileAutoLocalizerSettings) {
-  const source = String(markdown || "");
-  if (!source.trim()) return false;
-
-  if (hasLegacyAttachmentSyntax(source, settings.attachmentFolder)) return true;
-  if (settings.processOneNoteLinks && hasOneNoteWebLink(source)) return true;
-
-  if (settings.processScatteredLocalImages) {
-    const attachmentFolder = normalizeVaultPath(settings.attachmentFolder || DEFAULT_SETTINGS.attachmentFolder);
-    const localEmbeds = findScatteredLocalEmbeds(source);
-    if (localEmbeds.some((embed) => {
-      const normalized = normalizeVaultPath(embed.linkPath.split("|")[0]);
-      return SCATTERED_ATTACHMENT_RE.test(normalized) && !isInsideFolder(normalized, attachmentFolder);
-    })) {
-      return true;
-    }
-  }
-
-  const images = findProcessableMarkdownImages(source);
-  return images.some((image) => shouldAutoProcessImage(image, settings));
-}
-
-function hasLegacyAttachmentSyntax(markdown: string, attachmentFolder: string) {
-  const folder = escapeRegExp(normalizeVaultPath(attachmentFolder || DEFAULT_SETTINGS.attachmentFolder));
-  return /!\[\[\.attachments\/[^\]]+]]/i.test(markdown)
-    || /!\[[\s\S]*?]\((?:\.\.\/)*\.attachments\/[^)]+\)/i.test(markdown)
-    || new RegExp(`!\\[\\]\\((?:\\.\\./)*${folder}/[^)|]+\\.(?:png|jpe?g|gif|webp|avif|svg|bmp|tiff?)%7C\\d+\\)`, "i").test(markdown)
-    || new RegExp(`!\\[[\\s\\S]*?[\\r\\n][\\s\\S]*?\\]\\((?:\\.\\./)*${folder}/[^)]+\\)`, "i").test(markdown);
-}
-
-function hasOneNoteWebLink(markdown: string) {
-  return /https:\/\/(?:www\.)?onedrive\.live\.com\/redir/i.test(markdown)
-    || /https:\/\/(?:www\.)?sharepoint\.com\/:[a-z]:/i.test(markdown)
-    || /https:\/\/onedrive\.live\.com\/edit/i.test(markdown);
-}
-
-function shouldAutoProcessImage(match: ImageMatch, settings: FileAutoLocalizerSettings) {
-  if (match.type === "data") {
-    return Boolean(settings.processOneNoteImages);
-  }
-
-  const source = classifyRemoteSource(match.url);
-  if (source === "cubox") return Boolean(settings.processCuboxImages);
-  if (source === "wechat") return Boolean(settings.processWeChatImages);
-  return Boolean(settings.processOtherRemoteImages);
-}
-
-function isEditorPasteTarget(target: EventTarget | null) {
-  const el = target instanceof HTMLElement ? target : null;
-  if (!el) return false;
-  if (el.closest("input, textarea, select, .modal, .menu")) return false;
-  return Boolean(el.closest(".markdown-source-view, .markdown-reading-view, .markdown-preview-view, .cm-editor, .cm-content"));
-}
-
-function pasteCouldNeedAutoProcess(data: DataTransfer | null) {
-  if (!data) return false;
-
-  for (const item of Array.from(data.items || [])) {
-    if (item.kind === "file" && item.type.startsWith("image/")) return true;
-  }
-
-  const html = data.getData("text/html") || "";
-  if (html && /<img\b|data:image\/|https?:\/\/|onedrive\.live\.com|sharepoint\.com|\.attachments\//i.test(html)) {
-    return true;
-  }
-
-  const text = data.getData("text/plain") || data.getData("text/uri-list") || "";
-  return /!\[[\s\S]*?]\(\s*(?:https?:\/\/|data:image\/)|!\[\[\.attachments\/|https:\/\/(?:www\.)?onedrive\.live\.com|https:\/\/(?:www\.)?sharepoint\.com/i.test(text);
-}
-
 function guessExtensionFromPath(path: string) {
   const match = normalizeVaultPath(path).match(/\.(png|jpe?g|gif|webp|avif|svg|bmp|tiff?)$/i);
   return match ? normalizeExtension(match[1]) : ".png";
@@ -1122,10 +1008,6 @@ function normalizeVaultPath(path: string) {
     .replace(/^\/+/, "")
     .replace(/\/+$/, "")
     .replace(/\/{2,}/g, "/");
-}
-
-function escapeRegExp(value: string) {
-  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function encodeMarkdownPath(path: string) {
@@ -1301,8 +1183,8 @@ export function renderFileAutoLocalizerSettings(containerEl: HTMLElement) {
   const autoBody = autoSection.createDiv();
 
   new Setting(autoBody)
-    .setName("粘贴后自动处理当前笔记")
-    .setDesc("仅在编辑器里粘贴图片、远程图片或 OneNote 链接后检查；平时打开、编辑、保存笔记不触发")
+    .setName("自动处理当前笔记")
+    .setDesc("打开或导入 Markdown 后，自动下载远程图片并改成本地引用")
     .addToggle((toggle) =>
       toggle.setValue(runner.settings.autoProcessActiveNote).onChange(async (value) => {
         runner.settings.autoProcessActiveNote = value;
@@ -1311,10 +1193,10 @@ export function renderFileAutoLocalizerSettings(containerEl: HTMLElement) {
     );
 
   new Setting(autoBody)
-    .setName("后台文件事件处理")
-    .setDesc("已停用：为避免卡顿，不再监听打开、修改、新建文件；批量导入后请用上方“选择文件夹批量处理”")
+    .setName("自动处理所有新改 Markdown")
+    .setDesc("Web Clipper 后台创建或更新笔记时也会自动处理")
     .addToggle((toggle) =>
-      toggle.setValue(false).setDisabled(true).onChange(async (value) => {
+      toggle.setValue(runner.settings.autoProcessAllMarkdown).onChange(async (value) => {
         runner.settings.autoProcessAllMarkdown = value;
         await runner.saveSettings();
       })
@@ -1476,9 +1358,6 @@ export const __fileAutoLocalizerTest = {
   normalizeOneNoteUri,
   collapseConsecutiveDuplicateOneNoteLinks,
   findProcessableMarkdownImages,
-  hasActionableAutoProcessWork,
-  isEditorPasteTarget,
-  pasteCouldNeedAutoProcess,
   findScatteredLocalEmbeds,
   resolveLocalImagePath,
   isScatteredAttachmentPath,

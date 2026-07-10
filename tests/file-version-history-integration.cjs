@@ -15,8 +15,33 @@ const vaultRoot = path.resolve(root, "../../..");
 const TARGET =
   "❷自我管理/3️⃣我的实操/2计划/实践梳理：有效拆计划的方法.md";
 
+const MAX_LEGACY_ENCODED_LEN = 200;
+
 function encodePath(filePath) {
   return encodeURIComponent(String(filePath).replace(/\\/g, "/")).replace(/%/g, "_");
+}
+
+function hashContent(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function hashStorageKey(filePath) {
+  const normalized = String(filePath).replace(/\\/g, "/");
+  let out = "";
+  for (let round = 0; round < 5; round += 1) {
+    out += hashContent(`fv-hash:${round}:${normalized}:${out}`);
+  }
+  return `h_${out.replace(/[^a-z0-9]/gi, "x").slice(0, 32)}`;
+}
+
+function primaryStorageKey(filePath) {
+  const legacy = encodePath(filePath);
+  return legacy.length <= MAX_LEGACY_ENCODED_LEN ? legacy : hashStorageKey(filePath);
 }
 
 function readIndex(filePath) {
@@ -150,9 +175,41 @@ function testIndexFallbackScan() {
   assert.ok(found, "fallback scan should locate target file index by stored filePath");
 }
 
+function testDeepPathUsesHashKey() {
+  const DEEP =
+    "❶可迁移（new）/200通用能力/210个体能力/213表达力/3️⃣我的实践/02讲可信/场景实践/场景1：youcore学员证言.md";
+  const key = primaryStorageKey(DEEP);
+  assert.ok(key.startsWith("h_"));
+  const snapDir = path.join(
+    vaultRoot,
+    ".obsidian/plugins/feishu-doc-toolbar/file-versions/snapshots",
+    key
+  );
+  fs.mkdirSync(snapDir, { recursive: true });
+  const snapId = `${Date.now()}-deep-test`;
+  fs.writeFileSync(path.join(snapDir, `${snapId}.md`), "# deep path snapshot test\n");
+  const indexRel = `.obsidian/plugins/feishu-doc-toolbar/file-versions/indexes/${key}.json`;
+  const indexAbs = path.join(vaultRoot, indexRel);
+  fs.writeFileSync(
+    indexAbs,
+    JSON.stringify(
+      {
+        filePath: DEEP,
+        snapshots: [{ id: snapId, createdAt: Date.now(), reason: "deep-test", size: 24 }],
+      },
+      null,
+      2
+    )
+  );
+  const raw = JSON.parse(fs.readFileSync(indexAbs, "utf8"));
+  assert.equal(raw.filePath, DEEP);
+  assert.ok(fs.existsSync(path.join(snapDir, `${snapId}.md`)));
+}
+
 testTargetFileSnapshots();
 testVaultSnapshotCoverage();
 testPrototypePatch();
 testSyncCommandUsesOutlinerFile();
 testIndexFallbackScan();
+testDeepPathUsesHashKey();
 console.log("file-version-history-integration.cjs OK");

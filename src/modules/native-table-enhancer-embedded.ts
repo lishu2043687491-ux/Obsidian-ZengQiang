@@ -1860,6 +1860,17 @@ export default class MarkdownTableEnhancerPlugin extends Plugin {
 
   onunload() {
     void this.closeActiveEditor("cancel");
+    if (this.plainTableSidebarFallbackTimer) {
+      window.clearTimeout(this.plainTableSidebarFallbackTimer);
+      this.plainTableSidebarFallbackTimer = null;
+    }
+    this.hideTableSidebar(true);
+    this.tableSidebarHandleEl?.remove();
+    this.tableCopyImageHandleEl?.remove();
+    this.tableSidebarHandleEl = null;
+    this.tableCopyImageHandleEl = null;
+    this.activeTableSidebarContext = null;
+    this.activeNativeTableContext = null;
     this.hideImageToolbar();
     this.hideImageManipulator();
     this.activeImageDrag = null;

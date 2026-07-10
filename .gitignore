@@ -12,7 +12,10 @@ debug.log
 /block-link-plus.bundle.js
 tests/claudian-test-bundle.cjs
 release/
+dist/
 app.js
 FIXED-*.txt
 RELOAD-ME.txt
-.synced-from-近期工作.txt
+.synced-from-vault.txt
+tests/advanced-table-helpers-bundle.cjs
+tests/video-timestamp-preview-helpers-bundle.cjs

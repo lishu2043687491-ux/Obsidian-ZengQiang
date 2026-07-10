@@ -10,6 +10,7 @@ import {
   TFile,
   TFolder,
   normalizePath,
+  setIcon,
 } from "obsidian";
 import * as HtmlToImage from "html-to-image";
 
@@ -56,6 +57,13 @@ import {
   type GoalProgressPlanFile,
 } from "./modules/goal-progress-sync";
 import EmbeddedNativeTableEnhancerPlugin from "./modules/native-table-enhancer-embedded";
+import EmbeddedAdvancedTablesPlugin from "./modules/advanced-tables-embedded/main";
+import {
+  ADVANCED_TABLE_ACTION_GROUPS,
+  ADVANCED_TABLE_ACTION_IDS,
+  type AdvancedTableActionGroup,
+  type AdvancedTableActionId,
+} from "./modules/advanced-tables-embedded/actions";
 
 /** 指向链接优先启动，避免与其它内嵌模块抢 PluginManager / 视图注册 */
 const EMBEDDED_MODULES: EmbeddedSubModule[] = [
@@ -298,11 +306,15 @@ type FeishuDocToolbarData = {
   /** 启用 OneNote 高保真粘贴时后台联动 mte 增强表格能力（无增强表格按钮） */
   showOneNoteImport: boolean;
   showTableEnhancerEntrances: boolean;
+  /** 表格增强模式：默认成熟版；礼书版只在手动开启时启动自研表格层；全关只保留历史数据。 */
+  tableEnhancementMode: TableEnhancementMode;
   showDraggerIntegrationStatus: boolean;
   /** 内嵌子模块（merged 状态）的开关 + 私有 data 桶 */
   embeddedModules: Record<string, { enabled: boolean; data?: unknown }>;
   /** 已融合的原生表格增强私有数据，替代外部 markdown-table-enhancer/data.json */
   embeddedNativeTableEnhancer?: unknown;
+  /** 已融合的成熟版表格增强私有数据，替代外部 table-editor-obsidian/data.json */
+  embeddedAdvancedTables?: unknown;
   /** 设置页顶部导航栏顺序 */
   settingsTabOrder: ExperienceSettingsTabId[];
   /** 用户已删除/隐藏的内置插件分类 id */
@@ -589,6 +601,27 @@ type AdvancedTableSettings = {
   bindEnter: boolean;
   formatType: "normal" | "weak";
   showRibbonIcon: boolean;
+  showFloatingControls: boolean;
+  showColorBlocks: boolean;
+  showZebraStripes: boolean;
+};
+
+type TableEnhancementMode = "advancedTables" | "lishuNative" | "off";
+
+const TABLE_ENHANCEMENT_MODE_LABELS: Record<TableEnhancementMode, string> = {
+  advancedTables: "成熟版表格增强",
+  lishuNative: "礼书版表格增强",
+  off: "全关表格增强",
+};
+
+const DEFAULT_ADVANCED_TABLE_SETTINGS: AdvancedTableSettings = {
+  bindEnter: true,
+  bindTab: true,
+  formatType: "weak",
+  showRibbonIcon: true,
+  showFloatingControls: true,
+  showColorBlocks: true,
+  showZebraStripes: false,
 };
 
 const EXPERIENCE_SETTINGS_TABS: Array<{ id: ExperienceSettingsTabId; label: string }> = [
@@ -603,6 +636,7 @@ const EXPERIENCE_SETTINGS_TABS: Array<{ id: ExperienceSettingsTabId; label: stri
 const HOSTED_PLUGIN_DESCRIPTIONS: Record<string, string> = {
   "feishu-doc-toolbar": "统一入口层：T 工具栏、模板入口、总设置页",
   "markdown-table-enhancer": "原生表格颜色/长宽高、模板库",
+  "table-editor-obsidian": "成熟版表格增强外部插件：已由总插件内嵌接管，保留识别只是为了自动关闭旧安装",
   dragger: "块拖动能力，当前只托管状态，不自动启停",
   "canvas-copy-as-image": "右键复制卡片、表格、选区或页面成图",
   "global-wide-page": "全局宽页面和一键切换",
@@ -768,6 +802,8 @@ const PROTECTED_LOCAL_LIBRARY_PATHS = [
 const TABLE_PICKER_ROWS = 8;
 const TABLE_PICKER_COLS = 8;
 const MARKDOWN_TABLE_PLUGIN_ID = "markdown-table-enhancer";
+const ADVANCED_TABLES_PLUGIN_ID = "table-editor-obsidian";
+const DEFAULT_TABLE_ENHANCEMENT_MODE: TableEnhancementMode = "advancedTables";
 const ENHANCED_TABLE_COMMANDS = {
   insertNativeColorTemplate: `${MARKDOWN_TABLE_PLUGIN_ID}:insert-native-color-table-template`,
   initializeNativeLayout: `${MARKDOWN_TABLE_PLUGIN_ID}:initialize-current-table-native-layout`,
@@ -822,6 +858,7 @@ const DEFAULT_DATA: FeishuDocToolbarData = {
   enableBetaFeatures: false,
   showOneNoteImport: true,
   showTableEnhancerEntrances: false,
+  tableEnhancementMode: DEFAULT_TABLE_ENHANCEMENT_MODE,
   showDraggerIntegrationStatus: true,
   embeddedModules: {},
   settingsTabOrder: [...DEFAULT_SETTINGS_TAB_ORDER],
@@ -1393,6 +1430,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
   /** OneNote 粘贴：稳定自研功能，开关 showOneNoteImport（不经过 embeddedModules）。 */
   private appendOneNoteRichPasteOwnModuleRow(containerEl: HTMLElement, descriptor: OwnModuleDescriptor) {
     const isEnabled = this.plugin.isOneNoteRichPasteEnabled();
+    const isRuntimeAvailable = this.plugin.getTableEnhancementModeForManager() === "lishuNative";
 
     const card = document.createElement("details");
     card.className = "fdtb-own-module-card";
@@ -1458,14 +1496,18 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       const hint = document.createElement("p");
       hint.className = "fdtb-settings-page-desc";
       hint.textContent =
-        "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。";
+        isRuntimeAvailable
+          ? "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。"
+          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「原生表格增强」切到礼书版。";
       body.appendChild(hint);
-      this.appendCommandRow(
-        body,
-        "粘贴OneNote",
-        "从剪贴板读取 OneNote 富文本并插入当前笔记（含表中表、加粗、图片）",
-        ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable
-      );
+      if (isRuntimeAvailable) {
+        this.appendCommandRow(
+          body,
+          "粘贴OneNote",
+          "从剪贴板读取 OneNote 富文本并插入当前笔记（含表中表、加粗、图片）",
+          ENHANCED_TABLE_COMMANDS.pasteOneNoteRichTable
+        );
+      }
     } else {
       body.createEl("p", {
         text: "开启上方开关后显示「粘贴OneNote」状态栏按钮。",
@@ -1481,9 +1523,11 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       const hint = document.createElement("p");
       hint.className = "fdtb-settings-page-desc";
       hint.textContent =
-        "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。";
+        this.plugin.getTableEnhancementModeForManager() === "lishuNative"
+          ? "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。"
+          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「原生表格增强」切到礼书版。";
       body.appendChild(hint);
-      if (this.plugin.isOneNoteRichPasteEnabled()) {
+      if (this.plugin.isOneNoteRichPasteEnabled() && this.plugin.getTableEnhancementModeForManager() === "lishuNative") {
         this.appendCommandRow(
           body,
           "粘贴OneNote",
@@ -2713,20 +2757,131 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
     intro.textContent =
-      "原生表格颜色、长宽高、对齐、轻量公式、自动填充与模板库已内置在 Obsidian增强体验中。OneNote 粘贴为原生 Markdown 表，不启用增强表格。";
+      "表格增强分为成熟版、礼书版和全关。默认新增表格走成熟版；礼书版只在手动开启时加载旧的颜色、长宽高和色块能力；全关会关闭全部表格增强，只保留 Obsidian 原生 Markdown 表格和历史内容。";
     containerEl.appendChild(intro);
+    this.renderTableEnhancementModeControls(containerEl);
 
-    const advancedSection = this.createSettingsCollapsibleSection("编辑体验与内置能力", {
-      hint: "原生表格增强、公式/自动填充和 Advanced Tables 编辑体验",
+    const mode = this.plugin.getTableEnhancementModeForManager();
+    if (mode === "advancedTables") {
+      const section = this.createSettingsCollapsibleSection("成熟版状态", {
+        hint: "由内嵌成熟版接管新增表格体验",
+        open: true,
+      });
+      this.appendStatusRow(
+        section.body,
+        "内嵌成熟版表格增强",
+        "已启用",
+        "新增表格默认使用成熟版编辑体验；礼书版旧色块数据保留但不自动渲染。"
+      );
+      this.renderAdvancedTableSettings(section.body);
+      this.renderAdvancedTableActions(section.body);
+      containerEl.appendChild(section.details);
+      return;
+    }
+
+    if (mode === "off") {
+      const section = this.createSettingsCollapsibleSection("全关状态", {
+        hint: "只保留历史数据，不加载表格增强",
+        open: true,
+      });
+      this.appendStatusRow(section.body, "表格增强", "已全关", "普通 Markdown 表格和历史正文内容不受影响。");
+      this.appendStatusRow(section.body, "历史礼书版数据", "已保留", "不会迁移、删除或批量改写旧表格记录。");
+      containerEl.appendChild(section.details);
+      return;
+    }
+
+    const advancedSection = this.createSettingsCollapsibleSection("礼书版编辑体验与内置能力", {
+      hint: "旧色块、长宽高、公式、自动填充和内置成熟表格核心",
       open: false,
     });
-    this.appendStatusRow(advancedSection.body, "原生表格增强", "已内置", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
-    this.appendStatusRow(advancedSection.body, "公式 / 自动填充", "已内置", "支持 LaTeX 显示、SUM/AVG/MIN/MAX 和拖拽自动填充");
-    this.appendStatusRow(advancedSection.body, "Advanced Tables 编辑体验", "已接入", "支持跳格、格式化、增删移动、排序、转置、公式与 CSV");
+    this.appendStatusRow(advancedSection.body, "礼书版表格增强", "手动开启", `内部能力 id：${MARKDOWN_TABLE_PLUGIN_ID}`);
+    this.appendStatusRow(advancedSection.body, "公式 / 自动填充", "礼书版能力", "支持公式显示、求和、平均、最大最小和拖拽自动填充");
+    this.appendStatusRow(advancedSection.body, "内置成熟表格核心", "礼书版能力", "支持跳格、格式化、增删移动、排序、转置、公式与导出逗号分隔文本");
     this.renderAdvancedTableSettings(advancedSection.body);
     containerEl.appendChild(advancedSection.details);
 
     this.renderNativeTableColorSettings(containerEl);
+  }
+
+  private renderTableEnhancementModeControls(containerEl: HTMLElement) {
+    const mode = this.plugin.getTableEnhancementModeForManager();
+    const card = document.createElement("div");
+    card.className = "fdtb-native-color-card";
+
+    const header = document.createElement("div");
+    header.className = "fdtb-native-color-header";
+    const title = document.createElement("div");
+    title.className = "fdtb-native-color-title";
+    title.textContent = "表格增强模式";
+    const hint = document.createElement("div");
+    hint.className = "fdtb-native-color-hint";
+    hint.textContent = `当前：${this.plugin.getTableEnhancementModeLabel(mode)}。切换只改插件启停和总插件模式，不改历史笔记内容。`;
+    header.append(title, hint);
+    card.appendChild(header);
+
+    const options: Array<{ value: TableEnhancementMode; label: string; desc: string }> = [
+      {
+        value: "advancedTables",
+        label: "成熟版表格增强（默认新增）",
+        desc: "默认推荐。关闭礼书版旧接管，新增表格走成熟版；礼书版历史数据保留。",
+      },
+      {
+        value: "lishuNative",
+        label: "礼书版表格增强",
+        desc: "手动查看或继续使用旧色块、长宽高、行配色等能力；会加载旧自研表格层。",
+      },
+      {
+        value: "off",
+        label: "全关所有表格增强",
+        desc: "关闭成熟版、礼书版和外部同类表格插件，只用 Obsidian 原生表格；历史内容不改。",
+      },
+    ];
+
+    for (const option of options) {
+      const row = document.createElement("label");
+      row.className = "fdtb-native-table-default-row";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "fdtb-table-enhancement-mode";
+      input.value = option.value;
+      input.checked = option.value === mode;
+      input.addEventListener("change", async () => {
+        if (!input.checked) return;
+        input.disabled = true;
+        await this.plugin.setTableEnhancementMode(option.value);
+        this.display();
+      });
+
+      const copy = document.createElement("span");
+      copy.className = "fdtb-native-table-default-label";
+      const label = document.createElement("strong");
+      label.textContent = option.label;
+      const desc = document.createElement("span");
+      desc.className = "fdtb-native-table-default-hint";
+      desc.textContent = option.desc;
+      copy.append(label, desc);
+
+      const value = document.createElement("span");
+      value.className = "fdtb-native-table-default-value";
+      value.textContent = option.value === mode ? "当前使用" : "可切换";
+      row.append(input, copy, value);
+      card.appendChild(row);
+    }
+
+    this.appendStatusRow(
+      card,
+      "内嵌成熟版表格增强",
+      mode === "advancedTables" ? "已启用" : "已关闭",
+      "不用单独安装外部表格插件。"
+    );
+    this.appendStatusRow(
+      card,
+      "全部表格增强插件",
+      mode === "off" ? "已关闭" : "按当前模式启停",
+      "选择“全关所有表格增强”后，成熟版、礼书版和外部同类插件都会停用。"
+    );
+    this.appendStatusRow(card, "礼书版历史数据", "保留", "切换模式不会删除旧色块、长宽高和历史表格数据。");
+    containerEl.appendChild(card);
   }
 
   private createSettingsCollapsibleSection(
@@ -2759,7 +2914,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
   private renderAdvancedTableSettings(containerEl: HTMLElement) {
     const settings = this.plugin.getAdvancedTableSettingsForManager();
     if (!settings) {
-      this.appendStatusRow(containerEl, "Advanced Tables 设置", "未接通", "需要启用原生表格增强模块后才能设置编辑体验");
+      this.appendStatusRow(containerEl, "成熟版编辑设置", "未接通", "需要启用表格增强后才能设置编辑体验");
       return;
     }
 
@@ -2770,16 +2925,16 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     header.className = "fdtb-native-color-header";
     const title = document.createElement("div");
     title.className = "fdtb-native-color-title";
-    title.textContent = "Advanced Tables 编辑体验";
+    title.textContent = "成熟版表格编辑体验";
     const hint = document.createElement("div");
     hint.className = "fdtb-native-color-hint";
-    hint.textContent = "默认对齐成熟插件；遇到中文输入法或其他快捷键冲突时，可关闭 Tab / Enter 绑定。";
+    hint.textContent = "默认使用不写长空格的轻量格式化；遇到中文输入法或其他快捷键冲突时，可关闭快捷键绑定。";
     header.append(title, hint);
     card.appendChild(header);
 
     card.appendChild(
       this.createAdvancedTableToggleRow({
-        label: "Tab / Shift+Tab 跳格",
+        label: "制表键跳格",
         checked: settings.bindTab,
         onChange: async (checked) => {
           await this.plugin.updateAdvancedTableSettingsFromManager({ bindTab: checked });
@@ -2790,7 +2945,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     card.appendChild(
       this.createAdvancedTableToggleRow({
-        label: "Enter 跳到下一行",
+        label: "回车键跳到下一行",
         checked: settings.bindEnter,
         onChange: async (checked) => {
           await this.plugin.updateAdvancedTableSettingsFromManager({ bindEnter: checked });
@@ -2799,11 +2954,49 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       })
     );
 
+    if (this.plugin.getTableEnhancementModeForManager() === "advancedTables") {
+      card.appendChild(
+        this.createAdvancedTableToggleRow({
+          label: "显示表 / 图快捷入口",
+          checked: settings.showFloatingControls,
+          hint: "点入表格时，在表格左侧显示“表”和“图”；“表”打开全部操作，“图”直接复制成 PNG。",
+          onChange: async (checked) => {
+            await this.plugin.updateAdvancedTableSettingsFromManager({ showFloatingControls: checked });
+            this.display();
+          },
+        })
+      );
+
+      card.appendChild(
+        this.createAdvancedTableToggleRow({
+          label: "显示成熟版视觉色块",
+          checked: settings.showColorBlocks,
+          hint: "只用 CSS 高亮表头和当前行，不写入 Markdown，也不保存单表布局数据。启用斑马纹后会自动取消当前行高亮。",
+          onChange: async (checked) => {
+            await this.plugin.updateAdvancedTableSettingsFromManager({ showColorBlocks: checked });
+            this.display();
+          },
+        })
+      );
+
+      card.appendChild(
+        this.createAdvancedTableToggleRow({
+          label: "使用斑马纹",
+          checked: settings.showZebraStripes,
+          hint: "开启后保留表头高亮与交替行色，并关闭鼠标悬停或编辑焦点所在行的额外高亮。",
+          onChange: async (checked) => {
+            await this.plugin.updateAdvancedTableSettingsFromManager({ showZebraStripes: checked });
+            this.display();
+          },
+        })
+      );
+    }
+
     card.appendChild(
       this.createAdvancedTableToggleRow({
-        label: "显示 Advanced Tables 侧栏图标",
+        label: "显示成熟版侧栏图标",
         checked: settings.showRibbonIcon,
-        hint: "默认关闭，保留现有「表」按钮作为主入口；打开后需重载插件生效。",
+        hint: "作为备用入口保留；日常操作优先使用表格旁的“表”按钮，改动需重载插件生效。",
         onChange: async (checked) => {
           await this.plugin.updateAdvancedTableSettingsFromManager({ showRibbonIcon: checked });
           this.display();
@@ -2814,8 +3007,8 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const formatSelect = document.createElement("select");
     formatSelect.value = settings.formatType;
     for (const option of [
-      { value: "normal", label: "自动对齐列宽" },
-      { value: "weak", label: "轻量格式化" },
+      { value: "weak", label: "轻量格式化（推荐，不写长空格）" },
+      { value: "normal", label: "源码等宽对齐（会补空格）" },
     ] as const) {
       const item = document.createElement("option");
       item.value = option.value;
@@ -2830,11 +3023,72 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     });
     card.appendChild(
       this.createNativeTableSettingRow({
-        label: "格式化方式",
-        valueText: settings.formatType === "weak" ? "轻量格式化" : "自动对齐列宽",
+        label: "源码格式化方式",
+        valueText: settings.formatType === "weak" ? "轻量格式化" : "源码等宽对齐",
         input: formatSelect,
       })
     );
+
+    containerEl.appendChild(card);
+  }
+
+  private renderAdvancedTableActions(containerEl: HTMLElement) {
+    const groups = this.plugin.getAdvancedTableActionGroupsForManager();
+    const card = document.createElement("div");
+    card.className = "fdtb-native-color-card fdtb-advanced-table-actions-card";
+
+    const header = document.createElement("div");
+    header.className = "fdtb-native-color-header";
+    const title = document.createElement("div");
+    title.className = "fdtb-native-color-title";
+    title.textContent = "成熟版操作按钮（图标 + 文字）";
+    const hint = document.createElement("div");
+    hint.className = "fdtb-native-color-hint";
+    hint.textContent = "把 Advanced Tables 的常用能力集中成独立按钮；实时预览和源码编辑中都可使用。";
+    header.append(title, hint);
+    card.appendChild(header);
+
+    for (const group of groups) {
+      const section = document.createElement("div");
+      section.className = "fdtb-advanced-table-action-section";
+
+      const sectionHeader = document.createElement("div");
+      sectionHeader.className = "fdtb-advanced-table-action-section-header";
+      const sectionTitle = document.createElement("span");
+      sectionTitle.className = "fdtb-advanced-table-action-section-title";
+      sectionTitle.textContent = group.label;
+      const sectionHint = document.createElement("span");
+      sectionHint.className = "fdtb-advanced-table-action-section-hint";
+      sectionHint.textContent = group.hint;
+      sectionHeader.append(sectionTitle, sectionHint);
+      section.appendChild(sectionHeader);
+
+      const grid = document.createElement("div");
+      grid.className = "fdtb-advanced-table-action-grid";
+      for (const action of group.actions) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "fdtb-advanced-table-action-button";
+        button.title = action.label;
+        const iconEl = document.createElement("span");
+        iconEl.className = "fdtb-advanced-table-action-icon";
+        setIcon(iconEl, action.icon);
+        const labelEl = document.createElement("span");
+        labelEl.textContent = action.label;
+        button.append(iconEl, labelEl);
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            await this.plugin.runAdvancedTableActionFromManager(action.id);
+          } finally {
+            button.disabled = false;
+          }
+        });
+        grid.appendChild(button);
+      }
+      section.appendChild(grid);
+      card.appendChild(section);
+    }
 
     containerEl.appendChild(card);
   }
@@ -3648,6 +3902,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private slashTrigger: SlashTriggerState | null = null;
   private readonly embeddedHosts: Map<string, SubPluginHost> = new Map();
   private embeddedNativeTableEnhancer: EmbeddedNativeTableEnhancerPlugin | null = null;
+  private embeddedAdvancedTables: EmbeddedAdvancedTablesPlugin | null = null;
   claudianArchiveRunner: ClaudianChatArchiveRunner | null = null;
   private autoUpdateInFlight: Promise<void> | null = null;
 
@@ -3658,7 +3913,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.ensureHandle();
     this.registerCommands();
     this.addSettingTab(new FeishuDocExperienceSettingTab(this.app, this));
-    await this.startEmbeddedNativeTableEnhancer();
+    await this.applyTableEnhancementModeAtStartup();
     await this.startEnabledEmbeddedModules();
     await this.syncExperimentalFeatureGateToTableEnhancer(this.isEnhancedTableFeatureEnabled());
     this.registerInterval(window.setInterval(() => this.applyManagedPluginAliasesToSettingsSidebar(), 1800));
@@ -3724,6 +3979,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.closeNativeTableImagePreview();
     this.clearAllStyledArtifacts();
     this.hideToolbar(true);
+    this.stopEmbeddedAdvancedTables();
     this.stopEmbeddedNativeTableEnhancer();
     this.stopAllEmbeddedModules();
   }
@@ -3731,6 +3987,77 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private getExternalTableEnhancerPlugin() {
     const plugins = (this.app as any).plugins;
     return plugins?.plugins?.[MARKDOWN_TABLE_PLUGIN_ID] ?? plugins?.getPlugin?.(MARKDOWN_TABLE_PLUGIN_ID) ?? null;
+  }
+
+  private bindEmbeddedAdvancedTablesStorage(plugin: EmbeddedAdvancedTablesPlugin) {
+    const pluginApi = plugin as any;
+    pluginApi.loadData = async () => this.normalizeEmbeddedAdvancedTablesData(this.dataStore.embeddedAdvancedTables) ?? {};
+    pluginApi.saveData = async (data: unknown) => {
+      this.dataStore.embeddedAdvancedTables = this.normalizeEmbeddedAdvancedTablesData(data);
+      await this.saveData(this.dataStore);
+    };
+  }
+
+  private async startEmbeddedAdvancedTables() {
+    if (this.dataStore.tableEnhancementMode !== "advancedTables") return;
+    if (this.embeddedAdvancedTables) return;
+
+    const manifest = {
+      id: ADVANCED_TABLES_PLUGIN_ID,
+      name: "成熟版表格增强",
+      version: "0.23.2-zh",
+      minAppVersion: this.manifest?.minAppVersion ?? "1.5.0",
+      description: "内置于 Obsidian增强体验的成熟版表格编辑能力",
+      author: "礼书",
+      isDesktopOnly: false,
+    };
+    const plugin = new EmbeddedAdvancedTablesPlugin(this.app, manifest as any);
+    if (!this.canUseEmbeddedAdvancedTablesPlugin(plugin)) return;
+    this.bindEmbeddedAdvancedTablesStorage(plugin);
+    this.embeddedAdvancedTables = plugin;
+    try {
+      const pluginApi = plugin as any;
+      const maybePromise = typeof pluginApi.load === "function" ? pluginApi.load() : plugin.onload();
+      await maybePromise;
+      console.info("[feishu-doc-toolbar] 已内置启动成熟版表格增强");
+    } catch (error) {
+      this.embeddedAdvancedTables = null;
+      try {
+        (plugin as any).unload?.();
+      } catch {
+        // ignore
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("[feishu-doc-toolbar] 内置成熟版表格增强启动失败", error);
+      new Notice(`成熟版表格增强启动失败：${detail}`, 10000);
+    }
+  }
+
+  private canUseEmbeddedAdvancedTablesPlugin(plugin: EmbeddedAdvancedTablesPlugin) {
+    const pluginApi = plugin as any;
+    const missing = [
+      "addCommand",
+      "addRibbonIcon",
+      "registerEditorExtension",
+      "registerEvent",
+      "registerView",
+    ].filter((name) => typeof pluginApi[name] !== "function");
+    if (missing.length > 0) {
+      console.error("[feishu-doc-toolbar] 当前 Obsidian 缺少成熟版表格运行接口", missing);
+      return false;
+    }
+    return true;
+  }
+
+  private stopEmbeddedAdvancedTables() {
+    const plugin = this.embeddedAdvancedTables;
+    this.embeddedAdvancedTables = null;
+    if (!plugin) return;
+    try {
+      (plugin as any).unload?.();
+    } catch (error) {
+      console.error("[feishu-doc-toolbar] 卸载内置成熟版表格增强失败", error);
+    }
   }
 
   private bindEmbeddedNativeTableStorage(plugin: EmbeddedNativeTableEnhancerPlugin) {
@@ -3769,7 +4096,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   private async startEmbeddedNativeTableEnhancer() {
-    if (this.getExternalTableEnhancerPlugin()) return;
+    if (this.dataStore.tableEnhancementMode !== "lishuNative") return;
+    if (this.embeddedAdvancedTables) return;
+    if (this.getManagedPluginStatus(ADVANCED_TABLES_PLUGIN_ID).enabled) return;
+    if (this.getManagedPluginStatus(MARKDOWN_TABLE_PLUGIN_ID).enabled) return;
     if (this.embeddedNativeTableEnhancer) return;
     if (!this.canStartEmbeddedNativeTableEnhancer()) return;
 
@@ -3787,7 +4117,8 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     this.bindEmbeddedNativeTableStorage(plugin);
     this.embeddedNativeTableEnhancer = plugin;
     try {
-      const maybePromise = (plugin as any).load?.() ?? plugin.onload();
+      const pluginApi = plugin as any;
+      const maybePromise = typeof pluginApi.load === "function" ? pluginApi.load() : plugin.onload();
       await maybePromise;
       console.info("[feishu-doc-toolbar] 已内置启动原生表格增强");
     } catch (error) {
@@ -4210,7 +4541,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
       });
     });
 
-    if (context.kind === "table") {
+    if (context.kind === "table" && this.dataStore.tableEnhancementMode === "lishuNative") {
       menu.addItem((item) => {
         item.setTitle("对当前表格美化");
         item.onClick(() => {
@@ -4237,6 +4568,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   private normalizeData(value: unknown): FeishuDocToolbarData {
     const saved = value && typeof value === "object" ? (value as Partial<FeishuDocToolbarData>) : {};
     const embeddedNativeTableEnhancer = this.normalizeEmbeddedNativeTableData(saved.embeddedNativeTableEnhancer);
+    const embeddedAdvancedTables = this.normalizeEmbeddedAdvancedTablesData(saved.embeddedAdvancedTables);
     const data: FeishuDocToolbarData = {
       ...DEFAULT_DATA,
       templateFolderPath: normalizeTemplateFolderPath(saved.templateFolderPath),
@@ -4268,6 +4600,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
           : this.resolveEnableBetaFeatures(saved),
       showOneNoteImport: saved.showOneNoteImport === true,
       showTableEnhancerEntrances: saved.showTableEnhancerEntrances === true,
+      tableEnhancementMode: this.normalizeTableEnhancementMode(saved.tableEnhancementMode, saved),
       showDraggerIntegrationStatus: saved.showDraggerIntegrationStatus !== false,
       embeddedModules: this.normalizeEmbeddedModulesData(saved.embeddedModules),
       settingsTabOrder: this.normalizeSettingsTabOrder(saved.settingsTabOrder),
@@ -4281,7 +4614,20 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     if (embeddedNativeTableEnhancer) {
       data.embeddedNativeTableEnhancer = embeddedNativeTableEnhancer;
     }
+    if (embeddedAdvancedTables) {
+      data.embeddedAdvancedTables = embeddedAdvancedTables;
+    }
     return data;
+  }
+
+  private normalizeTableEnhancementMode(value: unknown, saved?: Partial<FeishuDocToolbarData>): TableEnhancementMode {
+    if (value === "advancedTables" || value === "lishuNative" || value === "off") {
+      return value;
+    }
+    if (saved?.showTableEnhancerEntrances === true) {
+      return "lishuNative";
+    }
+    return DEFAULT_TABLE_ENHANCEMENT_MODE;
   }
 
   private resolveEnableBetaFeatures(saved: Partial<FeishuDocToolbarData>) {
@@ -4311,6 +4657,79 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   isTableEnhancerEntrancesVisible() {
     return false;
+  }
+
+  getTableEnhancementModeForManager() {
+    return this.dataStore.tableEnhancementMode;
+  }
+
+  getTableEnhancementModeLabel(mode = this.dataStore.tableEnhancementMode) {
+    return TABLE_ENHANCEMENT_MODE_LABELS[mode] ?? TABLE_ENHANCEMENT_MODE_LABELS[DEFAULT_TABLE_ENHANCEMENT_MODE];
+  }
+
+  async applyTableEnhancementModeAtStartup() {
+    const mode = this.dataStore.tableEnhancementMode;
+    if (mode === "advancedTables") {
+      this.stopEmbeddedNativeTableEnhancer();
+      await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+      await this.setManagedPluginEnabledIfInstalled(MARKDOWN_TABLE_PLUGIN_ID, false);
+      await this.startEmbeddedAdvancedTables();
+      return;
+    }
+
+    if (mode === "off") {
+      this.stopEmbeddedAdvancedTables();
+      this.stopEmbeddedNativeTableEnhancer();
+      await this.setManagedPluginEnabledIfInstalled(MARKDOWN_TABLE_PLUGIN_ID, false);
+      await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+      return;
+    }
+
+    this.stopEmbeddedAdvancedTables();
+    await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+    await this.setManagedPluginEnabledIfInstalled(MARKDOWN_TABLE_PLUGIN_ID, false);
+    await this.startEmbeddedNativeTableEnhancer();
+  }
+
+  async setTableEnhancementMode(mode: TableEnhancementMode) {
+    const nextMode = this.normalizeTableEnhancementMode(mode);
+    this.dataStore = {
+      ...this.dataStore,
+      tableEnhancementMode: nextMode,
+      showTableEnhancerEntrances: false,
+    };
+    await this.saveData(this.dataStore);
+
+    if (nextMode !== "lishuNative") {
+      this.stopEmbeddedNativeTableEnhancer();
+      await this.setManagedPluginEnabledIfInstalled(MARKDOWN_TABLE_PLUGIN_ID, false);
+    }
+
+    if (nextMode === "advancedTables") {
+      await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+      await this.startEmbeddedAdvancedTables();
+      new Notice("已切到成熟版表格增强");
+      return;
+    }
+
+    if (nextMode === "lishuNative") {
+      this.stopEmbeddedAdvancedTables();
+      await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+      await this.setManagedPluginEnabledIfInstalled(MARKDOWN_TABLE_PLUGIN_ID, false);
+      await this.startEmbeddedNativeTableEnhancer();
+      new Notice("已切到礼书版表格增强");
+      return;
+    }
+
+    this.stopEmbeddedAdvancedTables();
+    await this.setManagedPluginEnabledIfInstalled(ADVANCED_TABLES_PLUGIN_ID, false);
+    new Notice("已全关表格增强；历史数据已保留");
+  }
+
+  private async setManagedPluginEnabledIfInstalled(pluginId: string, enabled: boolean) {
+    const status = this.getManagedPluginStatus(pluginId);
+    if (!status.installed) return false;
+    return this.setManagedPluginEnabled(pluginId, enabled, { silent: true });
   }
 
   async setOneNoteRichPasteEnabled(value: boolean) {
@@ -4436,6 +4855,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   private normalizeEmbeddedNativeTableData(value: unknown) {
+    return value && typeof value === "object" ? value : undefined;
+  }
+
+  private normalizeEmbeddedAdvancedTablesData(value: unknown) {
     return value && typeof value === "object" ? value : undefined;
   }
 
@@ -4978,16 +5401,16 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     await this.autoUpdateInFlight;
   }
 
-  async setManagedPluginEnabled(pluginId: string, enabled: boolean) {
+  async setManagedPluginEnabled(pluginId: string, enabled: boolean, options: { silent?: boolean } = {}) {
     if (!/^[a-zA-Z0-9._-]+$/.test(pluginId)) return false;
     if (pluginId === "feishu-doc-toolbar") {
-      new Notice("Obsidian增强体验不能在自身设置页关闭");
+      if (!options.silent) new Notice("Obsidian增强体验不能在自身设置页关闭");
       return false;
     }
     const pluginManager = (this.app as any)?.plugins;
     const status = this.getManagedPluginStatus(pluginId);
     if (!status.installed) {
-      new Notice("这个插件未安装，不能切换启用状态");
+      if (!options.silent) new Notice("这个插件未安装，不能切换启用状态");
       return false;
     }
     if (status.enabled === enabled) {
@@ -5012,7 +5435,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     }
 
     await this.refreshManagedPluginStatus({ silent: true });
-    new Notice(`${enabled ? "已启用" : "已关闭"}：${pluginId}`);
+    if (!options.silent) new Notice(`${enabled ? "已启用" : "已关闭"}：${pluginId}`);
     return true;
   }
 
@@ -5079,15 +5502,111 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   getAdvancedTableSettingsForManager(): AdvancedTableSettings | null {
+    if (this.dataStore.tableEnhancementMode === "advancedTables") {
+      if (typeof this.embeddedAdvancedTables?.getAdvancedTableSettingsForManager === "function") {
+        return this.embeddedAdvancedTables.getAdvancedTableSettingsForManager() as AdvancedTableSettings;
+      }
+      return this.getStoredAdvancedTableSettingsForManager();
+    }
     const enhancer = this.getTableEnhancerPlugin();
     if (typeof enhancer?.getAdvancedTableSettingsForManager !== "function") return null;
     return enhancer.getAdvancedTableSettingsForManager() as AdvancedTableSettings;
   }
 
+  getAdvancedTableActionGroupsForManager(): AdvancedTableActionGroup[] {
+    return ADVANCED_TABLE_ACTION_GROUPS.map((group) => ({
+      ...group,
+      actions: group.actions.map((action) => ({ ...action })),
+    }));
+  }
+
+  async runAdvancedTableActionFromManager(actionId: AdvancedTableActionId) {
+    if (!ADVANCED_TABLE_ACTION_IDS.has(actionId)) {
+      new Notice("未知的成熟版表格操作");
+      return false;
+    }
+    if (this.dataStore.tableEnhancementMode !== "advancedTables") {
+      new Notice("请先切到成熟版表格增强");
+      return false;
+    }
+    if (!this.embeddedAdvancedTables) {
+      await this.startEmbeddedAdvancedTables();
+    }
+    if (typeof this.embeddedAdvancedTables?.runAdvancedTableActionForManager !== "function") {
+      new Notice("成熟版表格增强未接通");
+      return false;
+    }
+    return this.embeddedAdvancedTables.runAdvancedTableActionForManager(actionId);
+  }
+
+  private getStoredAdvancedTableSettingsForManager(): AdvancedTableSettings {
+    const source = this.normalizeEmbeddedAdvancedTablesData(this.dataStore.embeddedAdvancedTables) as
+      | Partial<AdvancedTableSettings>
+      | undefined;
+    return {
+      bindEnter: typeof source?.bindEnter === "boolean" ? source.bindEnter : DEFAULT_ADVANCED_TABLE_SETTINGS.bindEnter,
+      bindTab: typeof source?.bindTab === "boolean" ? source.bindTab : DEFAULT_ADVANCED_TABLE_SETTINGS.bindTab,
+      formatType: source?.formatType === "weak" ? "weak" : DEFAULT_ADVANCED_TABLE_SETTINGS.formatType,
+      showRibbonIcon:
+        typeof source?.showRibbonIcon === "boolean"
+          ? source.showRibbonIcon
+          : DEFAULT_ADVANCED_TABLE_SETTINGS.showRibbonIcon,
+      showFloatingControls:
+        typeof source?.showFloatingControls === "boolean"
+          ? source.showFloatingControls
+          : DEFAULT_ADVANCED_TABLE_SETTINGS.showFloatingControls,
+      showColorBlocks:
+        typeof source?.showColorBlocks === "boolean"
+          ? source.showColorBlocks
+          : DEFAULT_ADVANCED_TABLE_SETTINGS.showColorBlocks,
+      showZebraStripes:
+        typeof source?.showZebraStripes === "boolean"
+          ? source.showZebraStripes
+          : DEFAULT_ADVANCED_TABLE_SETTINGS.showZebraStripes,
+    };
+  }
+
+  private async saveStoredAdvancedTableSettingsFromManager(input: Partial<AdvancedTableSettings>) {
+    const current = this.getStoredAdvancedTableSettingsForManager();
+    const next: AdvancedTableSettings = {
+      ...current,
+      bindEnter: typeof input.bindEnter === "boolean" ? input.bindEnter : current.bindEnter,
+      bindTab: typeof input.bindTab === "boolean" ? input.bindTab : current.bindTab,
+      formatType: input.formatType === "weak" || input.formatType === "normal" ? input.formatType : current.formatType,
+      showRibbonIcon:
+        typeof input.showRibbonIcon === "boolean" ? input.showRibbonIcon : current.showRibbonIcon,
+      showFloatingControls:
+        typeof input.showFloatingControls === "boolean"
+          ? input.showFloatingControls
+          : current.showFloatingControls,
+      showColorBlocks:
+        typeof input.showColorBlocks === "boolean" ? input.showColorBlocks : current.showColorBlocks,
+      showZebraStripes:
+        typeof input.showZebraStripes === "boolean" ? input.showZebraStripes : current.showZebraStripes,
+    };
+    this.dataStore.embeddedAdvancedTables = {
+      ...(this.normalizeEmbeddedAdvancedTablesData(this.dataStore.embeddedAdvancedTables) ?? {}),
+      ...next,
+    };
+    await this.saveData(this.dataStore);
+    return next;
+  }
+
   async updateAdvancedTableSettingsFromManager(input: Partial<AdvancedTableSettings>) {
+    if (this.dataStore.tableEnhancementMode === "advancedTables") {
+      if (typeof this.embeddedAdvancedTables?.updateAdvancedTableSettingsFromManager !== "function") {
+        const result = await this.saveStoredAdvancedTableSettingsFromManager(input);
+        new Notice("已更新表格编辑体验");
+        return result;
+      }
+      const result = await this.embeddedAdvancedTables.updateAdvancedTableSettingsFromManager(input);
+      new Notice("已更新表格编辑体验");
+      return result as AdvancedTableSettings;
+    }
+
     const enhancer = this.getTableEnhancerPlugin();
     if (typeof enhancer?.updateAdvancedTableSettingsFromManager !== "function") {
-      new Notice("原生表格增强插件未接通");
+      new Notice("礼书版表格增强未接通");
       return null;
     }
     const result = await enhancer.updateAdvancedTableSettingsFromManager(input);
@@ -7672,15 +8191,18 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     updateGridSelection(1, 1);
     submenu.appendChild(grid);
 
-    const utilityItems = [
-      {
-        label: "插入彩色空表格",
-        onClick: async () => {
-          await this.executeCommandById(ENHANCED_TABLE_COMMANDS.insertNativeColorTemplate);
-          this.hidePopover();
-        },
-      },
-    ];
+    const utilityItems =
+      this.dataStore.tableEnhancementMode === "lishuNative"
+        ? [
+            {
+              label: "插入彩色空表格",
+              onClick: async () => {
+                await this.executeCommandById(ENHANCED_TABLE_COMMANDS.insertNativeColorTemplate);
+                this.hidePopover();
+              },
+            },
+          ]
+        : [];
     for (const item of utilityItems) {
       const button = document.createElement("button");
       button.type = "button";
@@ -8875,7 +9397,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
   }
 
   private getTableEnhancerPlugin() {
-    return this.getExternalTableEnhancerPlugin() ?? this.embeddedNativeTableEnhancer;
+    return this.embeddedNativeTableEnhancer;
   }
 
   private stripTemplateSystemLines(content: string) {

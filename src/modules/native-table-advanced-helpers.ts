@@ -58,7 +58,7 @@ export type AdvancedTableRunResult = {
 export const DEFAULT_ADVANCED_TABLE_SETTINGS: AdvancedTableSettings = {
   bindTab: true,
   bindEnter: true,
-  formatType: "normal",
+  formatType: "weak",
   showRibbonIcon: false,
 };
 
@@ -78,7 +78,7 @@ export function normalizeAdvancedTableSettings(input: Partial<AdvancedTableSetti
   return {
     bindTab: typeof input?.bindTab === "boolean" ? input.bindTab : DEFAULT_ADVANCED_TABLE_SETTINGS.bindTab,
     bindEnter: typeof input?.bindEnter === "boolean" ? input.bindEnter : DEFAULT_ADVANCED_TABLE_SETTINGS.bindEnter,
-    formatType: input?.formatType === "weak" ? "weak" : "normal",
+    formatType: input?.formatType === "normal" ? "normal" : "weak",
     showRibbonIcon:
       typeof input?.showRibbonIcon === "boolean"
         ? input.showRibbonIcon
