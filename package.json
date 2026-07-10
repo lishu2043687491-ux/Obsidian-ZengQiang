@@ -1,7 +1,7 @@
 {
   "name": "feishu-doc-toolbar",
-  "version": "1.16.5",
-  "description": "Obsidian Enhanced Experience — unified toolbar, templates, and utilities",
+  "version": "1.16.6",
+  "description": "Obsidian comprehensive enhancements for office workflows: toolbar, templates, native tables, media and cross-device utilities",
   "repository": {
     "type": "git",
     "url": "https://github.com/lishu/feishu-doc-toolbar.git"

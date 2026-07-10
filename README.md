@@ -1,53 +1,153 @@
-# ZengQiang Enhanced / 增强写作体验
+# ZengQiang Enhanced / Obsidian 增强办公体验
 
 **插件 id：** `feishu-doc-toolbar`  
-**仓库：** https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
+**中文定位：** Obsidian 增强办公体验工具。
 
-## 简介（中文）
+**适合人群：** 从飞书、企业微信、Notion、OneNote 等办公工具迁移到 Obsidian 的白领、业务负责人、知识工作者。
 
-浮动 **T 工具栏**、**模板库**、**内置表格增强**，以及多种实用工具（粘贴触发文件本地化、宽页面、复制成图、Claudian 跨设备存档、内嵌指向链接增强）。
+## 这款插件解决什么问题
 
-- **单插件即用**：原生表格增强已内置，**无需**再单独安装 `markdown-table-enhancer`。
-- 模板功能使用 vault 内 **`.templates/`**（可配置）；仓库 bundled 示例见 `examples/templates/`（不含个人模板库内容）。
-- 表格默认使用成熟版编辑体验：首行高亮与当前行高亮默认开启；斑马纹为可选模式，开启后不叠加当前行颜色。
-- 表格浮动控制面板会在点击表格正文或页面其他区域时自动收起，避免遮挡编辑。
+Obsidian 的优点是自由、稳定、数据归自己掌握；但刚从办公协作工具迁移过来时，常会觉得入口分散、表格不顺手、模板难管理、图片和附件需要反复整理。
 
----
+ZengQiang Enhanced 是一个 Obsidian 增强办公体验工具。它不是再造一个办公软件，而是把办公工具里已经验证过的高频体验，整理成一个统一入口：**一个 T 工具栏、一个设置中心、一套模板库和一组可按需启停的增强功能。**
 
-## 隐私与权限说明 / Privacy
+## 功能总览
 
-本插件**不会**将 vault 内容或系统信息上传到第三方服务器。下列能力仅在您主动使用相关功能时触发：
+### 1. 浮动 T 工具栏：把常用动作放在手边
 
-| 能力 | 用途 | 说明 |
-|------|------|------|
-| **Vault 枚举** | 模板库、文件本地化、内嵌链接解析 | 本地扫描路径；不上传 |
-| **Vault 读写** | 模板、存档、附件本地化、表格配色 | Obsidian API |
-| **剪贴板** | 复制成图、OneNote 粘贴 | 用户主动操作时 |
-| **设备标识** | Claudian 跨设备存档文件名 | 随机 `deviceId`，不读主机名 |
-| **内嵌 block-link-plus** | 段落/文件夹短链 | 请关闭独立 block-link-plus |
+- 在正文中打开浮动 T 工具栏，集中访问常用文字、段落、链接、文件、图片、日期、表格和模板动作。
+- 工具栏按钮可以拖动排序，也可以恢复默认顺序。
+- 轻量 Markdown 操作保留 Obsidian 原生写法，不改变你的笔记存储方式。
+- 设置中心按功能分成文字工具栏、原生表格增强、模板库管理、自研功能开关、第三方插件管理和视频总结 6 个页签。
 
-**Claudian（可选）：** 需已安装 [Claudian](https://github.com/YishenTu/claudian)。
+### 2. 模板库：更像办公工具一样管理模板
 
----
+- 模板集中存放在 vault 内的 `.templates/` 目录，目录名可以在设置中调整。
+- 支持根目录未分组模板、子文件夹分组、空分组展示、模板新建、编辑、移动、删除、恢复和永久删除。
+- 设置页、T 工具栏模板菜单、表格模板弹窗共享同一套模板数据，不需要维护多份模板。
+- 可以从当前表格或选中内容保存为模板，也可以从模板库快速插入。
+- 公开仓库只提供通用示例模板，不包含任何个人 vault 模板。
 
-## Requirements (English)
+### 3. 原生表格增强：单插件即可使用
 
-Single plugin — no companion required. Native table enhancement (colors, column width, row height, template library, OneNote native paste) is **built in**. Block short links are also built in; disable the standalone block-link-plus plugin if both are installed.
+无需再单独安装 `markdown-table-enhancer`。表格底层仍是普通 Markdown，增强层只改善编辑体验与显示效果。
 
-## Installation
+插件提供 3 种互斥模式：
 
-1. Download `main.js`, `manifest.json`, `styles.css` from the latest Release into `.obsidian/plugins/feishu-doc-toolbar/`
-2. Enable **ZengQiang Enhanced** in Obsidian settings
-3. No need to install `markdown-table-enhancer`; disable it if previously installed
+| 模式 | 适用场景 |
+| --- | --- |
+| **成熟版表格增强** | 默认模式。提供 Advanced Tables 风格的跳格、格式化、增删移动、排序、转置、公式和 CSV 等编辑动作，并附带礼书微增强的可视化控制。 |
+| **礼书版表格增强** | 需要历史表格能力时手动启用。支持表格配色、列宽、行高、整体比例、文字色、对齐、填充、模板和 OneNote 原生表格粘贴。 |
+| **全关表格增强** | 只保留 Markdown 表格，关闭所有增强接管；不会删除历史表格、笔记正文或历史配置。 |
+
+成熟版默认提供：
+
+- 首行高亮、当前行整行高亮；斑马纹是可选显示模式。
+- Tab / Shift+Tab / Enter 跳格与常用表格编辑动作。
+- 表格旁的「表」控制面板，以及复用复制成图能力的「图」入口。
+- 点击表格正文或页面其他区域时，浮动控制面板自动收起，避免遮挡编辑内容。
+- 视觉色块只通过显示层实现，不把无关标记写进普通 Markdown；启用和切换显示不会改写笔记正文。
+
+礼书版保留历史表格能力：
+
+- 表头、行列、文字颜色和常用配色方案。
+- 列宽、行高和整体比例的手动调节。
+- 表格模板、公式提示、自动填充、对齐和编辑排序。
+- 兼容历史 `nativeLayout` 数据，不覆盖已有单元格内容。
+
+### 4. OneNote 富文本粘贴：把迁移成本降下来
+
+在“礼书版表格增强”模式下，可以从 OneNote 复制富文本后使用「粘贴 OneNote」：
+
+- 转换为官方原生 Markdown 表格，而不是私有增强表格格式。
+- 保留加粗、链接和图片；图片可继续本地化为附件。
+- 支持表中表，将嵌套结构整理为可读的缩进文本和列表。
+- 无表头时根据结构推断并补齐可读表头。
+- 复杂样式仍可能需要人工复核；大批量归档建议使用独立的 OneNote 归档工具。
+
+### 5. 图片、附件与页面：减少手工整理
+
+- **文件自动本地化**：只在用户粘贴内容疑似包含远程图片、data 图片、OneNote/OneDrive 链接或旧附件格式时处理当前笔记，避免打开普通笔记时后台扫描。
+- 提供“立即处理当前笔记”和选择文件夹批量处理的手动兜底入口。
+- **全局宽页面**：让 Markdown 页面默认使用更宽的工作区，并提供状态栏一键切换。
+- **右键复制成图**：把 Canvas 卡片、表格、选区或整页复制为 PNG，便于发群、做汇报或归档。
+
+### 6. 段落、块和文件夹短链接
+
+内嵌指向链接增强，提供更短的段落链接与文件夹链接：
+
+- 段落/块链接可直接定位到笔记中的对应内容。
+- 文件夹链接可以在文件树中定位目标文件夹，并支持自定义高亮时长。
+- 文件夹链接使用短 id，不把很长的本地路径直接暴露在链接文本中。
+- 如果同时安装独立的 `block-link-plus`，请关闭独立插件，避免两个版本重复接管。
+
+### 7. Claudian 与跨设备工作流
+
+Claudian 相关能力是可选的，需要先安装并启用 Claudian：
+
+- **聊天记录同步**：将轻量会话存档到 vault，换设备后从 Claudian 历史入口打开并创建本机新线程继续聊天。
+- **候选排除规则**：自动补齐 `@` 文件候选排除规则，减少开发资料误进入日常对话候选。
+- **Agent 接入修复**：Claudian 更新后，可由用户点击按钮检测并重新接入本机 Cursor Agent 与 Codex CLI；执行前会备份，失败时给出修复提示。
+
+设备标识使用随机 `deviceId`，不读取主机名。
+
+### 8. 视频总结时间轴预览
+
+如果你的工作流会生成带时间轴的视频总结，可以在 Obsidian 内点击时间轴：
+
+- 在右侧栏预览视频或音频。
+- 支持在线媒体直链与本地媒体库切换，并沿用当前笔记选择的播放端。
+- 优先使用有声预览媒体；没有可控在线媒体时可回退到本地缓存。
+- 默认不使用容易在暂停或点击时跳回站外页面的 B 站 iframe。
+
+视频总结服务、Cookie、API Key、Agent token 和网页登录信息不属于插件公开配置；公开发行版不会携带个人服务地址或密钥。
+
+### 9. 可选的第三方工具托管
+
+插件设置中心还可以集中展示和管理一些成熟的外部工具：
+
+- 图片注释、标注、裁剪、对齐、缩放、粘贴重命名和批量处理。
+- Imgur、GitHub、Cloudflare R2、AWS S3、阿里云 OSS、腾讯云 COS 等图片上传方案。
+- 扫描未被 Markdown/Canvas 引用的孤立图片；删除前必须由用户确认。
+- Dragger 等第三方能力的启用状态与兼容情况。
+
+这些属于外部插件或测试入口，是否安装、启用、上传或删除，均由用户主动决定；总插件不会在后台自动上传或删除文件。
+
+## 隐私与权限说明
+
+本插件默认不会把 vault 内容或系统信息上传到第三方服务器。相关能力只在用户主动使用时触发：
+
+| 能力 | 用途 | 边界 |
+| --- | --- | --- |
+| Vault 枚举 | 模板、文件本地化、短链接解析 | 本地扫描路径，不上传 |
+| Vault 读写 | 模板、存档、附件本地化、表格显示数据 | 通过 Obsidian API |
+| 剪贴板 | 复制成图、OneNote 粘贴 | 用户主动复制或粘贴时 |
+| 外部插件/服务 | 图片上传、Claudian、视频总结 | 仅在用户安装、配置并主动使用后发生 |
+| 设备标识 | Claudian 跨设备存档文件名 | 随机 `deviceId`，不读主机名 |
+
+公开 Release 只包含 `main.js`、`manifest.json` 和 `styles.css`，不包含 `data.json`、个人模板、笔记、缓存、备份或本地绝对路径。
+
+## 安装
+
+### 从 Release 安装
+
+1. 从最新 Release 下载 `main.js`、`manifest.json`、`styles.css`。
+2. 放入 vault 的 `.obsidian/plugins/feishu-doc-toolbar/` 目录。
+3. 在 Obsidian 设置中启用 **ZengQiang Enhanced**。
+4. 不需要再安装 `markdown-table-enhancer`；如果以前安装过，请关闭独立插件。
+
+### 从源码构建
 
 ```bash
-npm install && npm run build:oss
+npm install
+npm run build:oss
+npm run test:smoke
 ```
 
-## Example templates
+## 公开发行版的边界
 
-Bundled starters in [`examples/templates/`](examples/templates/) — copy into your vault `.templates/` folder.
+这是一个以“综合增强使用体验”为目标的个人开源项目。部分个人化工作流（例如个人目标管理、私有服务地址和本地知识库规则）只存在于日常版本，不会进入公开发行包。外部服务相关功能请按自己的隐私要求配置。
 
 ## License
 
-本发行版包含并修改了 GPL-3.0 许可的表格编辑器代码，因此整体以 **GPL-3.0-only** 发布；完整文本见 [`src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt`](src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt)。
+本发行版包含并修改了 GPL-3.0 许可的表格编辑器代码，因此发行版整体按 **GPL-3.0-only** 发布。完整文本见 [`src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt`](src/modules/advanced-tables-embedded/LICENSE-GPL-3.0.txt)。

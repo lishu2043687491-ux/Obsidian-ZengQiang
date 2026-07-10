@@ -1,9 +1,9 @@
 {
   "id": "feishu-doc-toolbar",
   "name": "ZengQiang Enhanced",
-  "version": "1.16.5",
+  "version": "1.16.6",
   "minAppVersion": "1.5.0",
-  "description": "浮动工具栏、模板库、表格增强模式切换（成熟版 / 礼书版 / 全关）、Claudian 跨设备续聊、粘贴触发文件本地化等.",
+  "description": "Obsidian 增强办公体验工具，面向飞书、企微等办公工具迁移用户：T 工具栏、模板库、原生表格、OneNote 粘贴、文件本地化、宽页面、复制成图、短链接、Claudian 跨设备与视频时间轴预览。",
   "author": "lishu",
   "isDesktopOnly": false
 }
