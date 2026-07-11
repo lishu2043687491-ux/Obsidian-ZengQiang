@@ -1,24 +1,34 @@
-# ZengQiang Enhanced / Obsidian 增强办公体验
+# ZengQiang Enhanced
 
 **插件 id：** `feishu-doc-toolbar`  
-**中文定位：** Obsidian 增强办公体验工具。
+**中文定位：** 增强办公体验工具。
 
-**适合人群：** 从飞书、企业微信、Notion、OneNote 等办公工具迁移到 Obsidian 的白领、业务负责人、知识工作者。
+## Overview (English)
+
+ZengQiang Enhanced is a productivity workspace plugin for people moving from Feishu, WeCom, Notion, and OneNote to Obsidian. It keeps notes in standard Markdown while bringing common work actions into a single, task-based settings center.
+
+It includes a floating T toolbar, template management, native table workflows, OneNote rich-paste helpers, attachment localization, wide pages, copy-as-image, short links, and optional integrations such as Claudian and video timeline preview. Sensitive data stays local: releases contain only `main.js`, `manifest.json`, and `styles.css`; they never contain personal notes, templates, settings, caches, backups, absolute paths, or credentials.
+
+The plugin reads or writes vault files only for user-triggered features such as templates, attachment localization, short links, and local archives. Clipboard access is used only when you copy or paste. External services and managed third-party plugins require your own installation, configuration, and explicit action.
+
+## 简介（中文）
+
+**适合人群：** 从飞书、企业微信、Notion、OneNote 等办公工具迁移到 Obsidian 的知识工作者。
 
 ## 这款插件解决什么问题
 
 Obsidian 的优点是自由、稳定、数据归自己掌握；但刚从办公协作工具迁移过来时，常会觉得入口分散、表格不顺手、模板难管理、图片和附件需要反复整理。
 
-ZengQiang Enhanced 是一个 Obsidian 增强办公体验工具。它不是再造一个办公软件，而是把办公工具里已经验证过的高频体验，整理成一个统一入口：**一个 T 工具栏、一个设置中心、一套模板库和一组可按需启停的增强功能。**
+ZengQiang Enhanced 不是再造一个办公软件，而是把办公工具里已经验证过的高频体验，整理成一个统一入口：**一个 T 工具栏、一个按任务分类的设置中心、一套模板库和一组可按需启停的增强功能。**
 
 ## 功能总览
 
-### 1. 浮动 T 工具栏：把常用动作放在手边
+### 1. 按任务组织设置与浮动 T 工具栏
 
 - 在正文中打开浮动 T 工具栏，集中访问常用文字、段落、链接、文件、图片、日期、表格和模板动作。
 - 工具栏按钮可以拖动排序，也可以恢复默认顺序。
 - 轻量 Markdown 操作保留 Obsidian 原生写法，不改变你的笔记存储方式。
-- 设置中心按功能分成文字工具栏、原生表格增强、模板库管理、自研功能开关、第三方插件管理和视频总结 6 个页签。
+- 设置中心按实际使用场景组织为：编辑与排版、知识组织、内容与素材、自动化与 AI、第三方插件管理；首页提供功能地图，后续功能先归类再配置。
 
 ### 2. 模板库：更像办公工具一样管理模板
 

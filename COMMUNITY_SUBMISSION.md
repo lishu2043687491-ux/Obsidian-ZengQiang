@@ -1,4 +1,4 @@
-# Obsidian 社区插件提交清单（目标版本 1.16.6）
+# Obsidian 社区插件提交清单（目标版本 1.17.0）
 
 仓库：https://github.com/lishu2043687491-ux/Obsidian-ZengQiang
 
@@ -8,24 +8,26 @@
 |------|-----|
 | `id` | `feishu-doc-toolbar` |
 | `name` | `ZengQiang Enhanced` |
-| `version` | `1.16.6`（与 Release tag 一致） |
+| `version` | `1.17.0`（与 Release tag 一致） |
 
-> 审核边界：`manifest.json` 的插件名称保持英文 `ZengQiang Enhanced`；“Obsidian 增强办公体验”只作为中文定位，出现在 README、manifest description 和插件详情介绍中，不作为上传名称。
+> 审核边界：`manifest.json` 的插件名称保持英文 `ZengQiang Enhanced`；描述不包含 “Obsidian”，并以英文句点结尾。中文定位只出现在 README 和插件详情介绍中，不作为上传名称。
 
-## 本版重点（1.16.6）
+## 本版重点（1.17.0）
 
-- 中文定位明确为“Obsidian 增强办公体验工具”，面向飞书、企微等办公工具迁移用户。
-- README 详细补充 T 工具栏、模板库、表格三模式、OneNote 粘贴、文件本地化、宽页面、复制成图和短链接。
-- README 详细补充 Claudian 跨设备工作流、视频时间轴预览和可选第三方工具托管。
+- 设置中心改为按使用场景分类：首页功能地图、编辑与排版、知识组织、内容与素材、自动化与 AI、第三方插件管理。
+- README 首屏补充完整英文介绍，并保留中文使用说明、权限边界和安装步骤。
+- `manifest.description` 使用准确的英文定位，符合社区自动审核规则。
+- 根目录提供完整 GPL-3.0-only 许可证文本，便于社区和用户识别。
 - 明确隐私边界：公开包不含 vault 内容、个人模板、配置、缓存、备份、本地路径或密钥。
-- 保留 1.16.5 的表格交互：点击其他区域自动收起，首行/当前行高亮，斑马纹可选。
 - 工具：`audit:privacy`、`package:oss`、`publish:oss`
 
 ## 官方审查对照
 
 | 类别 | 项 | 状态 |
 |------|-----|------|
-| Manifest | description 以 `.` `!` `?` 结尾 | 已修复 |
+| Manifest | description 不含 `Obsidian` 且以 `.` `!` `?` 结尾 | 已修复 |
+| License | 根目录完整 GPL-3.0-only 许可证 | 已修复 |
+| README | 包含完整英文介绍 | 已修复 |
 | Behavior | 无 os.hostname / 系统身份 | 已修复（随机 deviceId） |
 | Behavior | 无 localStorage stub | 已修复 |
 | Behavior | Vault Read/Write | Pass（保持） |
@@ -33,7 +35,7 @@
 | Releases | artifact attestation | 可选，未做 |
 | CSS lint | text-decoration / :has 抽样 | 抽样修复 |
 | CSS lint | 大量 !important（BLP/表格） | 部分保留，非阻塞 |
-| Dependencies | 无漏洞 | Pass（保持） |
+| Dependencies | `lodash` 依赖提示 | 已记录，非本版功能改动范围 |
 
 ## Release 附件
 

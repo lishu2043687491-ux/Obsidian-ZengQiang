@@ -1,6 +1,6 @@
 {
   "name": "feishu-doc-toolbar",
-  "version": "1.16.6",
+  "version": "1.17.0",
   "description": "Obsidian comprehensive enhancements for office workflows: toolbar, templates, native tables, media and cross-device utilities",
   "repository": {
     "type": "git",
@@ -22,11 +22,12 @@
     "build:video-timestamp-preview-test": "esbuild src/modules/video-timestamp-preview-helpers.ts --bundle --platform=node --format=cjs --target=es2020 --outfile=tests/video-timestamp-preview-helpers-bundle.cjs",
     "build:advanced-table-test": "esbuild src/modules/native-table-advanced-helpers.ts --bundle --platform=node --format=cjs --target=es2020 --outfile=tests/advanced-table-helpers-bundle.cjs",
     "test:iteration-guardrails": "node ./tests/iteration-guardrails.cjs",
+    "test:settings-information-architecture": "node ./tests/settings-information-architecture.cjs",
     "test:native-table-selection-style": "node ./tests/native-table-selection-style.cjs",
     "test:native-table-regression": "npm run test:native-table-selection-style && node ./tests/native-table-markerless-regression.cjs",
     "test:advanced-tables-parity": "npm run build:advanced-table-test && node ./tests/advanced-tables-parity.cjs",
     "test:advanced-tables-visual-controls": "npm run build && node ./tests/advanced-tables-visual-controls.cjs",
-    "test:smoke": "npm run build && npm run build:claudian-test && npm run build:claudian-mention-guard-test && npm run build:auto-updater-test && npm run build:goal-progress-test && npm run build:native-table-video-test && npm run build:video-timestamp-preview-test && npm run build:advanced-table-test && npm run test:iteration-guardrails && node ./tests/advanced-tables-visual-controls.cjs && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && NODE_PATH=./test-support node ./tests/claudian-cross-device-bridge.cjs && node ./tests/claudian-mention-exclude-guard.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater-integration.cjs && node ./tests/goal-progress-sync.cjs && node ./tests/native-table-video-helpers.cjs && node ./tests/video-timestamp-preview-helpers.cjs && npm run test:native-table-regression && node ./tests/advanced-tables-parity.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs",
+    "test:smoke": "npm run build && npm run build:claudian-test && npm run build:claudian-mention-guard-test && npm run build:auto-updater-test && npm run build:goal-progress-test && npm run build:native-table-video-test && npm run build:video-timestamp-preview-test && npm run build:advanced-table-test && npm run test:iteration-guardrails && npm run test:settings-information-architecture && node ./tests/advanced-tables-visual-controls.cjs && NODE_PATH=./test-support node ./tests/block-link-plus-host.cjs && NODE_PATH=./test-support node ./tests/smoke.js && NODE_PATH=./test-support node ./tests/claudian-cross-device-bridge.cjs && node ./tests/claudian-mention-exclude-guard.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater.cjs && NODE_PATH=./test-support node ./tests/managed-plugin-auto-updater-integration.cjs && node ./tests/goal-progress-sync.cjs && node ./tests/native-table-video-helpers.cjs && node ./tests/video-timestamp-preview-helpers.cjs && npm run test:native-table-regression && node ./tests/advanced-tables-parity.cjs && node ./tests/embedded-blp-boot.cjs && node ./tests/embedded-blp-obsidian-parity.cjs && node ./tests/embedded-blp-view-registry.cjs && node ./tests/embedded-blp-editor-isolation.cjs && node ./tests/embedded-blp-bundle-only.cjs",
     "community:check-releases": "node scripts/trigger-community-release-check.mjs",
     "community:login": "OBSIDIAN_COMMUNITY_HEADED=1 node scripts/trigger-community-release-check.mjs",
     "publish:oss": "bash scripts/publish-oss.sh",

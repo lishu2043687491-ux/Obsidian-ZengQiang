@@ -39,8 +39,8 @@ assert.equal(hasVideoSummarySeekLink("[00:00](video-summary://seek?start=0)"), t
 assert.equal(hasVideoSummarySeekLink("[00:00](https://example.com)"), false);
 
 assert.equal(
-  absolutePathToFileUrl("/tmp/Videos/测试 视频.mp4"),
-  "file:///tmp/Videos/%E6%B5%8B%E8%AF%95%20%E8%A7%86%E9%A2%91.mp4"
+  absolutePathToFileUrl("/Users/mac/Videos/测试 视频.mp4"),
+  "file:///Users/mac/Videos/%E6%B5%8B%E8%AF%95%20%E8%A7%86%E9%A2%91.mp4"
 );
 assert.equal(mediaTypeFromPath("/tmp/a.mp4"), "video");
 assert.equal(mediaTypeFromPath("/tmp/a.mp3"), "audio");

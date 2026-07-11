@@ -96,6 +96,20 @@ const BLOCK_LINK_PLUS_MANIFEST = {
 
 type BlockLinkPlusConstructor = new (app: App, manifest: Plugin["manifest"]) => Plugin;
 
+type FdtbBlpLangStore = Map<string, string>;
+
+declare global {
+  interface Window {
+    __FDTB_BLP_LANG__?: FdtbBlpLangStore;
+  }
+}
+
+function ensureBundleRuntimeGlobals(): void {
+  if (typeof window === "undefined") return;
+  if (window.__FDTB_BLP_LANG__) return;
+  window.__FDTB_BLP_LANG__ = new Map();
+}
+
 function obsidianRequire(id: string): unknown {
   ensureObsidianRequireBinding();
   return createObsidianModuleResolver()(id);
@@ -177,6 +191,7 @@ function primeObsidianRuntimeModules(): void {
 }
 
 function getBlockLinkPlusClass(): BlockLinkPlusConstructor {
+  ensureBundleRuntimeGlobals();
   ensureObsidianRequireBinding();
   primeObsidianRuntimeModules();
   // 延迟加载；esbuild 将 bundle 内联为 require_block_link_plus_bundle()（不可外置兄弟文件）

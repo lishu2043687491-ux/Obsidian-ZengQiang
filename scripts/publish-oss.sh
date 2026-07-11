@@ -3,17 +3,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="${SRC_PLUGIN_DIR:-}"
+SRC="${SRC_PLUGIN_DIR:-${SRC_VAULT:-$ROOT}}"
 REPO="${GITHUB_REPO_DIR:-$ROOT}"
 GITHUB_REPO="${GITHUB_REPO:-lishu2043687491-ux/Obsidian-ZengQiang}"
 SKIP_COMMUNITY="${SKIP_COMMUNITY:-0}"
 
-export PATH="/usr/bin:/bin:/usr/local/bin:$PATH"
-
-if [[ -z "$SRC" ]]; then
-  echo "请通过 SRC_PLUGIN_DIR 指定已审查的插件源码目录"
-  exit 1
-fi
+export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/local/bin:$PATH"
 
 VERSION="$(node -p "require('$SRC/manifest.json').version")"
 NOTES_FILE="$REPO/RELEASE_NOTES_${VERSION}.md"
@@ -83,8 +78,8 @@ cd "$REPO"
 if git diff --quiet && git diff --cached --quiet; then
   echo "源码无变更，跳过 commit"
 else
-  git add manifest.json package.json package-lock.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md" COMMUNITY_SUBMISSION.md 2>/dev/null || \
-  git add manifest.json package.json package-lock.json styles.css src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md"
+  git add manifest.json package.json package-lock.json styles.css README.md LICENSE src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md" COMMUNITY_SUBMISSION.md 2>/dev/null || \
+  git add manifest.json package.json package-lock.json styles.css README.md LICENSE src/ scripts/ tests/ "RELEASE_NOTES_${VERSION}.md"
   CHECK_GIT=1 node scripts/audit-privacy.mjs
   git commit -m "$(cat <<EOF
 Release ${VERSION}: OSS publish.

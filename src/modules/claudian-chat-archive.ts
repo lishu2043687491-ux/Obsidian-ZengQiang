@@ -12,6 +12,7 @@ import {
   CLAUDIAN_META_DIR,
   DEFAULT_CLAUDIAN_ARCHIVE_SETTINGS,
   buildArchiveRecord,
+  createLocalDeviceId,
   getArchiveRelativePath,
   normalizeClaudianArchiveSettings,
   parseSessionMeta,
@@ -47,6 +48,9 @@ export class ClaudianChatArchiveRunner {
   async start() {
     const saved = await this.host.loadData();
     this.settings = normalizeClaudianArchiveSettings(saved);
+    if (!this.settings.deviceId.trim()) {
+      await this.updateSettings({ deviceId: createLocalDeviceId() });
+    }
     if (!this.settings.enabled) {
       await this.updateSettings({ enabled: true });
     }
@@ -480,7 +484,7 @@ export function renderClaudianChatArchiveSettings(containerEl: HTMLElement, onRe
 
   new Setting(body)
     .setName("本机设备标识")
-    .setDesc("留空则使用系统主机名")
+    .setDesc("用于跨设备存档文件名；留空会在首次启用时自动生成，不读取主机名")
     .addText((text) =>
       text.setValue(s.deviceId).onChange(async (value) => {
         await runner.updateSettings({ deviceId: value.trim() });

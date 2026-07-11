@@ -49,19 +49,19 @@ const agentGuide = fs.readFileSync(path.join(pluginRoot, "AGENTS.md"), "utf8");
   );
 });
 
+const gitignore = readVault(".gitignore");
+[
+  ".obsidian/plugins/*/data.json",
+  ".obsidian/plugins/*/file-versions",
+  ".obsidian/plugins/*/*.bak*",
+  ".obsidian/plugins/*/**/*.bak*",
+  "开发插件（Obsidian优化）/0️⃣系统信息库/**/*.bak*",
+].forEach((needle) => {
+  assert(gitignore.includes(needle), `.gitignore must ignore ${needle}`);
+});
+
 const gitDir = path.join(vaultRoot, ".dev-git");
 if (fs.existsSync(gitDir)) {
-  const gitignore = readVault(".gitignore");
-  [
-    ".obsidian/plugins/*/data.json",
-    ".obsidian/plugins/*/file-versions",
-    ".obsidian/plugins/*/*.bak*",
-    ".obsidian/plugins/*/**/*.bak*",
-    "开发插件（Obsidian优化）/0️⃣系统信息库/**/*.bak*",
-  ].forEach((needle) => {
-    assert(gitignore.includes(needle), `.gitignore must ignore ${needle}`);
-  });
-
   const trackedRuntimePatterns = [
     ".obsidian/plugins/feishu-doc-toolbar/file-versions",
     ".obsidian/plugins/feishu-doc-toolbar/data.json.bak-*",

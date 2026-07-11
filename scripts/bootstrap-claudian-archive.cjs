@@ -4,12 +4,11 @@
  */
 const fs = require("fs");
 const path = require("path");
-const vaultArg = process.argv[2];
-if (!vaultArg) {
-  console.error("请传入目标 vault 路径：node scripts/bootstrap-claudian-archive.cjs <vault-path>");
-  process.exit(1);
-}
-const VAULT = path.resolve(vaultArg);
+const os = require("os");
+
+const VAULT =
+  process.argv[2] ||
+  path.join(os.homedir(), "Library/Mobile Documents/com~apple~CloudDocs/近期工作");
 
 const bundlePath = path.join(__dirname, "../tests/claudian-test-bundle.cjs");
 const {

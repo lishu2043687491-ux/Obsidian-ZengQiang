@@ -561,6 +561,20 @@ const OWN_MODULE_DESCRIPTORS: OwnModuleDescriptor[] = [
   },
 ];
 
+const OWN_MODULE_IDS_BY_AREA = {
+  editing: ["global-wide-page"],
+  knowledge: ["block-link-plus"],
+  content: [
+    "file-auto-localizer",
+    "onenote-rich-paste",
+    "imagen-image-manager",
+    "image-cloud-upload",
+    "image-orphan-cleanup",
+    "right-click-copy-as-image",
+  ],
+  automation: ["claudian-chat-archive", "claudian-agent-bridge", "video-timestamp-preview"],
+} as const;
+
 type NativeColorPalette = {
   header: string;
   headerText: string;
@@ -624,13 +638,100 @@ const DEFAULT_ADVANCED_TABLE_SETTINGS: AdvancedTableSettings = {
   showZebraStripes: false,
 };
 
-const EXPERIENCE_SETTINGS_TABS: Array<{ id: ExperienceSettingsTabId; label: string }> = [
-  { id: "toolbar", label: "文字工具栏" },
-  { id: "nativeTable", label: "原生表格增强" },
-  { id: "templateLibrary", label: "模板库管理" },
-  { id: "modules", label: "自研功能开关" },
-  { id: "plugins", label: "第三方插件管理" },
-  { id: "videoSummary", label: "视频总结" },
+type ExperienceSettingsTabDefinition = {
+  id: ExperienceSettingsTabId;
+  label: string;
+  icon: string;
+  description: string;
+  emphasized?: boolean;
+};
+
+/**
+ * 保留历史 id，只重组用户看到的功能分类。
+ * 这样现有 settingsTabOrder 不需要迁移，更不会在启动时改写 data.json。
+ */
+const EXPERIENCE_SETTINGS_TABS: ExperienceSettingsTabDefinition[] = [
+  {
+    id: "toolbar",
+    label: "功能总览",
+    icon: "layout-dashboard",
+    description: "看清插件能做什么，并快速进入对应分类",
+  },
+  {
+    id: "nativeTable",
+    label: "编辑与排版",
+    icon: "pilcrow",
+    description: "T 工具栏、表格增强和页面显示",
+  },
+  {
+    id: "templateLibrary",
+    label: "知识组织",
+    icon: "library",
+    description: "模板复用、段落链接与文件夹定位",
+  },
+  {
+    id: "modules",
+    label: "内容与素材",
+    icon: "images",
+    description: "OneNote 导入、图片处理、本地化与复制成图",
+  },
+  {
+    id: "plugins",
+    label: "第三方插件管理",
+    icon: "plug",
+    description: "中文名、用途备注、分类、启停与更新",
+    emphasized: true,
+  },
+  {
+    id: "videoSummary",
+    label: "自动化与 AI",
+    icon: "sparkles",
+    description: "视频总结、时间轴预览与 Claudian 协作",
+  },
+];
+
+const OVERVIEW_FEATURE_AREAS: Array<{
+  tabId: Exclude<ExperienceSettingsTabId, "toolbar">;
+  title: string;
+  icon: string;
+  description: string;
+  features: string[];
+}> = [
+  {
+    tabId: "nativeTable",
+    title: "编辑与排版",
+    icon: "pilcrow",
+    description: "把高频编辑动作放在手边，同时保留 Markdown 底层。",
+    features: ["T 工具栏", "表格增强", "全局宽页面"],
+  },
+  {
+    tabId: "templateLibrary",
+    title: "知识组织",
+    icon: "library",
+    description: "把可复用结构和笔记之间的连接收到一处。",
+    features: ["模板库", "段落链接", "文件夹定位"],
+  },
+  {
+    tabId: "modules",
+    title: "内容与素材",
+    icon: "images",
+    description: "处理外部内容、图片和需要再输出的素材。",
+    features: ["OneNote 粘贴", "文件本地化", "图片管理", "复制成图"],
+  },
+  {
+    tabId: "videoSummary",
+    title: "自动化与 AI",
+    icon: "sparkles",
+    description: "管理需要服务、Skill 或 AI 插件配合的工作流。",
+    features: ["视频总结", "时间轴预览", "Claudian 管理"],
+  },
+  {
+    tabId: "plugins",
+    title: "第三方插件管理",
+    icon: "plug",
+    description: "把英文插件变成自己记得住、找得到的中文工具箱。",
+    features: ["中文名", "用途备注", "分类", "启停与更新"],
+  },
 ];
 
 const HOSTED_PLUGIN_DESCRIPTIONS: Record<string, string> = {
@@ -1004,48 +1105,232 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     const header = document.createElement("div");
     header.className = "fdtb-settings-header";
+    const heading = document.createElement("div");
+    heading.className = "fdtb-settings-heading";
+    const kicker = document.createElement("div");
+    kicker.className = "fdtb-settings-kicker";
+    kicker.textContent = "综合增强办公体验";
     const title = document.createElement("h2");
     title.textContent = "Obsidian增强体验";
+    const desc = document.createElement("p");
+    desc.className = "fdtb-settings-page-desc";
+    desc.textContent = "按使用场景集中管理编辑、素材、知识组织、自动化和第三方插件。";
+    heading.append(kicker, title, desc);
     const version = document.createElement("span");
     version.className = "fdtb-settings-version-badge";
     version.textContent = `版本 ${this.plugin.getPluginVersion()}`;
-    header.append(title, version);
+    header.append(heading, version);
     containerEl.appendChild(header);
-
-    const desc = document.createElement("p");
-    desc.className = "fdtb-settings-page-desc";
-    desc.textContent = "集中管理已接入能力；第三方插件只做状态托管，不自动启停。";
-    containerEl.appendChild(desc);
 
     this.renderSettingsTabs(containerEl);
 
     if (this.activeTab === "toolbar") {
-      this.renderToolbarOrderSection(containerEl);
+      this.renderFeatureOverview(containerEl);
       return;
     }
 
     if (this.activeTab === "nativeTable") {
-      this.renderTableEnhancerSection(containerEl);
+      this.renderEditingAndLayoutSection(containerEl);
       return;
     }
 
     if (this.activeTab === "templateLibrary") {
-      void this.renderTemplateLibrarySection(containerEl);
+      void this.renderKnowledgeOrganizationSection(containerEl);
       return;
     }
 
     if (this.activeTab === "modules") {
-      this.renderOwnModulesSection(containerEl);
+      this.renderContentAndAssetsSection(containerEl);
       return;
     }
 
     if (this.activeTab === "videoSummary") {
-      this.renderVideoSummarySection(containerEl);
+      this.renderAutomationAndAISection(containerEl);
       return;
     }
 
+    this.renderThirdPartyPluginsSection(containerEl);
+  }
+
+  private renderFeatureOverview(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "功能总览",
+      "这里是插件的功能地图。以后新增功能先归入使用场景，再进入对应页面设置，不再按“自研 / 第三方”混在一起。",
+      "layout-dashboard"
+    );
+
+    const stats = document.createElement("div");
+    stats.className = "fdtb-overview-stats";
+    const statItems = [
+      { value: String(EXPERIENCE_SETTINGS_TABS.length), label: "一级页面" },
+      { value: String(OWN_MODULE_DESCRIPTORS.length), label: "功能项" },
+      { value: String(this.plugin.getHostedPluginItems().length), label: "已纳管插件" },
+    ];
+    for (const item of statItems) {
+      const stat = document.createElement("div");
+      stat.className = "fdtb-overview-stat";
+      const value = document.createElement("strong");
+      value.textContent = item.value;
+      const label = document.createElement("span");
+      label.textContent = item.label;
+      stat.append(value, label);
+      stats.appendChild(stat);
+    }
+    containerEl.appendChild(stats);
+
+    const principle = document.createElement("div");
+    principle.className = "fdtb-overview-principle";
+    const principleIcon = document.createElement("span");
+    principleIcon.className = "fdtb-overview-principle-icon";
+    setIcon(principleIcon, "route");
+    const principleText = document.createElement("span");
+    principleText.textContent = "分类原则：用户要完成什么，功能就放到哪里；来源与稳定状态改用标签表达。";
+    principle.append(principleIcon, principleText);
+    containerEl.appendChild(principle);
+
+    const grid = document.createElement("div");
+    grid.className = "fdtb-overview-grid";
+    for (const area of OVERVIEW_FEATURE_AREAS) {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "fdtb-overview-card";
+      if (area.tabId === "plugins") card.classList.add("is-emphasized");
+
+      const top = document.createElement("div");
+      top.className = "fdtb-overview-card-top";
+      const icon = document.createElement("span");
+      icon.className = "fdtb-overview-card-icon";
+      setIcon(icon, area.icon);
+      const titleWrap = document.createElement("div");
+      titleWrap.className = "fdtb-overview-card-heading";
+      const title = document.createElement("strong");
+      title.textContent = area.title;
+      const cardDesc = document.createElement("span");
+      cardDesc.textContent = area.description;
+      titleWrap.append(title, cardDesc);
+      top.append(icon, titleWrap);
+
+      const chips = document.createElement("div");
+      chips.className = "fdtb-overview-card-chips";
+      for (const feature of area.features) {
+        const chip = document.createElement("span");
+        chip.textContent = feature;
+        chips.appendChild(chip);
+      }
+
+      const action = document.createElement("span");
+      action.className = "fdtb-overview-card-action";
+      action.textContent = "进入设置";
+      const arrow = document.createElement("span");
+      setIcon(arrow, "arrow-right");
+      action.appendChild(arrow);
+
+      card.append(top, chips, action);
+      card.addEventListener("click", () => {
+        this.activeTab = area.tabId;
+        this.display();
+      });
+      grid.appendChild(card);
+    }
+    containerEl.appendChild(grid);
+  }
+
+  private renderEditingAndLayoutSection(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "编辑与排版",
+      "管理写作时直接触达的工具：工具栏顺序、表格编辑体验与页面显示。",
+      "pilcrow"
+    );
+    this.renderToolbarOrderSection(containerEl);
+    this.appendSectionTitle(containerEl, "表格增强");
+    this.renderTableEnhancerSection(containerEl);
+    this.renderOwnModuleGroup(
+      containerEl,
+      "页面显示",
+      "只调整阅读与编辑时的页面体验，不改笔记内容。",
+      OWN_MODULE_IDS_BY_AREA.editing
+    );
+    this.renderExperimentalFeaturesSection(containerEl);
+  }
+
+  private async renderKnowledgeOrganizationSection(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "知识组织",
+      "管理可重复使用的模板，以及笔记、段落和文件夹之间的连接。",
+      "library"
+    );
+    await this.renderTemplateLibrarySection(containerEl);
+    this.renderOwnModuleGroup(
+      containerEl,
+      "连接与定位",
+      "把知识块之间的关系做成可稳定复用的链接。",
+      OWN_MODULE_IDS_BY_AREA.knowledge
+    );
+  }
+
+  private renderContentAndAssetsSection(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "内容与素材",
+      "集中处理从外部进来的内容、图片与需要再输出的素材。",
+      "images"
+    );
+    this.renderOwnModuleGroup(
+      containerEl,
+      "采集、整理与输出",
+      "点开卡片查看细项；涉及上传或删除的功能始终由你主动触发。",
+      OWN_MODULE_IDS_BY_AREA.content
+    );
+  }
+
+  private renderAutomationAndAISection(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "自动化与 AI",
+      "管理需要外部服务、Skill 或 AI 插件配合的工作流。",
+      "sparkles"
+    );
+    this.renderOwnModuleGroup(
+      containerEl,
+      "AI 协作与预览",
+      "Claudian 会话同步、Agent 接入修复与视频时间轴预览。",
+      OWN_MODULE_IDS_BY_AREA.automation
+    );
+    this.renderVideoSummarySection(containerEl);
+  }
+
+  private renderThirdPartyPluginsSection(containerEl: HTMLElement) {
+    this.appendPageLead(
+      containerEl,
+      "第三方插件管理",
+      "这是独立的一级页面。优先给英文插件填中文名和用途备注，以后就能按自己的记忆方式找到它们。",
+      "plug"
+    );
     this.renderPluginHostSection(containerEl);
     this.renderDraggerSection(containerEl);
+  }
+
+  private appendPageLead(containerEl: HTMLElement, titleText: string, descText: string, iconName: string) {
+    const lead = document.createElement("div");
+    lead.className = "fdtb-settings-page-lead";
+    const icon = document.createElement("span");
+    icon.className = "fdtb-settings-page-lead-icon";
+    setIcon(icon, iconName);
+    const content = document.createElement("div");
+    content.className = "fdtb-settings-page-lead-main";
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "fdtb-settings-page-lead-eyebrow";
+    eyebrow.textContent = "当前分类";
+    const title = document.createElement("h3");
+    title.textContent = titleText;
+    const desc = document.createElement("p");
+    desc.textContent = descText;
+    content.append(eyebrow, title, desc);
+    lead.append(icon, content);
+    containerEl.appendChild(lead);
   }
 
   private renderVideoSummarySection(containerEl: HTMLElement) {
@@ -1395,30 +1680,40 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     return "******";
   }
 
-  private renderOwnModulesSection(containerEl: HTMLElement) {
-    this.appendSectionTitle(containerEl, "自研功能开关");
+  private renderOwnModuleGroup(
+    containerEl: HTMLElement,
+    titleText: string,
+    descText: string,
+    moduleIds: readonly string[]
+  ) {
+    this.appendSectionTitle(containerEl, titleText);
     void this.plugin.refreshManagedPluginStatus({ silent: true });
 
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
-    intro.textContent =
-      "日常只需用右侧开关启停各功能。点击功能卡片可展开详细设置（交互与「模板库管理」里点分组一致）。模板请用「模板库管理」页签。";
+    intro.textContent = descText;
     containerEl.appendChild(intro);
 
-    this.appendClaudianSuiteOwnModuleRow(containerEl);
-
-    for (const descriptor of OWN_MODULE_DESCRIPTORS) {
-      if (descriptor.moduleId === "claudian-chat-archive" || descriptor.moduleId === "claudian-agent-bridge") {
+    let claudianSuiteRendered = false;
+    for (const moduleId of moduleIds) {
+      if (moduleId === "claudian-chat-archive" || moduleId === "claudian-agent-bridge") {
+        if (!claudianSuiteRendered) {
+          this.appendClaudianSuiteOwnModuleRow(containerEl);
+          claudianSuiteRendered = true;
+        }
         continue;
       }
+      const descriptor = OWN_MODULE_DESCRIPTORS.find((item) => item.moduleId === moduleId);
+      if (!descriptor) continue;
       this.appendOwnModuleRow(containerEl, descriptor);
     }
+  }
 
-    this.appendSectionTitle(containerEl, "实验 / 测试功能");
-
+  private renderExperimentalFeaturesSection(containerEl: HTMLElement) {
+    this.appendSectionTitle(containerEl, "实验功能");
     new Setting(containerEl)
       .setName("启用测试功能")
-      .setDesc("解锁文字工具栏中的实验样式（颜色/格式实验项）。OneNote 粘贴已移至上方自研功能卡片。")
+      .setDesc("只解锁 T 工具栏中的实验样式；不会自动开启 OneNote 粘贴或改写历史笔记。")
       .addToggle((toggle) =>
         toggle.setValue(this.plugin.isBetaFeaturesEnabled()).onChange(async (value) => {
           await this.plugin.setBetaFeaturesEnabled(value);
@@ -1498,7 +1793,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       hint.textContent =
         isRuntimeAvailable
           ? "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。"
-          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「原生表格增强」切到礼书版。";
+          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「编辑与排版 → 表格增强」切到礼书版。";
       body.appendChild(hint);
       if (isRuntimeAvailable) {
         this.appendCommandRow(
@@ -1525,7 +1820,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       hint.textContent =
         this.plugin.getTableEnhancementModeForManager() === "lishuNative"
           ? "从 OneNote 复制后点右下角「粘贴OneNote」，或在此执行命令。产出纯 pipe 表，无 %% mdtp 标记。"
-          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「原生表格增强」切到礼书版。";
+          : "OneNote 粘贴依赖礼书版表格层；当前模式不会加载该能力。需要使用时，请先在「编辑与排版 → 表格增强」切到礼书版。";
       body.appendChild(hint);
       if (this.plugin.isOneNoteRichPasteEnabled() && this.plugin.getTableEnhancementModeForManager() === "lishuNative") {
         this.appendCommandRow(
@@ -2029,8 +2324,21 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "fdtb-settings-tab";
-      button.textContent = tab.label;
       button.dataset.tabId = tab.id;
+      button.title = tab.description;
+      const icon = document.createElement("span");
+      icon.className = "fdtb-settings-tab-icon";
+      setIcon(icon, tab.icon);
+      const label = document.createElement("span");
+      label.className = "fdtb-settings-tab-label";
+      label.textContent = tab.label;
+      button.append(icon, label);
+      if (tab.emphasized) {
+        const badge = document.createElement("span");
+        badge.className = "fdtb-settings-tab-badge";
+        badge.textContent = "常用";
+        button.appendChild(badge);
+      }
       button.draggable = true;
       button.toggleClass?.("is-active", this.activeTab === tab.id);
       if (!button.toggleClass && this.activeTab === tab.id) {
@@ -2091,7 +2399,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
     const hint = document.createElement("p");
     hint.className = "fdtb-settings-tabs-sort-hint";
-    hint.textContent = "长按拖动可排序顶部导航栏。";
+    hint.textContent = "一级页面按使用场景分类；长按拖动仍可调整顺序。";
 
     wrap.append(tabs, hint);
     containerEl.appendChild(wrap);
@@ -2144,18 +2452,19 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
 
   private async renderTemplateLibrarySection(containerEl: HTMLElement) {
     this.appendSectionTitle(containerEl, "模板库管理");
+    const templateFolderPath = this.plugin.getTemplateFolderPath();
 
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
     intro.textContent =
-      "模板统一保存在隐藏目录 .templates/，可按子文件夹分组。点击模板名可展开预览内容，再点「插入到当前笔记」写入光标处；与 T 工具栏「模板库」联动。";
+      `模板当前保存在 ${templateFolderPath}/，可按子文件夹分组。点击模板名可展开预览，与 T 工具栏「模板库」共用同一份数据。`;
     containerEl.appendChild(intro);
 
     this.renderLocalLibraryPathsSection(containerEl);
 
     new Setting(containerEl)
       .setName("模板目录")
-      .setDesc("默认 .templates；留空也会回退到该目录")
+      .setDesc(`当前：${templateFolderPath}。只在你主动修改时保存，打开设置页不会迁移模板。`)
       .addText((text) =>
         text
           .setPlaceholder(TEMPLATE_FOLDER_DEFAULT)
@@ -3517,21 +3826,63 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
   }
 
   private renderPluginHostSection(containerEl: HTMLElement) {
-    this.appendSectionTitle(containerEl, "第三方插件管理");
     void this.plugin.refreshManagedPluginStatus({ silent: true });
+    const hostedItems = this.plugin.getHostedPluginItems();
+    const renamedCount = hostedItems.filter((item) => item.alias.trim().length > 0).length;
+    const notedCount = hostedItems.filter((item) => item.note.trim().length > 0).length;
+    const enabledCount = hostedItems.filter((item) => item.enabled).length;
+
+    const hero = document.createElement("div");
+    hero.className = "fdtb-plugin-manager-hero";
+    const heroMain = document.createElement("div");
+    heroMain.className = "fdtb-plugin-manager-hero-main";
+    const heroTitle = document.createElement("strong");
+    heroTitle.textContent = "把英文插件变成自己记得住的工具箱";
+    const heroDesc = document.createElement("span");
+    heroDesc.textContent = "中文名和用途备注只保存在本插件的显示层，不会修改第三方插件 manifest。";
+    heroMain.append(heroTitle, heroDesc);
+    const heroStats = document.createElement("div");
+    heroStats.className = "fdtb-plugin-manager-hero-stats";
+    for (const stat of [
+      { value: String(hostedItems.length), label: "已纳管" },
+      { value: String(renamedCount), label: "已写中文名" },
+      { value: String(notedCount), label: "已写备注" },
+      { value: String(enabledCount), label: "已启用" },
+    ]) {
+      const item = document.createElement("div");
+      const value = document.createElement("strong");
+      value.textContent = stat.value;
+      const label = document.createElement("span");
+      label.textContent = stat.label;
+      item.append(value, label);
+      heroStats.appendChild(item);
+    }
+    hero.append(heroMain, heroStats);
+    containerEl.appendChild(hero);
+
+    this.appendSectionTitle(containerEl, "插件清单与中文备注");
 
     const intro = document.createElement("p");
     intro.className = "fdtb-settings-page-desc";
     intro.textContent =
-      "插件按分类分组展示，可折叠、改名、删除分类；每条插件右侧用小号「移到」切换分类。分类删除后，组内插件会移至「其他插件」。";
+      "先填“中文名”和“用途备注”，再按你的工作方式分类。删除分类后，组内插件只会移到“其他插件”，不会卸载插件。";
     containerEl.appendChild(intro);
-
-    this.renderPluginAutoUpdateSection(containerEl);
 
     new Setting(containerEl)
       .setName("自动监测插件启用状态")
       .setDesc(this.plugin.getPluginStatusMonitorDescription());
     this.appendStatusRow(containerEl, "合并方式", "安全托管", "统一入口、状态和显示名；开关调用 Obsidian 自带插件启停能力");
+
+    const search = document.createElement("label");
+    search.className = "fdtb-plugin-manager-search";
+    const searchIcon = document.createElement("span");
+    setIcon(searchIcon, "search");
+    const searchInput = document.createElement("input");
+    searchInput.type = "search";
+    searchInput.placeholder = "搜索中文名、英文名、插件 id 或用途备注";
+    searchInput.setAttribute("aria-label", "搜索第三方插件");
+    search.append(searchIcon, searchInput);
+    containerEl.appendChild(search);
 
     this.appendInlineForm(containerEl, {
       label: "新建分类",
@@ -3551,6 +3902,21 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
       this.appendPluginCategorySection(list, section.category, section.items, categoryOptions);
     }
     containerEl.appendChild(list);
+
+    const applySearchFilter = () => {
+      const query = searchInput.value.trim().toLocaleLowerCase("zh-Hans-CN");
+      list.querySelectorAll<HTMLElement>(".fdtb-plugin-manager-row").forEach((row) => {
+        const haystack = row.dataset.searchText || row.textContent || "";
+        row.hidden = Boolean(query) && !haystack.toLocaleLowerCase("zh-Hans-CN").includes(query);
+      });
+      list.querySelectorAll<HTMLElement>(".fdtb-plugin-category-folder").forEach((group) => {
+        const rows = Array.from(group.querySelectorAll<HTMLElement>(".fdtb-plugin-manager-row"));
+        group.hidden = Boolean(query) && (rows.length === 0 || rows.every((row) => row.hidden));
+      });
+    };
+    searchInput.addEventListener("input", applySearchFilter);
+
+    this.renderPluginAutoUpdateSection(containerEl);
   }
 
   private renderPluginAutoUpdateSection(containerEl: HTMLElement) {
@@ -3636,7 +4002,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
           bodyEl.appendChild(resultWrap);
         }
       },
-      { defaultOpen: true }
+      { defaultOpen: false }
     );
   }
 
@@ -3724,6 +4090,9 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const row = document.createElement("div");
     row.className = "fdtb-plugin-manager-row";
     row.dataset.pluginId = item.id;
+    row.dataset.searchText = [item.name, item.originalName, item.id, item.alias, item.note, item.description]
+      .filter(Boolean)
+      .join(" ");
     const main = document.createElement("div");
     main.className = "fdtb-plugin-manager-main";
     const title = document.createElement("div");
@@ -3734,7 +4103,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     meta.textContent = `${item.originalName}${item.version ? ` · ${item.version}` : ""} · ${item.id}`;
     const desc = document.createElement("div");
     desc.className = "fdtb-plugin-manager-desc";
-    desc.textContent = item.description;
+    desc.textContent = item.note ? `用途备注：${item.note}` : item.description;
     main.append(title, meta, desc);
 
     const controls = document.createElement("div");
@@ -3768,10 +4137,24 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
     const aliasInput = document.createElement("input");
     aliasInput.type = "text";
     aliasInput.className = "fdtb-plugin-manager-input";
-    aliasInput.placeholder = "显示名称";
+    aliasInput.placeholder = "中文名";
     aliasInput.value = item.alias;
+    aliasInput.title = "只修改本管理页和 Obsidian 设置侧栏的本地显示名";
+    aliasInput.setAttribute("aria-label", `${item.originalName} 的中文显示名`);
     aliasInput.addEventListener("change", async () => {
       await this.plugin.updateManagedPluginAlias(item.id, aliasInput.value);
+      this.display();
+    });
+
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "fdtb-plugin-manager-input fdtb-plugin-manager-note-input";
+    noteInput.placeholder = "用途备注：它是做什么的？";
+    noteInput.value = item.note;
+    noteInput.title = "记录它解决什么问题，便于以后查找";
+    noteInput.setAttribute("aria-label", `${item.name} 的用途备注`);
+    noteInput.addEventListener("change", async () => {
+      await this.plugin.updateManagedPluginNote(item.id, noteInput.value);
       this.display();
     });
 
@@ -3799,7 +4182,7 @@ class FeishuDocExperienceSettingTab extends PluginSettingTab {
         new Notice(`插件开关失败：${error instanceof Error ? error.message : String(error)}`);
       }
     });
-    controls.append(moveWrap, aliasInput, toggleLabel);
+    controls.append(moveWrap, aliasInput, noteInput, toggleLabel);
     row.append(main, controls);
     containerEl.appendChild(row);
   }
@@ -5045,6 +5428,15 @@ export default class FeishuDocToolbarPlugin extends Plugin {
     return { installed, enabled };
   }
 
+  private getManagedPluginTextValue(map: Record<string, string>, pluginId: string) {
+    const compatibleIds = pluginId === "realclaudian" ? ["realclaudian", "claudian"] : [pluginId];
+    for (const id of compatibleIds) {
+      const value = map[id];
+      if (value) return value;
+    }
+    return "";
+  }
+
   getHostedPluginItems(): HostedPluginItem[] {
     const pluginManager = (this.app as any)?.plugins;
     const pluginsMap = pluginManager?.plugins ?? {};
@@ -5061,8 +5453,10 @@ export default class FeishuDocToolbarPlugin extends Plugin {
             : Boolean(pluginsMap[id]));
         const installed = Boolean(manifests[id]) || Boolean(pluginsMap[id]);
         const originalName = id === "feishu-doc-toolbar" ? "Obsidian增强体验" : String(manifest.name ?? id);
-        const alias = this.dataStore.managedPluginAliases[id] ?? "";
-        const note = this.dataStore.managedPluginNotes[id] ?? "";
+        // Claudian 旧安装 id 为 claudian，当前礼书版 id 为 realclaudian。
+        // 只做读取兼容，不在加载时迁移或改写用户的中文名/备注。
+        const alias = this.getManagedPluginTextValue(this.dataStore.managedPluginAliases, id);
+        const note = this.getManagedPluginTextValue(this.dataStore.managedPluginNotes, id);
         return {
           id,
           name: alias || originalName,
@@ -9426,7 +9820,7 @@ export default class FeishuDocToolbarPlugin extends Plugin {
 
   async copyCurrentTableAsImage(tableEl: HTMLTableElement) {
     if (!this.isEmbeddedModuleEnabled("right-click-copy-as-image")) {
-      new Notice("请在 Obsidian增强体验 → 自研功能开关 中启用「右键复制成图」");
+      new Notice("请在 Obsidian增强体验 → 内容与素材 中启用「右键复制成图」");
       return false;
     }
 

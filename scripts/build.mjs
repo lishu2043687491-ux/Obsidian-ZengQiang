@@ -68,22 +68,46 @@ const embeddedNativeTableStylesStart =
   "\n/* === Embedded native table enhancer styles: BEGIN === */\n";
 const embeddedNativeTableStylesEnd =
   "\n/* === Embedded native table enhancer styles: END === */\n";
+const embeddedAdvancedTablesStylesStart =
+  "\n/* === Embedded advanced tables styles: BEGIN === */\n";
+const embeddedAdvancedTablesStylesEnd =
+  "\n/* === Embedded advanced tables styles: END === */\n";
 
-async function syncEmbeddedNativeTableStyles() {
+async function syncEmbeddedStyles({ embeddedStylesPath, markerStart, markerEnd, label }) {
   const stylesPath = "styles.css";
-  const embeddedStylesPath = "src/modules/native-table-enhancer-embedded.css";
   const ownCss = await fs.promises.readFile(stylesPath, "utf8");
-  const nativeTableCss = await fs.promises.readFile(embeddedStylesPath, "utf8");
+  const embeddedCss = await fs.promises.readFile(embeddedStylesPath, "utf8");
+  const markerStartToken = markerStart.trim();
+  const markerEndToken = markerEnd.trim();
   const markerRe = new RegExp(
-    `${escapeRegExp(embeddedNativeTableStylesStart)}[\\s\\S]*?${escapeRegExp(embeddedNativeTableStylesEnd)}`,
-    "m"
+    `${escapeRegExp(markerStartToken)}[\\s\\S]*?${escapeRegExp(markerEndToken)}`
   );
-  const withoutPrevious = ownCss.replace(markerRe, "").trimEnd();
-  const merged = `${withoutPrevious}${embeddedNativeTableStylesStart}${nativeTableCss.trimEnd()}${embeddedNativeTableStylesEnd}`;
+  const replacement = `${markerStartToken}\n${embeddedCss.trimEnd()}\n${markerEndToken}`;
+  const merged = markerRe.test(ownCss)
+    ? ownCss.replace(markerRe, replacement)
+    : `${ownCss.trimEnd()}\n${replacement}\n`;
   if (merged !== ownCss) {
     await fs.promises.writeFile(stylesPath, merged, "utf8");
-    console.log("styles: embedded native table enhancer styles synced");
+    console.log(`styles: ${label} styles synced`);
   }
+}
+
+async function syncEmbeddedNativeTableStyles() {
+  await syncEmbeddedStyles({
+    embeddedStylesPath: "src/modules/native-table-enhancer-embedded.css",
+    markerStart: embeddedNativeTableStylesStart,
+    markerEnd: embeddedNativeTableStylesEnd,
+    label: "embedded native table enhancer",
+  });
+}
+
+async function syncEmbeddedAdvancedTablesStyles() {
+  await syncEmbeddedStyles({
+    embeddedStylesPath: "src/modules/advanced-tables-embedded/styles.css",
+    markerStart: embeddedAdvancedTablesStylesStart,
+    markerEnd: embeddedAdvancedTablesStylesEnd,
+    label: "embedded advanced tables",
+  });
 }
 
 function escapeRegExp(input) {
@@ -91,6 +115,7 @@ function escapeRegExp(input) {
 }
 
 await syncEmbeddedNativeTableStyles();
+await syncEmbeddedAdvancedTablesStyles();
 
 await esbuild.build({
   entryPoints: ["src/main.ts"],
